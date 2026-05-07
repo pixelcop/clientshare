@@ -1,0 +1,14 @@
+.history
+.DS_Store
+.env.*
+.build-env
+
+data/
+config/config.yaml
+/storage
+/public
+
+# generated
+internal/static/dist
+internal/services/email/generated
+

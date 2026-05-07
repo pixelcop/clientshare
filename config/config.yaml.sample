@@ -1,0 +1,74 @@
+dev_mode: true
+server:
+  host: "0.0.0.0"
+  port: 8080
+  base_url: "https://portal.example.com"
+  max_body_mb: 64
+
+tenancy:
+  # single or hosted
+  mode: "single"
+  internal_target_header: "X-ClientShare-Tenant"
+
+database:
+  # Supported values: sqlite, postgres, mysql
+  # Keep sqlite as the default self-hosted path.
+  driver: "sqlite"
+  dsn: file:./data/clientshare.db?_journal_mode=WAL&_synchronous=NORMAL&_busy_timeout=5000
+  # path: "./data/clientshare.db"
+  # For postgres/mysql, set driver accordingly and provide a DSN instead of path.
+  # Examples:
+  #   postgres://user:pass@localhost:5432/clientshare?sslmode=disable
+  #   user:pass@tcp(localhost:3306)/clientshare?charset=utf8mb4
+  dsn: ""
+
+storage:
+  type: "local"
+  local:
+    root: "./storage"
+  s3:
+    bucket: ""
+    region: ""
+    endpoint: ""
+    access_key: ""
+    secret_key: ""
+    # Use path-style addressing (e.g., http://endpoint/bucket/key) instead of virtual-hosted-style (e.g., http://bucket.endpoint/key)
+    path_style: false
+
+auth:
+  jwt_secret: ""
+  session_duration: "24h"
+  password_reset_duration: "30m"
+  invite_token_secret: ""
+  invite_token_duration: "72h"
+
+secure_links:
+  default_expiry_days: 90
+  signing_key: ""
+
+email:
+  enabled: false
+  smtp:
+    host: ""
+    port: 587
+    username: ""
+    password: ""
+    from: "portal@example.com"
+  batch_delay_minutes: 15
+  send_rate: 12
+  user_invite_welcome_text: "Welcome to ClientShare. Use this secure site to upload documents, review shared files, and message our team in one place."
+
+branding:
+  site_title: "Client Portal"
+  logo_path: ""
+  primary_color: "#3B82F6"
+
+admin:
+  bootstrap_email: "admin@example.com"
+  bootstrap_password: ""
+
+# Internal control-plane API (disabled by default).
+# When enabled, set a shared secret with at least 32 characters.
+internal_api:
+  enabled: false
+  secret: ""

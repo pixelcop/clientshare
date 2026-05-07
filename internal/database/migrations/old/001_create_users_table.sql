@@ -1,0 +1,14 @@
+-- +goose Up
+CREATE TABLE users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    role TEXT NOT NULL,
+    name TEXT,
+    client_id INTEGER,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- +goose Down
+DROP TABLE IF EXISTS users;

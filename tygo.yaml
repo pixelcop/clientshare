@@ -1,0 +1,7 @@
+packages:
+  - path: "github.com/pixelcop/clientshare/internal/models"
+    output_path: "./web/src/types/models.ts"
+    type_mappings:
+      time.Time: "string"
+    exclude_files:
+      - "password_reset_token.go"

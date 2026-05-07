@@ -1,0 +1,9 @@
+@reference './tailwind.css';
+
+.layout-topbar {
+  @apply px-4 sm:px-8;
+}
+
+.layout-main-container {
+  @apply px-4 sm:px-8 pt-4;
+}

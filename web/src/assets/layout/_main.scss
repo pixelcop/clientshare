@@ -1,0 +1,12 @@
+.layout-main-container {
+  flex: auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: margin-left var(--layout-section-transition-duration);
+}
+
+.layout-main {
+  flex: 1 1 auto;
+  padding-bottom: 2rem;
+}

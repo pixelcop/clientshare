@@ -1,0 +1,96 @@
+<script setup>
+import {
+  Body,
+  Button,
+  Container,
+  Head,
+  Heading,
+  Hr,
+  Html,
+  Link,
+  Preview,
+  Section,
+  Tailwind,
+  Text,
+} from '@vue-email/components';
+
+import { tailwindConfig } from './tailwindConfig';
+
+defineProps({
+  displayName: {
+    type: String,
+    required: true,
+  },
+  inviteUrl: {
+    type: String,
+    required: true,
+  },
+  expiry: {
+    type: String,
+    required: true,
+  },
+  productName: {
+    type: String,
+    default: 'ClientShare',
+  },
+  welcomeText: {
+    type: String,
+    default:
+      'Welcome to your 2025 tax year portal. Use this secure site to upload documents, review shared files, and message our team safely in one place.',
+  },
+});
+</script>
+
+<template>
+  <Html lang="en">
+    <Head />
+    <Preview>You're invited to join ${ productName }</Preview>
+
+    <Tailwind :config="tailwindConfig">
+      <Body class="m-0 bg-surface-bg px-0 py-6 font-sans text-text-primary">
+        <Container class="mx-auto w-full max-w-160 px-4">
+          <Text class="m-0 mb-4 text-xs font-semibold uppercase tracking-wide text-text-muted">
+            ${ productName }
+          </Text>
+
+          <Section
+            class="rounded-xl border border-surface-border bg-surface-card px-6 py-6 shadow-card"
+          >
+            <Heading as="h1" class="m-0 mb-3 text-2xl font-semibold text-text-primary">
+              You're invited
+            </Heading>
+
+            <Text class="m-0 mb-3 text-sm text-text-primary">Hi ${ displayName },</Text>
+
+            <Text class="m-0 mb-5 text-sm text-text-primary">${ welcomeText }</Text>
+
+            <Text class="m-0 mb-5 text-sm text-text-primary">
+              Your account is ready. Use the link below to set your password and sign in.
+            </Text>
+
+            <Section class="mb-5">
+              <Button
+                :href="inviteUrl"
+                class="rounded-md bg-brand px-4 py-3 text-sm font-semibold leading-4 text-white no-underline"
+              >
+                Set password
+              </Button>
+            </Section>
+
+            <Text class="m-0 mb-3 text-xs text-text-muted">This invite expires on ${ expiry }.</Text>
+
+            <Hr class="my-4 border-surface-border" />
+
+            <Text class="m-0 mb-2 text-xs text-text-muted">
+              If the button does not work, copy and paste this URL into your browser:
+            </Text>
+
+            <Link :href="inviteUrl" class="m-0 break-all text-xs font-medium text-brand-dark">
+              ${ inviteUrl }
+            </Link>
+          </Section>
+        </Container>
+      </Body>
+    </Tailwind>
+  </Html>
+</template>
