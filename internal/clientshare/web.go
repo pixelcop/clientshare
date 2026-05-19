@@ -129,6 +129,10 @@ func StartWebServer(cfg *Config, db *gorm.DB, logger *zap.Logger, emailQueue ema
 		return err
 	}
 
+	cleanupWorker := services.NewFileCleanupWorker(db, store, logger)
+	cleanupWorker.Start()
+	defer cleanupWorker.Stop()
+
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 	mode := "production"
 	if cfg.DevMode {

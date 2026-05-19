@@ -131,3 +131,61 @@ func TestGetFolderHierarchyByIDCacheInvalidatedOnFolderCreate(t *testing.T) {
 		t.Fatalf("expected recomputed hierarchy of 2 folders after root deletion, got %d", len(recomputedHierarchy))
 	}
 }
+
+func TestListFilesPendingDiskDeleteOnlyReturnsEligibleRows(t *testing.T) {
+	db := setupFileServiceTestDB(t)
+	service := NewFileService(db)
+	now := time.Now()
+	oldDeletedAt := now.Add(-31 * 24 * time.Hour)
+	recentDeletedAt := now.Add(-7 * 24 * time.Hour)
+	alreadyDiskDeletedAt := now.Add(-2 * 24 * time.Hour)
+
+	eligible := &models.File{TenantID: tenantctx.DefaultTenantID, ClientID: "client-1", Filename: "eligible.pdf", Path: "Acme/eligible.pdf", Type: "file", Size: 1, UploadedAt: now.Add(-40 * 24 * time.Hour), DeletedAt: &oldDeletedAt}
+	recent := &models.File{TenantID: tenantctx.DefaultTenantID, ClientID: "client-1", Filename: "recent.pdf", Path: "Acme/recent.pdf", Type: "file", Size: 1, UploadedAt: now.Add(-10 * 24 * time.Hour), DeletedAt: &recentDeletedAt}
+	alreadyDeleted := &models.File{TenantID: tenantctx.DefaultTenantID, ClientID: "client-1", Filename: "done.pdf", Path: "Acme/done.pdf", Type: "file", Size: 1, UploadedAt: now.Add(-50 * 24 * time.Hour), DeletedAt: &oldDeletedAt, DiskDeletedAt: &alreadyDiskDeletedAt}
+	active := &models.File{TenantID: tenantctx.DefaultTenantID, ClientID: "client-1", Filename: "active.pdf", Path: "Acme/active.pdf", Type: "file", Size: 1, UploadedAt: now}
+
+	for _, file := range []*models.File{eligible, recent, alreadyDeleted, active} {
+		if err := db.Create(file).Error; err != nil {
+			t.Fatalf("failed to seed file %s: %v", file.Filename, err)
+		}
+	}
+
+	files, err := service.ListFilesPendingDiskDelete(context.Background(), now.Add(-30*24*time.Hour), 10)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(files) != 1 {
+		t.Fatalf("expected 1 eligible file, got %d", len(files))
+	}
+	if files[0].ID != eligible.ID {
+		t.Fatalf("expected eligible file %s, got %s", eligible.ID, files[0].ID)
+	}
+}
+
+func TestMarkFileDiskDeletedSetsTimestamp(t *testing.T) {
+	db := setupFileServiceTestDB(t)
+	service := NewFileService(db)
+	now := time.Now().UTC().Truncate(time.Second)
+	deletedAt := now.Add(-31 * 24 * time.Hour)
+	file := &models.File{TenantID: tenantctx.DefaultTenantID, ClientID: "client-1", Filename: "eligible.pdf", Path: "Acme/eligible.pdf", Type: "file", Size: 1, UploadedAt: now.Add(-40 * 24 * time.Hour), DeletedAt: &deletedAt}
+	if err := db.Create(file).Error; err != nil {
+		t.Fatalf("failed to seed file: %v", err)
+	}
+
+	markAt := now.Add(5 * time.Minute)
+	if err := service.MarkFileDiskDeleted(context.Background(), tenantctx.DefaultTenantID, file.ID, markAt); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	var stored models.File
+	if err := db.First(&stored, "tenant_id = ? AND id = ?", tenantctx.DefaultTenantID, file.ID).Error; err != nil {
+		t.Fatalf("failed to reload file: %v", err)
+	}
+	if stored.DiskDeletedAt == nil {
+		t.Fatal("expected disk_deleted_at to be set")
+	}
+	if !stored.DiskDeletedAt.Equal(markAt) {
+		t.Fatalf("expected disk_deleted_at %v, got %v", markAt, stored.DiskDeletedAt)
+	}
+}

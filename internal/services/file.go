@@ -228,6 +228,44 @@ func (s *FileService) SoftDeleteFile(ctx context.Context, tenantID string, file 
 	return nil
 }
 
+func (s *FileService) ListFilesPendingDiskDelete(ctx context.Context, olderThan time.Time, limit int) ([]models.File, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+
+	var files []models.File
+	err := s.DB.WithContext(ctx).
+		Where("deleted_at IS NOT NULL AND deleted_at <= ? AND disk_deleted_at IS NULL", olderThan).
+		Order("deleted_at ASC, id ASC").
+		Limit(limit).
+		Find(&files).Error
+	if err != nil {
+		return nil, err
+	}
+	return files, nil
+}
+
+func (s *FileService) MarkFileDiskDeleted(ctx context.Context, tenantID, fileID string, deletedAt time.Time) error {
+	tenantID, err := requireTenantID(tenantID)
+	if err != nil {
+		return err
+	}
+	if fileID == "" {
+		return gorm.ErrRecordNotFound
+	}
+	result := s.DB.WithContext(ctx).
+		Model(&models.File{}).
+		Where("tenant_id = ? AND id = ? AND disk_deleted_at IS NULL", tenantID, fileID).
+		Update("disk_deleted_at", deletedAt)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
 // GetFolderHierarchyByID returns the starting folder and all its parent folders up to root.
 // The result is ordered from root folder to the starting folder.
 func (s *FileService) GetFolderHierarchyByID(ctx context.Context, tenantID, clientID string, folderID string) ([]models.File, error) {
@@ -248,7 +286,7 @@ func (s *FileService) GetFolderHierarchyByID(ctx context.Context, tenantID, clie
 	err = s.DB.WithContext(ctx).Raw(`
 		WITH RECURSIVE folder_hierarchy AS (
 			SELECT
-				tenant_id, id, client_id, user_id, folder_id, filename, path, type, size, uploaded_at, deleted_at,
+				tenant_id, id, client_id, user_id, folder_id, filename, path, type, size, uploaded_at, deleted_at, disk_deleted_at,
 				0 AS depth
 			FROM files
 			WHERE tenant_id = ? AND client_id = ? AND id = ? AND type = 'folder' AND deleted_at IS NULL
@@ -256,13 +294,13 @@ func (s *FileService) GetFolderHierarchyByID(ctx context.Context, tenantID, clie
 			UNION ALL
 
 			SELECT
-				f.tenant_id, f.id, f.client_id, f.user_id, f.folder_id, f.filename, f.path, f.type, f.size, f.uploaded_at, f.deleted_at,
+				f.tenant_id, f.id, f.client_id, f.user_id, f.folder_id, f.filename, f.path, f.type, f.size, f.uploaded_at, f.deleted_at, f.disk_deleted_at,
 				fh.depth + 1
 			FROM files f
 			JOIN folder_hierarchy fh ON fh.folder_id = f.id
 			WHERE f.tenant_id = ? AND f.client_id = ? AND f.type = 'folder' AND f.deleted_at IS NULL
 		)
-		SELECT tenant_id, id, client_id, user_id, folder_id, filename, path, type, size, uploaded_at, deleted_at
+		SELECT tenant_id, id, client_id, user_id, folder_id, filename, path, type, size, uploaded_at, deleted_at, disk_deleted_at
 		FROM folder_hierarchy
 		ORDER BY depth DESC
 	`, tenantID, clientID, folderID, tenantID, clientID).Scan(&folders).Error

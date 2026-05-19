@@ -25,10 +25,11 @@ func TestMigrationProviderUpCreatesCurrentSchemaAndSeedsTenant(t *testing.T) {
 
 	results, err := provider.Up(context.Background())
 	require.NoError(t, err)
-	require.Len(t, results, 3)
+	require.Len(t, results, 4)
 
 	requireDefaultTenantSeeded(t, db, dbpkg.DatabaseDriverSQLite)
-	requireGooseVersionsApplied(t, db, dbpkg.DatabaseDriverSQLite, 34, 35, 36)
+	requireGooseVersionsApplied(t, db, dbpkg.DatabaseDriverSQLite, 34, 35, 36, 37)
+	requireColumnPresent(t, db, "files", "disk_deleted_at")
 }
 
 func TestMigrationProviderUpCreatesCurrentSchemaAndSeedsTenantPostgres(t *testing.T) {
@@ -37,10 +38,11 @@ func TestMigrationProviderUpCreatesCurrentSchemaAndSeedsTenantPostgres(t *testin
 
 	results, err := provider.Up(context.Background())
 	require.NoError(t, err)
-	require.Len(t, results, 3)
+	require.Len(t, results, 4)
 
 	requireDefaultTenantSeeded(t, db, dbpkg.DatabaseDriverPostgres)
-	requireGooseVersionsApplied(t, db, dbpkg.DatabaseDriverPostgres, 34, 35, 36)
+	requireGooseVersionsApplied(t, db, dbpkg.DatabaseDriverPostgres, 34, 35, 36, 37)
+	requireColumnPresent(t, db, "files", "disk_deleted_at")
 }
 
 func TestMigrationProviderUpIsIdempotent(t *testing.T) {
@@ -80,7 +82,7 @@ func TestMigrationProviderResetDropsManagedTables(t *testing.T) {
 
 	results, err := provider.DownTo(context.Background(), 0)
 	require.NoError(t, err)
-	require.Len(t, results, 3)
+	require.Len(t, results, 4)
 
 	requireManagedTablesMissing(t, db, dbpkg.DatabaseDriverSQLite)
 }
@@ -94,7 +96,7 @@ func TestMigrationProviderResetDropsManagedTablesPostgres(t *testing.T) {
 
 	results, err := provider.DownTo(context.Background(), 0)
 	require.NoError(t, err)
-	require.Len(t, results, 3)
+	require.Len(t, results, 4)
 
 	requireManagedTablesMissing(t, db, dbpkg.DatabaseDriverPostgres)
 }
@@ -114,6 +116,7 @@ func newMigrationProviderForTest(t *testing.T, db *sql.DB, dialect goose.Dialect
 			migration.NewGoMigration(34, upCreateCurrentSchema, downCreateCurrentSchema),
 			migration.NewGoMigration(35, upSeedDefaultTenant, downSeedDefaultTenant),
 			migration.NewGoMigration(36, upBackfillTenantDomainsFromPublicBaseURLs, downBackfillTenantDomainsFromPublicBaseURLs),
+			migration.NewGoMigration(37, upAddFilesDiskDeletedAt, downAddFilesDiskDeletedAt),
 		},
 	)
 	require.NoError(t, err)
@@ -218,6 +221,12 @@ func requireGooseVersionsApplied(t *testing.T, db *sql.DB, driver string, versio
 	for _, version := range versions {
 		require.Equal(t, int64(1), scalarCount(t, db, query, version))
 	}
+}
+
+func requireColumnPresent(t *testing.T, db *sql.DB, table, column string) {
+	t.Helper()
+	_, err := db.Exec("SELECT " + column + " FROM " + table + " LIMIT 1")
+	require.NoError(t, err)
 }
 
 func requireManagedTablesMissing(t *testing.T, db *sql.DB, driver string) {
