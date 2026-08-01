@@ -116,7 +116,11 @@ func NewWebApp(cfg *Config, db *gorm.DB, logger *zap.Logger, emailQueue emailpkg
 	if err != nil {
 		return nil, fmt.Errorf("load embedded frontend: %w", err)
 	}
-	if err := web.SetupStaticFileServing(app, cfg.DevMode, 5173, webFS); err != nil {
+	vitePort := cfg.Server.VitePort
+	if vitePort == 0 {
+		vitePort = 5193
+	}
+	if err := web.SetupStaticFileServing(app, cfg.DevMode, vitePort, webFS); err != nil {
 		return nil, fmt.Errorf("setup static file serving: %w", err)
 	}
 

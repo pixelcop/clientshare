@@ -24,6 +24,7 @@ type Config struct {
 	Server     struct {
 		Host      string `mapstructure:"host"`
 		Port      int    `mapstructure:"port"`
+		VitePort  int    `mapstructure:"vite_port"`
 		BaseURL   string `mapstructure:"base_url"`
 		MaxBodyMB int    `mapstructure:"max_body_mb"`
 	} `mapstructure:"server"`
@@ -88,6 +89,7 @@ type Config struct {
 
 func LoadConfig(configPath string) (*Config, error) {
 	v := viper.New()
+	v.SetDefault("server.vite_port", 5193)
 	v.SetConfigFile(configPath)
 	if err := v.ReadInConfig(); err != nil {
 		return nil, fmt.Errorf("read config: %w", err)

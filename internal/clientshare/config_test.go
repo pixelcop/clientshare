@@ -15,6 +15,7 @@ const mockConfig = `
 server:
   host: "127.0.0.1"
   port: 1234
+  vite_port: 4321
   base_url: "https://test.example.com"
 tenancy:
 	mode: "hosted"
@@ -79,6 +80,7 @@ func TestConfigUnmarshal(t *testing.T) {
 
 	require.Equal(t, "127.0.0.1", cfg.Server.Host)
 	require.Equal(t, 1234, cfg.Server.Port)
+	require.Equal(t, 4321, cfg.Server.VitePort)
 	require.Equal(t, "https://test.example.com", cfg.Server.BaseURL)
 	require.Equal(t, "hosted", cfg.Tenancy.Mode)
 	require.Equal(t, "X-Test-Tenant", cfg.Tenancy.InternalTargetHeader)
@@ -112,6 +114,19 @@ func TestConfigUnmarshal(t *testing.T) {
 	require.Equal(t, "#123456", cfg.Branding.PrimaryColor)
 	require.Equal(t, "admin@example.com", cfg.Admin.BootstrapEmail)
 	require.Equal(t, "secret", cfg.Admin.BootstrapPassword)
+}
+
+func TestLoadConfigDefaultsVitePort(t *testing.T) {
+	tmpfile, err := os.CreateTemp("", "config-*.yaml")
+	require.NoError(t, err)
+	defer os.Remove(tmpfile.Name())
+	_, err = tmpfile.WriteString("server:\n  port: 8320\n")
+	require.NoError(t, err)
+	require.NoError(t, tmpfile.Close())
+
+	cfg, err := LoadConfig(tmpfile.Name())
+	require.NoError(t, err)
+	require.Equal(t, 5193, cfg.Server.VitePort)
 }
 
 func TestApplyBuildInfo(t *testing.T) {
