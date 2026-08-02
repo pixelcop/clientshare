@@ -7,53 +7,57 @@ import (
 )
 
 var File = struct {
-	ID         field.String
-	TenantID   field.String
-	ClientID   field.String
-	UserID     field.String
-	FolderID   field.String
-	Filename   field.String
-	Path       field.String
-	Type       field.String
-	Size       field.Number[int64]
-	UploadedAt field.Time
-	DeletedAt  field.Time
+	ID            field.String
+	TenantID      field.String
+	ClientID      field.String
+	UserID        field.String
+	FolderID      field.String
+	Filename      field.String
+	Path          field.String
+	Type          field.String
+	Size          field.Number[int64]
+	UploadedAt    field.Time
+	DeletedAt     field.Time
+	DiskDeletedAt field.Time
 }{
-	ID:         field.String{}.WithColumn("id"),
-	TenantID:   field.String{}.WithColumn("tenant_id"),
-	ClientID:   field.String{}.WithColumn("client_id"),
-	UserID:     field.String{}.WithColumn("user_id"),
-	FolderID:   field.String{}.WithColumn("folder_id"),
-	Filename:   field.String{}.WithColumn("filename"),
-	Path:       field.String{}.WithColumn("path"),
-	Type:       field.String{}.WithColumn("type"),
-	Size:       field.Number[int64]{}.WithColumn("size"),
-	UploadedAt: field.Time{}.WithColumn("uploaded_at"),
-	DeletedAt:  field.Time{}.WithColumn("deleted_at"),
+	ID:            field.String{}.WithColumn("id"),
+	TenantID:      field.String{}.WithColumn("tenant_id"),
+	ClientID:      field.String{}.WithColumn("client_id"),
+	UserID:        field.String{}.WithColumn("user_id"),
+	FolderID:      field.String{}.WithColumn("folder_id"),
+	Filename:      field.String{}.WithColumn("filename"),
+	Path:          field.String{}.WithColumn("path"),
+	Type:          field.String{}.WithColumn("type"),
+	Size:          field.Number[int64]{}.WithColumn("size"),
+	UploadedAt:    field.Time{}.WithColumn("uploaded_at"),
+	DeletedAt:     field.Time{}.WithColumn("deleted_at"),
+	DiskDeletedAt: field.Time{}.WithColumn("disk_deleted_at"),
 }
 
 var FileItem = struct {
-	ID         field.String
-	TenantID   field.String
-	ClientID   field.String
-	UserID     field.String
-	FolderID   field.String
-	Filename   field.String
-	Path       field.String
-	Type       field.String
-	Size       field.Number[int64]
-	UploadedAt field.Time
-	DeletedAt  field.Time
+	ID            field.String
+	TenantID      field.String
+	ClientID      field.String
+	UserID        field.String
+	FolderID      field.String
+	Filename      field.String
+	Path          field.String
+	Type          field.String
+	Size          field.Number[int64]
+	UploadedAt    field.Time
+	DeletedAt     field.Time
+	DiskDeletedAt field.Time
 }{
-	ID:         field.String{}.WithColumn("id"),
-	TenantID:   field.String{}.WithColumn("tenant_id"),
-	ClientID:   field.String{}.WithColumn("client_id"),
-	UserID:     field.String{}.WithColumn("user_id"),
-	FolderID:   field.String{}.WithColumn("folder_id"),
-	Filename:   field.String{}.WithColumn("filename"),
-	Path:       field.String{}.WithColumn("path"),
-	Type:       field.String{}.WithColumn("type"),
-	Size:       field.Number[int64]{}.WithColumn("size"),
-	UploadedAt: field.Time{}.WithColumn("uploaded_at"),
-	DeletedAt:  field.Time{}.WithColumn("deleted_at"),
+	ID:            field.String{}.WithColumn("id"),
+	TenantID:      field.String{}.WithColumn("tenant_id"),
+	ClientID:      field.String{}.WithColumn("client_id"),
+	UserID:        field.String{}.WithColumn("user_id"),
+	FolderID:      field.String{}.WithColumn("folder_id"),
+	Filename:      field.String{}.WithColumn("filename"),
+	Path:          field.String{}.WithColumn("path"),
+	Type:          field.String{}.WithColumn("type"),
+	Size:          field.Number[int64]{}.WithColumn("size"),
+	UploadedAt:    field.Time{}.WithColumn("uploaded_at"),
+	DeletedAt:     field.Time{}.WithColumn("deleted_at"),
+	DiskDeletedAt: field.Time{}.WithColumn("disk_deleted_at"),
 }

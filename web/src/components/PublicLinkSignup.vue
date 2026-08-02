@@ -6,7 +6,9 @@ import { useAuthStore } from '@/stores/auth';
 import { usePublicLinkStore } from '@/stores/publicLink';
 
 const publicLink = usePublicLinkStore();
-const { user } = storeToRefs(useAuthStore());
+const auth = useAuthStore();
+const { user } = storeToRefs(auth);
+const router = useRouter();
 
 const showRegister = ref(false);
 
@@ -23,6 +25,9 @@ async function submitRegistration(e: Event) {
   if (ok) {
     form.reset();
     showRegister.value = false;
+    await auth.fetchMe(true);
+    auth.offerPasskeyEnrollment();
+    await router.push({ name: 'FolderRootView' });
   }
 }
 </script>

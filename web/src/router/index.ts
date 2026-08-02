@@ -11,6 +11,7 @@ import ForgotPasswordView from '../views/ForgotPasswordView.vue';
 import LoginView from '../views/LoginView.vue';
 import ResetPasswordView from '../views/ResetPasswordView.vue';
 import SecureLinks from '../views/SecureLinks.vue';
+import SecurityView from '../views/SecurityView.vue';
 import SettingsView from '../views/SettingsView.vue';
 import UsersList from '../views/UsersList.vue';
 
@@ -126,6 +127,12 @@ const router = createRouter({
       component: SettingsView,
       meta: { public: false, roles: ['admin'] },
     },
+    {
+      path: '/security',
+      name: 'Security',
+      component: SecurityView,
+      meta: { public: false, roles: ['admin', 'manager', 'client'] },
+    },
   ],
 });
 
@@ -152,6 +159,12 @@ router.beforeEach(async (to, _from) => {
   }
   // If user is logged in, allow
   if (auth.user) {
+    const allowedRoles = to.meta.roles as string[] | undefined;
+    if (allowedRoles && !allowedRoles.includes(auth.user.role)) {
+      return auth.user.role === 'client' || auth.user.role === 'link'
+        ? { name: 'FolderRootView' }
+        : { name: 'Clients' };
+    }
     if (to.path === '/') {
       if (auth.user.role === 'client' || auth.user.role === 'link') {
         return { name: 'ClientFiles' };

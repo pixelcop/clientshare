@@ -62,6 +62,8 @@ func RegisterAuthRoutes(insecureApi fiber.Router, db *gorm.DB, signingKey string
 	}
 
 	insecureApi.Post("/auth/login", l, h.LoginHandler)
+	insecureApi.Post("/auth/passkeys/login/options", l, h.BeginPasskeyLoginHandler)
+	insecureApi.Post("/auth/passkeys/login/verify", l, h.FinishPasskeyLoginHandler)
 	insecureApi.Post("/auth/logout", h.LogoutHandler)
 	insecureApi.Post("/auth/register", l, h.RegisterHandler)
 	insecureApi.Post("/auth/forgot-password", l, h.ForgotPasswordHandler)
@@ -70,6 +72,12 @@ func RegisterAuthRoutes(insecureApi fiber.Router, db *gorm.DB, signingKey string
 
 	// secure with auth
 	insecureApi.Get("/auth/me", middleware.AuthRequired, h.MeHandler)
+	insecureApi.Get("/auth/passkeys", middleware.AuthRequired, h.ListPasskeysHandler)
+	insecureApi.Post("/auth/passkeys/registration/options", middleware.AuthRequired, h.BeginPasskeyRegistrationHandler)
+	insecureApi.Post("/auth/passkeys/registration/verify", middleware.AuthRequired, h.FinishPasskeyRegistrationHandler)
+	insecureApi.Patch("/auth/passkeys/:id", middleware.AuthRequired, h.RenamePasskeyHandler)
+	insecureApi.Delete("/auth/passkeys/:id", middleware.AuthRequired, h.DeletePasskeyHandler)
+	insecureApi.Post("/auth/passkeys/prompt-dismiss", middleware.AuthRequired, h.DismissPasskeyPromptHandler)
 }
 
 func (h *AuthHandler) siteTitleForTenant(c fiber.Ctx, tenantID string) string {
@@ -290,7 +298,10 @@ func (h *AuthHandler) AcceptInviteHandler(c fiber.Ctx) error {
 	}
 	setAuthSessionCookie(c, token)
 
-	return c.JSON(fiber.Map{"user": authenticatedUser})
+	return c.JSON(fiber.Map{
+		"user":               authenticatedUser,
+		"passkey_enrollment": h.shouldOfferPasskeyEnrollment(c, authenticatedUser),
+	})
 }
 
 func generateResetToken() (string, error) {
@@ -364,7 +375,10 @@ func (h *AuthHandler) LoginHandler(c fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to generate token"})
 	}
 	setAuthSessionCookie(c, token)
-	return c.JSON(fiber.Map{"authenticated": true})
+	return c.JSON(fiber.Map{
+		"authenticated":      true,
+		"passkey_enrollment": h.shouldOfferPasskeyEnrollment(c, user),
+	})
 }
 
 // LogoutHandler handles /api/auth/logout
@@ -471,5 +485,13 @@ func (h *AuthHandler) RegisterHandler(c fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create user"})
 	}
 	user.ClientIDs = []string{link.ClientID}
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"user": user})
+	token, err := auth.GenerateJWT(user.ID, user.Role, user.TenantID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to generate token"})
+	}
+	setAuthSessionCookie(c, token)
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+		"user":               user,
+		"passkey_enrollment": h.shouldOfferPasskeyEnrollment(c, user),
+	})
 }

@@ -51,6 +51,14 @@ const menuItems = computed(() => {
     });
   }
 
+  if (user.value?.role !== 'link') {
+    items.push({
+      label: 'Security',
+      icon: 'pi pi-shield',
+      command: () => router.push({ name: 'Security' }),
+    });
+  }
+
   items.push({ label: 'Logout', icon: 'pi pi-sign-out', command: logout });
 
   return items;

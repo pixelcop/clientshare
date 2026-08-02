@@ -3,13 +3,16 @@ import axios from 'axios';
 import { storeToRefs } from 'pinia';
 import { Button, FloatLabel, Password } from 'primevue';
 import { computed, ref } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 
 import Logo from '@/components/Logo.vue';
 import { useBrandingStore } from '@/stores/branding';
+import { useAuthStore } from '@/stores/auth';
 
 const { branding } = storeToRefs(useBrandingStore());
 const route = useRoute();
+const router = useRouter();
+const auth = useAuthStore();
 
 const token = computed(() => {
   const hash = route.hash.startsWith('#') ? route.hash.slice(1) : route.hash;
@@ -43,14 +46,16 @@ async function onSubmit() {
   error.value = null;
   message.value = null;
   try {
-    await axios.post('/api/auth/accept-invite', {
+    const response = await axios.post<{ passkey_enrollment?: boolean }>('/api/auth/accept-invite', {
       token: token.value,
       password: password.value,
     });
+    await auth.fetchMe(true);
+    if (response.data.passkey_enrollment) {
+      auth.offerPasskeyEnrollment();
+    }
     message.value = 'Password set. Signing you in...';
-    setTimeout(() => {
-      window.location.href = '/';
-    }, 400);
+    await router.push('/');
   } catch (e: unknown) {
     error.value = resolveErrorMessage(e, 'Unable to accept invite.');
   } finally {

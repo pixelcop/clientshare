@@ -1,12 +1,14 @@
 package handlers_test
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/pixelcop/clientshare/internal/models"
 	"github.com/pixelcop/clientshare/internal/services/links"
 )
@@ -271,5 +273,134 @@ func TestAuthHandlers_AcceptInvite(t *testing.T) {
 	}
 	if reuseResp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", reuseResp.StatusCode)
+	}
+}
+
+func TestAuthHandlers_PasskeyOptionsAndManagement(t *testing.T) {
+	env := setupOtherHandlersEnv(t)
+
+	credential := webauthn.Credential{
+		ID:        []byte("test-passkey-credential"),
+		PublicKey: []byte("test-public-key"),
+	}
+	credentialData, err := json.Marshal(credential)
+	if err != nil {
+		t.Fatalf("marshal passkey credential: %v", err)
+	}
+	stored := models.PasskeyCredential{
+		TenantID:         env.clientUser.TenantID,
+		UserID:           env.clientUser.ID,
+		CredentialID:     base64.RawURLEncoding.EncodeToString(credential.ID),
+		CredentialIDHash: "test-credential-hash",
+		CredentialData:   credentialData,
+		Name:             "Laptop",
+		CreatedAt:        time.Now(),
+	}
+	if err := env.db.Create(&stored).Error; err != nil {
+		t.Fatalf("create passkey: %v", err)
+	}
+
+	optionsReq := jsonRequest(http.MethodPost, "/api/auth/passkeys/login/options", map[string]any{"email": env.clientUser.Email})
+	optionsResp, err := env.app.Test(optionsReq)
+	if err != nil {
+		t.Fatalf("passkey options request failed: %v", err)
+	}
+	if optionsResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", optionsResp.StatusCode)
+	}
+	var optionsBody struct {
+		Passkey     bool   `json:"passkey"`
+		ChallengeID string `json:"challenge_id"`
+		PublicKey   any    `json:"public_key"`
+	}
+	if err := json.NewDecoder(optionsResp.Body).Decode(&optionsBody); err != nil {
+		t.Fatalf("decode passkey options: %v", err)
+	}
+	if !optionsBody.Passkey || optionsBody.ChallengeID == "" || optionsBody.PublicKey == nil {
+		t.Fatalf("expected passkey options, got %#v", optionsBody)
+	}
+	var challenge models.WebAuthnChallenge
+	if err := env.db.Where("id = ?", optionsBody.ChallengeID).First(&challenge).Error; err != nil {
+		t.Fatalf("expected stored challenge: %v", err)
+	}
+	if challenge.UserID != env.clientUser.ID || challenge.Purpose != "login" || challenge.UsedAt != nil {
+		t.Fatalf("unexpected stored challenge: %#v", challenge)
+	}
+
+	unknownReq := jsonRequest(http.MethodPost, "/api/auth/passkeys/login/options", map[string]any{"email": "missing@test.local"})
+	unknownResp, err := env.app.Test(unknownReq)
+	if err != nil {
+		t.Fatalf("unknown passkey options request failed: %v", err)
+	}
+	var unknownBody struct {
+		Passkey bool `json:"passkey"`
+	}
+	if err := json.NewDecoder(unknownResp.Body).Decode(&unknownBody); err != nil {
+		t.Fatalf("decode unknown passkey options: %v", err)
+	}
+	if unknownBody.Passkey {
+		t.Fatalf("expected no passkey for unknown email")
+	}
+
+	listReq := jsonAuthRequest(http.MethodGet, "/api/auth/passkeys", env.clientToken, nil)
+	listResp, err := env.app.Test(listReq)
+	if err != nil {
+		t.Fatalf("list passkeys request failed: %v", err)
+	}
+	if listResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 listing passkeys, got %d", listResp.StatusCode)
+	}
+	var listed []struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(listResp.Body).Decode(&listed); err != nil {
+		t.Fatalf("decode listed passkeys: %v", err)
+	}
+	if len(listed) != 1 || listed[0].ID != stored.ID || listed[0].Name != "Laptop" {
+		t.Fatalf("unexpected listed passkeys: %#v", listed)
+	}
+
+	registrationReq := jsonAuthRequest(http.MethodPost, "/api/auth/passkeys/registration/options", env.clientToken, nil)
+	registrationResp, err := env.app.Test(registrationReq)
+	if err != nil {
+		t.Fatalf("registration options request failed: %v", err)
+	}
+	if registrationResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 registration options, got %d", registrationResp.StatusCode)
+	}
+
+	renameReq := jsonAuthRequest(http.MethodPatch, "/api/auth/passkeys/"+stored.ID, env.clientToken, map[string]any{"name": "Work laptop"})
+	renameResp, err := env.app.Test(renameReq)
+	if err != nil {
+		t.Fatalf("rename passkey request failed: %v", err)
+	}
+	if renameResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 renaming passkey, got %d", renameResp.StatusCode)
+	}
+
+	dismissReq := jsonAuthRequest(http.MethodPost, "/api/auth/passkeys/prompt-dismiss", env.clientToken, nil)
+	dismissResp, err := env.app.Test(dismissReq)
+	if err != nil {
+		t.Fatalf("dismiss passkey prompt request failed: %v", err)
+	}
+	if dismissResp.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204 dismissing passkey prompt, got %d", dismissResp.StatusCode)
+	}
+	var user models.User
+	if err := env.db.First(&user, "id = ?", env.clientUser.ID).Error; err != nil {
+		t.Fatalf("reload user: %v", err)
+	}
+	if !user.PasskeyPromptDismissed {
+		t.Fatalf("expected passkey prompt dismissal to persist")
+	}
+
+	deleteReq := jsonAuthRequest(http.MethodDelete, "/api/auth/passkeys/"+stored.ID, env.clientToken, nil)
+	deleteResp, err := env.app.Test(deleteReq)
+	if err != nil {
+		t.Fatalf("delete passkey request failed: %v", err)
+	}
+	if deleteResp.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204 deleting passkey, got %d", deleteResp.StatusCode)
 	}
 }

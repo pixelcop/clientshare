@@ -13,6 +13,7 @@ func main() {
 		migration.NewGoMigration(35, upSeedDefaultTenant, downSeedDefaultTenant),
 		migration.NewGoMigration(36, upBackfillTenantDomainsFromPublicBaseURLs, downBackfillTenantDomainsFromPublicBaseURLs),
 		migration.NewGoMigration(37, upAddFilesDiskDeletedAt, downAddFilesDiskDeletedAt),
+		migration.NewGoMigration(38, upAddPasskeySupport, downAddPasskeySupport),
 	}
 
 	migration.Run(goMigrations, func(path string) (db.DatabaseConfig, error) {

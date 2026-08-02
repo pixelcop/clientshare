@@ -2,6 +2,7 @@
 import { storeToRefs } from 'pinia';
 
 import { useLayout } from '@/composables/useLayout';
+import PasskeyEnrollmentDialog from '@/components/PasskeyEnrollmentDialog.vue';
 import { useAuthStore } from '@/stores/auth';
 
 import AppFooter from './AppFooter.vue';
@@ -24,5 +25,7 @@ const { isPublicLayout } = useLayout();
   </div>
 
   <AppFooter />
+  <PasskeyEnrollmentDialog />
+  <ConfirmDialog />
   <Toast />
 </template>
