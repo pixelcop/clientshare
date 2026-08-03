@@ -1,6 +1,7 @@
 package clientshare
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -49,6 +50,9 @@ func newTestDB(t *testing.T) *gorm.DB {
 	}
 	if err := database.Create(&models.TenantSettings{TenantID: tenantctx.DefaultTenantID, PublicBaseURL: "https://frontend.local"}).Error; err != nil {
 		t.Fatalf("failed to seed default tenant settings: %v", err)
+	}
+	if err := database.Create(&models.TenantDomain{TenantID: tenantctx.DefaultTenantID, Domain: "frontend.local", Kind: tenantctx.DomainKindPublicBaseURL, IsPrimary: true}).Error; err != nil {
+		t.Fatalf("failed to seed default tenant domain: %v", err)
 	}
 
 	return database
@@ -123,6 +127,44 @@ func TestNewWebApp_UsesProductionRouteSetup(t *testing.T) {
 	}
 	if protectedResp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("expected 401, got %d", protectedResp.StatusCode)
+	}
+}
+
+func TestNewWebAppServesWebAuthnRelatedOrigins(t *testing.T) {
+	tempRoot, err := os.MkdirTemp("", "clientshare-web-test-*")
+	if err != nil {
+		t.Fatalf("create temp root: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(tempRoot) })
+
+	cfg := newTestConfig(tempRoot)
+	cfg.DevMode = true
+	cfg.Auth.HostedPasskeyOrigin = "https://clientshare.app"
+	cfg.InternalAPI.Enabled = true
+	cfg.InternalAPI.Secret = "12345678901234567890123456789012"
+	app, err := NewWebApp(cfg, newTestDB(t), zap.NewNop(), nil, storage.NewLocalStorage(tempRoot))
+	if err != nil {
+		t.Fatalf("NewWebApp() error = %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/.well-known/webauthn", nil)
+	req.Host = "frontend.local"
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test() error = %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+	var body struct {
+		Origins []string `json:"origins"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(body.Origins) != 1 || body.Origins[0] != "https://clientshare.app" {
+		t.Fatalf("origins = %#v, want ClientShare SaaS origin", body.Origins)
 	}
 }
 

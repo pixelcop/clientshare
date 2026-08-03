@@ -25,31 +25,39 @@ import (
 )
 
 type AuthHandler struct {
-	db                *gorm.DB
-	signingKey        string
-	resetTokenSecret  string
-	inviteTokenSecret string
-	resetTokenTTL     time.Duration
-	inviteTokenTTL    time.Duration
-	resetBaseURL      string
-	tenantSettings    *services.TenantSettingsService
-	emailQueue        emailpkg.EmailQueue
-	feedService       *services.FeedService
+	db                  *gorm.DB
+	signingKey          string
+	resetTokenSecret    string
+	inviteTokenSecret   string
+	resetTokenTTL       time.Duration
+	inviteTokenTTL      time.Duration
+	resetBaseURL        string
+	hostedPasskeyOrigin string
+	hostedLogin         *services.HostedLoginService
+	tenantSettings      *services.TenantSettingsService
+	emailQueue          emailpkg.EmailQueue
+	feedService         *services.FeedService
 }
 
-func RegisterAuthRoutes(insecureApi fiber.Router, db *gorm.DB, signingKey string, emailQueue emailpkg.EmailQueue, resetBaseURL string, resetTokenSecret, inviteTokenSecret string, resetTokenTTL, inviteTokenTTL time.Duration, tenantSettings *services.TenantSettingsService, rateLimitEnabled bool) {
-	h := &AuthHandler{
-		db:                db,
-		signingKey:        signingKey,
-		resetTokenSecret:  resetTokenSecret,
-		inviteTokenSecret: inviteTokenSecret,
-		resetTokenTTL:     resetTokenTTL,
-		inviteTokenTTL:    inviteTokenTTL,
-		resetBaseURL:      resetBaseURL,
-		tenantSettings:    tenantSettings,
-		emailQueue:        emailQueue,
-		feedService:       services.NewFeedService(db),
+func NewAuthHandler(db *gorm.DB, signingKey string, emailQueue emailpkg.EmailQueue, resetBaseURL string, resetTokenSecret, inviteTokenSecret string, resetTokenTTL, inviteTokenTTL time.Duration, hostedPasskeyOrigin string, hostedLogin *services.HostedLoginService, tenantSettings *services.TenantSettingsService) *AuthHandler {
+	return &AuthHandler{
+		db:                  db,
+		signingKey:          signingKey,
+		resetTokenSecret:    resetTokenSecret,
+		inviteTokenSecret:   inviteTokenSecret,
+		resetTokenTTL:       resetTokenTTL,
+		inviteTokenTTL:      inviteTokenTTL,
+		resetBaseURL:        resetBaseURL,
+		hostedPasskeyOrigin: normalizeWebAuthnOrigin(hostedPasskeyOrigin),
+		hostedLogin:         hostedLogin,
+		tenantSettings:      tenantSettings,
+		emailQueue:          emailQueue,
+		feedService:         services.NewFeedService(db),
 	}
+}
+
+func RegisterAuthRoutes(insecureApi fiber.Router, db *gorm.DB, signingKey string, emailQueue emailpkg.EmailQueue, resetBaseURL string, resetTokenSecret, inviteTokenSecret string, resetTokenTTL, inviteTokenTTL time.Duration, hostedPasskeyOrigin string, hostedLogin *services.HostedLoginService, tenantSettings *services.TenantSettingsService, rateLimitEnabled bool) *AuthHandler {
+	h := NewAuthHandler(db, signingKey, emailQueue, resetBaseURL, resetTokenSecret, inviteTokenSecret, resetTokenTTL, inviteTokenTTL, hostedPasskeyOrigin, hostedLogin, tenantSettings)
 
 	var l fiber.Handler
 	if rateLimitEnabled {
@@ -64,6 +72,7 @@ func RegisterAuthRoutes(insecureApi fiber.Router, db *gorm.DB, signingKey string
 	insecureApi.Post("/auth/login", l, h.LoginHandler)
 	insecureApi.Post("/auth/passkeys/login/options", l, h.BeginPasskeyLoginHandler)
 	insecureApi.Post("/auth/passkeys/login/verify", l, h.FinishPasskeyLoginHandler)
+	insecureApi.Post("/auth/hosted-login/exchange", l, h.ExchangeHostedLoginHandler)
 	insecureApi.Post("/auth/logout", h.LogoutHandler)
 	insecureApi.Post("/auth/register", l, h.RegisterHandler)
 	insecureApi.Post("/auth/forgot-password", l, h.ForgotPasswordHandler)
@@ -78,6 +87,35 @@ func RegisterAuthRoutes(insecureApi fiber.Router, db *gorm.DB, signingKey string
 	insecureApi.Patch("/auth/passkeys/:id", middleware.AuthRequired, h.RenamePasskeyHandler)
 	insecureApi.Delete("/auth/passkeys/:id", middleware.AuthRequired, h.DeletePasskeyHandler)
 	insecureApi.Post("/auth/passkeys/prompt-dismiss", middleware.AuthRequired, h.DismissPasskeyPromptHandler)
+
+	return h
+}
+
+func (h *AuthHandler) ExchangeHostedLoginHandler(c fiber.Ctx) error {
+	if h.hostedLogin == nil {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "hosted login is unavailable"})
+	}
+	var req struct {
+		Code string `json:"code"`
+	}
+	if err := c.Bind().Body(&req); err != nil || strings.TrimSpace(req.Code) == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid hosted login handoff"})
+	}
+	identity, err := h.hostedLogin.ConsumeHandoff(tenantIDFromCtx(c), req.Code)
+	if err != nil {
+		if errors.Is(err, services.ErrHostedLoginHandoffInvalid) {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid hosted login handoff"})
+		}
+		utils.Logger(c).Error("failed consuming hosted login handoff", zap.Error(err))
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not complete sign in"})
+	}
+	token, err := auth.GenerateJWT(identity.UserID, identity.Role, identity.TenantID)
+	if err != nil {
+		utils.Logger(c).Error("failed generating hosted login session", zap.Error(err))
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not complete sign in"})
+	}
+	setAuthSessionCookie(c, token)
+	return c.JSON(fiber.Map{"authenticated": true})
 }
 
 func (h *AuthHandler) siteTitleForTenant(c fiber.Ctx, tenantID string) string {

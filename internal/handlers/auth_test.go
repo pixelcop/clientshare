@@ -10,7 +10,9 @@ import (
 
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/pixelcop/clientshare/internal/models"
+	"github.com/pixelcop/clientshare/internal/services"
 	"github.com/pixelcop/clientshare/internal/services/links"
+	tenantctx "github.com/pixelcop/clientshare/internal/tenant"
 )
 
 func TestAuthHandlers_LoginMeAndLogout(t *testing.T) {
@@ -69,6 +71,44 @@ func TestAuthHandlers_LoginMeAndLogout(t *testing.T) {
 	clearCookie := logoutResp.Header.Get("Set-Cookie")
 	if !strings.Contains(clearCookie, "jwt=") {
 		t.Fatalf("expected logout to clear jwt cookie, got %q", clearCookie)
+	}
+}
+
+func TestAuthHandlers_HostedLoginHandoffIsSingleUse(t *testing.T) {
+	env := setupOtherHandlersEnv(t)
+	hostedLogin := services.NewHostedLoginService(env.db, handlersTestPublicBaseURL, "reset-secret")
+	handoff, err := hostedLogin.IssueHandoff(services.HostedLoginIdentity{
+		UserID:      env.adminUser.ID,
+		Role:        env.adminUser.Role,
+		TenantID:    env.adminUser.TenantID,
+		TenantSlug:  tenantctx.DefaultTenantSlug,
+		RedirectURL: handlersTestPublicBaseURL,
+	})
+	if err != nil {
+		t.Fatalf("IssueHandoff() error = %v", err)
+	}
+
+	exchangeReq := jsonRequest(http.MethodPost, "/api/auth/hosted-login/exchange", map[string]any{"code": handoff.HandoffCode})
+	exchangeResp, err := env.app.Test(exchangeReq)
+	if err != nil {
+		t.Fatalf("exchange request failed: %v", err)
+	}
+	defer exchangeResp.Body.Close()
+	if exchangeResp.StatusCode != http.StatusOK {
+		t.Fatalf("exchange status = %d, want %d", exchangeResp.StatusCode, http.StatusOK)
+	}
+	if !strings.Contains(exchangeResp.Header.Get("Set-Cookie"), "jwt=") {
+		t.Fatalf("expected exchange to set jwt cookie, got %q", exchangeResp.Header.Get("Set-Cookie"))
+	}
+
+	replayReq := jsonRequest(http.MethodPost, "/api/auth/hosted-login/exchange", map[string]any{"code": handoff.HandoffCode})
+	replayResp, err := env.app.Test(replayReq)
+	if err != nil {
+		t.Fatalf("replay request failed: %v", err)
+	}
+	defer replayResp.Body.Close()
+	if replayResp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("replay status = %d, want %d", replayResp.StatusCode, http.StatusUnauthorized)
 	}
 }
 

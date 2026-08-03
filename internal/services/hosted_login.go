@@ -1,13 +1,20 @@
 package services
 
 import (
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/pixelcop/clientshare/internal/auth"
+	"github.com/pixelcop/clientshare/internal/models"
 	"github.com/pixelcop/clientshare/internal/tenant"
 	"gorm.io/gorm"
 )
@@ -17,54 +24,188 @@ var (
 	ErrHostedLoginAmbiguousEmail      = errors.New("hosted login email matches multiple tenants")
 	ErrHostedLoginTenantInactive      = errors.New("tenant is not active")
 	ErrHostedLoginRedirectUnavailable = errors.New("tenant redirect URL is unavailable")
+	ErrHostedLoginHandoffInvalid      = errors.New("invalid or expired hosted login handoff")
 )
 
 type HostedLoginResult struct {
-	Token       string `json:"token"`
-	TenantID    string `json:"tenant_id"`
-	TenantSlug  string `json:"tenant_slug"`
-	UserID      string `json:"user_id"`
-	Role        string `json:"role"`
+	HandoffCode string `json:"handoff_code"`
 	RedirectURL string `json:"redirect_url"`
 }
 
 type HostedLoginService struct {
 	db              *gorm.DB
 	fallbackBaseURL string
+	handoffSecret   string
+}
+
+type hostedLoginUserMatch struct {
+	UserID            string
+	Role              string
+	TenantID          string
+	TenantSlug        string
+	PasswordHash      string
+	PublicBaseURL     string
+	EntitlementStatus string
 }
 
 type hostedLoginDomainRow struct {
-	Domain    string
-	Kind      string
-	IsPrimary bool
+	Domain string
 }
 
-func NewHostedLoginService(db *gorm.DB, fallbackBaseURL string) *HostedLoginService {
-	return &HostedLoginService{db: db, fallbackBaseURL: normalizeHostedLoginBaseURL(fallbackBaseURL)}
+// HostedLoginIdentity identifies a user and their hosted tenant redirect target.
+// It is only returned to trusted internal callers.
+type HostedLoginIdentity struct {
+	UserID      string
+	Role        string
+	TenantID    string
+	TenantSlug  string
+	RedirectURL string
+}
+
+func NewHostedLoginService(db *gorm.DB, fallbackBaseURL, handoffSecret string) *HostedLoginService {
+	return &HostedLoginService{
+		db:              db,
+		fallbackBaseURL: normalizeHostedLoginBaseURL(fallbackBaseURL),
+		handoffSecret:   strings.TrimSpace(handoffSecret),
+	}
+}
+
+func (s *HostedLoginService) Resolve(email string) (*HostedLoginIdentity, error) {
+	match, err := s.lookupUser(email)
+	if err != nil {
+		return nil, err
+	}
+	redirectURL, err := s.redirectURL(match)
+	if err != nil {
+		return nil, err
+	}
+	return &HostedLoginIdentity{
+		UserID:      match.UserID,
+		Role:        match.Role,
+		TenantID:    match.TenantID,
+		TenantSlug:  match.TenantSlug,
+		RedirectURL: redirectURL,
+	}, nil
 }
 
 func (s *HostedLoginService) Login(email, password string) (*HostedLoginResult, error) {
-	if s == nil || s.db == nil {
-		return nil, gorm.ErrInvalidDB
-	}
-
-	normalizedEmail := strings.ToLower(strings.TrimSpace(email))
-	password = strings.TrimSpace(password)
-	if normalizedEmail == "" || password == "" {
+	if password == "" {
 		return nil, ErrHostedLoginInvalidCredentials
 	}
 
-	type userMatch struct {
-		UserID            string
-		Role              string
-		TenantID          string
-		TenantSlug        string
-		PasswordHash      string
-		PublicBaseURL     string
-		EntitlementStatus string
+	match, err := s.lookupUser(email)
+	if err != nil {
+		return nil, err
+	}
+	if !auth.CheckPasswordHash(password, match.PasswordHash) {
+		return nil, ErrHostedLoginInvalidCredentials
+	}
+	redirectURL, err := s.redirectURL(match)
+	if err != nil {
+		return nil, err
 	}
 
-	var matches []userMatch
+	return s.IssueHandoff(HostedLoginIdentity{
+		UserID:      match.UserID,
+		Role:        match.Role,
+		TenantID:    match.TenantID,
+		TenantSlug:  match.TenantSlug,
+		RedirectURL: redirectURL,
+	})
+}
+
+func (s *HostedLoginService) IssueHandoff(identity HostedLoginIdentity) (*HostedLoginResult, error) {
+	if s == nil || s.db == nil || s.handoffSecret == "" {
+		return nil, errors.New("hosted login handoffs are unavailable")
+	}
+	code, err := generateHostedLoginHandoffCode()
+	if err != nil {
+		return nil, fmt.Errorf("generate hosted login handoff: %w", err)
+	}
+	now := time.Now()
+	_ = s.db.Where("expires_at < ? OR used_at IS NOT NULL", now).Delete(&models.HostedLoginHandoff{}).Error
+	handoff := models.HostedLoginHandoff{
+		TenantID:  identity.TenantID,
+		UserID:    identity.UserID,
+		Role:      identity.Role,
+		CodeHash:  hashHostedLoginHandoff(s.handoffSecret, code),
+		ExpiresAt: now.Add(2 * time.Minute),
+		CreatedAt: now,
+	}
+	if err := s.db.Create(&handoff).Error; err != nil {
+		return nil, fmt.Errorf("store hosted login handoff: %w", err)
+	}
+	return &HostedLoginResult{
+		HandoffCode: code,
+		RedirectURL: identity.RedirectURL,
+	}, nil
+}
+
+func (s *HostedLoginService) ConsumeHandoff(tenantID, code string) (*HostedLoginIdentity, error) {
+	if s == nil || s.db == nil || s.handoffSecret == "" {
+		return nil, ErrHostedLoginHandoffInvalid
+	}
+	tenantID = strings.TrimSpace(tenantID)
+	code = strings.TrimSpace(code)
+	if tenantID == "" || code == "" {
+		return nil, ErrHostedLoginHandoffInvalid
+	}
+	now := time.Now()
+	codeHash := hashHostedLoginHandoff(s.handoffSecret, code)
+	var handoff models.HostedLoginHandoff
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("tenant_id = ? AND code_hash = ? AND used_at IS NULL AND expires_at > ?", tenantID, codeHash, now).First(&handoff).Error; err != nil {
+			return err
+		}
+		result := tx.Model(&models.HostedLoginHandoff{}).
+			Where("id = ? AND used_at IS NULL AND expires_at > ?", handoff.ID, now).
+			Update("used_at", now)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return ErrHostedLoginHandoffInvalid
+		}
+		return nil
+	})
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) || errors.Is(err, ErrHostedLoginHandoffInvalid) {
+			return nil, ErrHostedLoginHandoffInvalid
+		}
+		return nil, fmt.Errorf("consume hosted login handoff: %w", err)
+	}
+	return &HostedLoginIdentity{
+		UserID:   handoff.UserID,
+		Role:     handoff.Role,
+		TenantID: handoff.TenantID,
+	}, nil
+}
+
+func generateHostedLoginHandoffCode() (string, error) {
+	bytes := make([]byte, 32)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(bytes), nil
+}
+
+func hashHostedLoginHandoff(secret, code string) string {
+	mac := hmac.New(sha256.New, []byte(secret))
+	_, _ = mac.Write([]byte(code))
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
+func (s *HostedLoginService) lookupUser(email string) (hostedLoginUserMatch, error) {
+	if s == nil || s.db == nil {
+		return hostedLoginUserMatch{}, gorm.ErrInvalidDB
+	}
+
+	normalizedEmail := strings.ToLower(strings.TrimSpace(email))
+	if normalizedEmail == "" {
+		return hostedLoginUserMatch{}, ErrHostedLoginInvalidCredentials
+	}
+
+	var matches []hostedLoginUserMatch
 	if err := s.db.Table("users AS u").
 		Select("u.id AS user_id, u.role, u.tenant_id, t.slug AS tenant_slug, u.password_hash, COALESCE(ts.public_base_url, '') AS public_base_url, COALESCE(te.status, '') AS entitlement_status").
 		Joins("JOIN tenants AS t ON t.id = u.tenant_id").
@@ -73,103 +214,62 @@ func (s *HostedLoginService) Login(email, password string) (*HostedLoginResult, 
 		Where("LOWER(u.email) = ?", normalizedEmail).
 		Order("u.created_at ASC").
 		Find(&matches).Error; err != nil {
-		return nil, fmt.Errorf("lookup hosted login user: %w", err)
+		return hostedLoginUserMatch{}, fmt.Errorf("lookup hosted login user: %w", err)
 	}
 
 	if len(matches) == 0 {
-		return nil, ErrHostedLoginInvalidCredentials
+		return hostedLoginUserMatch{}, ErrHostedLoginInvalidCredentials
 	}
 	if len(matches) > 1 {
-		return nil, ErrHostedLoginAmbiguousEmail
+		return hostedLoginUserMatch{}, ErrHostedLoginAmbiguousEmail
 	}
-
-	match := matches[0]
-	if !auth.CheckPasswordHash(password, match.PasswordHash) {
-		return nil, ErrHostedLoginInvalidCredentials
-	}
-	if status := strings.TrimSpace(match.EntitlementStatus); status != "" && status != tenant.StatusActive {
-		return nil, ErrHostedLoginTenantInactive
-	}
-
-	redirectURL, err := s.resolveRedirectURL(match.TenantID, match.TenantSlug, match.PublicBaseURL)
-	if err != nil {
-		return nil, err
-	}
-
-	token, err := auth.GenerateJWT(match.UserID, match.Role, match.TenantID)
-	if err != nil {
-		return nil, fmt.Errorf("generate hosted login token: %w", err)
-	}
-
-	return &HostedLoginResult{
-		Token:       token,
-		TenantID:    match.TenantID,
-		TenantSlug:  match.TenantSlug,
-		UserID:      match.UserID,
-		Role:        match.Role,
-		RedirectURL: redirectURL,
-	}, nil
+	return matches[0], nil
 }
 
-func (s *HostedLoginService) resolveRedirectURL(tenantID, tenantSlug, publicBaseURL string) (string, error) {
-	if normalized := normalizeHostedLoginBaseURL(publicBaseURL); normalized != "" {
-		return normalized, nil
+func (s *HostedLoginService) redirectURL(match hostedLoginUserMatch) (string, error) {
+	if status := strings.TrimSpace(match.EntitlementStatus); status != "" && status != tenant.StatusActive {
+		return "", ErrHostedLoginTenantInactive
 	}
 
+	redirectURL, err := s.resolveRedirectURL(match.TenantID)
+	if err != nil {
+		return "", err
+	}
+	return redirectURL, nil
+}
+
+func (s *HostedLoginService) resolveRedirectURL(tenantID string) (string, error) {
+	if s == nil || s.db == nil {
+		return "", gorm.ErrInvalidDB
+	}
 	var domains []hostedLoginDomainRow
 	if err := s.db.Table("tenant_domains").
-		Select("domain, kind, is_primary").
+		Select("domain").
 		Where("tenant_id = ?", strings.TrimSpace(tenantID)).
 		Order("is_primary DESC, created_at ASC").
 		Find(&domains).Error; err != nil {
-		return "", fmt.Errorf("load tenant domains: %w", err)
+		return "", fmt.Errorf("load tenant login domains: %w", err)
 	}
-
-	if domain := preferredHostedLoginDomain(domains); domain != "" {
-		scheme := hostedLoginBaseScheme(s.fallbackBaseURL)
-		return scheme + "://" + domain, nil
-	}
-
-	if fallback := buildHostedLoginURLFromFallback(s.fallbackBaseURL, tenantSlug); fallback != "" {
-		return fallback, nil
-	}
-
-	return "", ErrHostedLoginRedirectUnavailable
-}
-
-func preferredHostedLoginDomain(domains []hostedLoginDomainRow) string {
-	bestDomain := ""
-	bestRank := 0
 	for _, candidate := range domains {
-		domain := strings.ToLower(strings.TrimSpace(candidate.Domain))
+		domain := normalizeHostedLoginDomain(candidate.Domain)
 		if domain == "" {
 			continue
 		}
-		rank := hostedLoginDomainRank(candidate.Kind, candidate.IsPrimary)
-		if rank > bestRank {
-			bestRank = rank
-			bestDomain = domain
-		}
+		return hostedLoginBaseScheme(s.fallbackBaseURL) + "://" + domain, nil
 	}
-	return bestDomain
+	return "", ErrHostedLoginRedirectUnavailable
 }
 
-func hostedLoginDomainRank(kind string, isPrimary bool) int {
-	rank := 1
-	if isPrimary {
-		rank += 10
+func normalizeHostedLoginDomain(value string) string {
+	value = strings.TrimSpace(strings.ToLower(value))
+	if value == "" || strings.Contains(value, "://") || strings.ContainsAny(value, "/?#") {
+		return ""
 	}
-	switch strings.TrimSpace(kind) {
-	case tenant.DomainKindPublicBaseURL:
-		rank += 5
-	case tenant.DomainKindBase:
-		rank += 4
-	case "custom":
-		rank += 3
-	case "subdomain":
-		rank += 2
+	parsed, err := url.Parse("//" + value)
+	if err != nil || parsed.Host == "" || parsed.User != nil || parsed.Path != "" {
+		return ""
 	}
-	return rank
+	return parsed.Host
 }
 
 func normalizeHostedLoginBaseURL(value string) string {
@@ -178,7 +278,10 @@ func normalizeHostedLoginBaseURL(value string) string {
 		return ""
 	}
 	parsed, err := url.Parse(value)
-	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+	if err != nil || parsed.Host == "" || parsed.User != nil {
+		return ""
+	}
+	if parsed.Scheme != "https" && !(parsed.Scheme == "http" && isLoopbackHostname(parsed.Hostname())) {
 		return ""
 	}
 	parsed.Fragment = ""
@@ -187,32 +290,19 @@ func normalizeHostedLoginBaseURL(value string) string {
 	return parsed.String()
 }
 
+func isLoopbackHostname(hostname string) bool {
+	hostname = strings.TrimSpace(strings.ToLower(hostname))
+	if hostname == "localhost" || hostname == "::1" {
+		return true
+	}
+	parsed := net.ParseIP(hostname)
+	return parsed != nil && parsed.IsLoopback()
+}
+
 func hostedLoginBaseScheme(baseURL string) string {
 	parsed, err := url.Parse(baseURL)
 	if err != nil || strings.TrimSpace(parsed.Scheme) == "" {
 		return "https"
 	}
 	return parsed.Scheme
-}
-
-func buildHostedLoginURLFromFallback(baseURL, tenantSlug string) string {
-	baseURL = normalizeHostedLoginBaseURL(baseURL)
-	tenantSlug = strings.TrimSpace(tenantSlug)
-	if baseURL == "" || tenantSlug == "" {
-		return ""
-	}
-	parsed, err := url.Parse(baseURL)
-	if err != nil {
-		return ""
-	}
-	hostname := strings.TrimSpace(parsed.Hostname())
-	if hostname == "" {
-		return ""
-	}
-	host := tenantSlug + "." + hostname
-	if port := strings.TrimSpace(parsed.Port()); port != "" {
-		host = net.JoinHostPort(host, port)
-	}
-	parsed.Host = host
-	return parsed.String()
 }

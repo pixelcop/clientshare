@@ -41,6 +41,8 @@ auth:
   password_reset_duration: "30m"
   invite_token_secret: ""
   invite_token_duration: "72h"
+  # Optional SaaS origin authorized to use tenant passkeys via Related Origin Requests.
+  hosted_passkey_origin: ""
 
 secure_links:
   default_expiry_days: 90

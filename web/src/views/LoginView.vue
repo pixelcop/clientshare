@@ -110,14 +110,14 @@ onMounted(async () => {
     ? window.location.hash.slice(1)
     : window.location.hash;
   const params = new URLSearchParams(fragment);
-  const token = params.get('token')?.trim() || '';
-  if (!token) {
+  const handoff = params.get('handoff')?.trim() || '';
+  if (!handoff) {
     return;
   }
 
   loading.value = true;
   error.value = null;
-  const ok = await auth.acceptRedirectToken(token);
+  const ok = await auth.acceptHostedLoginHandoff(handoff);
   loading.value = false;
   window.history.replaceState(
     {},

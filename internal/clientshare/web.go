@@ -19,6 +19,9 @@ import (
 )
 
 func NewWebApp(cfg *Config, db *gorm.DB, logger *zap.Logger, emailQueue emailpkg.EmailQueue, store storage.Storage) (*fiber.App, error) {
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("validate config: %w", err)
+	}
 	maxBodyMB := cfg.Server.MaxBodyMB
 	app := web.CreateApp(maxBodyMB, logger, cfg.DevMode)
 
@@ -75,7 +78,10 @@ func NewWebApp(cfg *Config, db *gorm.DB, logger *zap.Logger, emailQueue emailpkg
 		return nil, fmt.Errorf("auth.jwt_secret is required")
 	}
 	auth.SetJWTSecret(jwtSecret)
-	handlers.RegisterAuthRoutes(insecure, db, cfg.SecureLinks.SigningKey, emailQueue, cfg.Server.BaseURL, jwtSecret, inviteTokenSecret, resetTTL, inviteTTL, tenantSettingsService, authRateLimitEnabled)
+	hostedLoginSvc := services.NewHostedLoginService(db, cfg.Server.BaseURL, jwtSecret)
+	authHandler := handlers.RegisterAuthRoutes(insecure, db, cfg.SecureLinks.SigningKey, emailQueue, cfg.Server.BaseURL, jwtSecret, inviteTokenSecret, resetTTL, inviteTTL, cfg.Auth.HostedPasskeyOrigin, hostedLoginSvc, tenantSettingsService, authRateLimitEnabled)
+	app.Use("/.well-known", tenantResolver)
+	app.Get("/.well-known/webauthn", authHandler.RelatedOriginsHandler)
 	api := fiber.New()
 	app.Use("/api", api)
 	api.Use("/", middleware.AuthRequired)
@@ -106,9 +112,8 @@ func NewWebApp(cfg *Config, db *gorm.DB, logger *zap.Logger, emailQueue emailpkg
 	if cfg.InternalAPI.Enabled {
 		internalGroup := app.Group("/internal", middleware.InternalAuthRequired(cfg.InternalAPI.Secret))
 		provisioningSvc := services.NewTenantProvisioningService(db, inviteTokenSecret, inviteTTL, emailQueue, cfg.Server.BaseURL)
-		hostedLoginSvc := services.NewHostedLoginService(db, cfg.Server.BaseURL)
 		handlers.RegisterInternalTenantRoutes(internalGroup, provisioningSvc)
-		handlers.RegisterInternalAuthRoutes(internalGroup, hostedLoginSvc)
+		handlers.RegisterInternalAuthRoutes(internalGroup, hostedLoginSvc, authHandler)
 	}
 
 	// setup static serving last due to catch-all routes

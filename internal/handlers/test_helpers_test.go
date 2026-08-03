@@ -210,6 +210,7 @@ func setupSharedHandlersEnvWithOptions(t *testing.T, options handlersTestOptions
 		&models.InviteToken{},
 		&models.PasskeyCredential{},
 		&models.WebAuthnChallenge{},
+		&models.HostedLoginHandoff{},
 	); err != nil {
 		t.Fatalf("failed to migrate db: %v", err)
 	}

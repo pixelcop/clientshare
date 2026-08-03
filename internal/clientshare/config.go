@@ -2,6 +2,9 @@ package clientshare
 
 import (
 	"fmt"
+	"net"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/pixelcop/clientshare/pkg/db"
@@ -54,6 +57,7 @@ type Config struct {
 		PasswordResetDuration string `mapstructure:"password_reset_duration"`
 		InviteTokenDuration   string `mapstructure:"invite_token_duration"`
 		RateLimitEnabled      *bool  `mapstructure:"rate_limit_enabled"`
+		HostedPasskeyOrigin   string `mapstructure:"hosted_passkey_origin"`
 	} `mapstructure:"auth"`
 	SecureLinks struct {
 		DefaultExpiryDays int    `mapstructure:"default_expiry_days"`
@@ -102,8 +106,44 @@ func LoadConfig(configPath string) (*Config, error) {
 	if err := ApplyBuildInfo(&cfg); err != nil {
 		return nil, fmt.Errorf("apply build info: %w", err)
 	}
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("validate config: %w", err)
+	}
 
 	return &cfg, nil
+}
+
+func (cfg *Config) Validate() error {
+	origin := strings.TrimSpace(cfg.Auth.HostedPasskeyOrigin)
+	if origin == "" {
+		return nil
+	}
+	parsed, err := url.Parse(origin)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" || parsed.User != nil {
+		return fmt.Errorf("auth.hosted_passkey_origin must be an absolute origin")
+	}
+	if parsed.Scheme != "https" && parsed.Scheme != "http" {
+		return fmt.Errorf("auth.hosted_passkey_origin must use http or https")
+	}
+	if parsed.Scheme == "http" && (!cfg.DevMode || !isLoopbackHost(parsed.Hostname())) {
+		return fmt.Errorf("auth.hosted_passkey_origin must use https outside local development")
+	}
+	if parsed.Path != "" && parsed.Path != "/" || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return fmt.Errorf("auth.hosted_passkey_origin must not include a path, query, or fragment")
+	}
+	if !cfg.InternalAPI.Enabled {
+		return fmt.Errorf("auth.hosted_passkey_origin requires internal_api.enabled")
+	}
+	return nil
+}
+
+func isLoopbackHost(hostname string) bool {
+	hostname = strings.TrimSpace(strings.ToLower(hostname))
+	if hostname == "localhost" || hostname == "::1" {
+		return true
+	}
+	ip := net.ParseIP(hostname)
+	return ip != nil && ip.IsLoopback()
 }
 
 func ApplyBuildInfo(cfg *Config) error {

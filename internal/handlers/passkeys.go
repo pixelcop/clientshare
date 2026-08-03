@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 	"github.com/pixelcop/clientshare/internal/auth"
 	"github.com/pixelcop/clientshare/internal/models"
+	"github.com/pixelcop/clientshare/internal/services"
 	"github.com/pixelcop/clientshare/pkg/utils"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -22,11 +24,13 @@ import (
 
 const (
 	passkeyChallengeLogin        = "login"
+	passkeyChallengeHostedLogin  = "hosted_login"
 	passkeyChallengeRegistration = "registration"
 	passkeyChallengeTTL          = 5 * time.Minute
 )
 
 var errPasskeyChallengeInvalid = errors.New("invalid or expired passkey challenge")
+var errHostedPasskeyVerificationFailed = errors.New("hosted passkey verification failed")
 
 type passkeyUser struct {
 	user        models.User
@@ -138,7 +142,7 @@ func (h *AuthHandler) FinishPasskeyRegistrationHandler(c fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Could not verify passkey"})
 	}
-	webAuthn, err := h.webAuthnForRequest(c, user.TenantID)
+	webAuthn, err := h.webAuthnForRPID(c, user.TenantID, session.RelyingPartyID, []string{tenantWebAuthnOrigin(c, h.resetBaseURL)})
 	if err != nil {
 		utils.Logger(c).Error("failed configuring WebAuthn", zap.Error(err))
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Passkeys are not configured"})
@@ -164,6 +168,7 @@ func (h *AuthHandler) FinishPasskeyRegistrationHandler(c fiber.Ctx) error {
 		CredentialID:     base64.RawURLEncoding.EncodeToString(credential.ID),
 		CredentialIDHash: passkeyCredentialHash(credential.ID),
 		CredentialData:   encodedCredential,
+		RPID:             session.RelyingPartyID,
 		Name:             name,
 		CreatedAt:        time.Now(),
 	}
@@ -196,7 +201,12 @@ func (h *AuthHandler) BeginPasskeyLoginHandler(c fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to begin sign in"})
 	}
 
-	passkeyUser, records, err := h.loadPasskeyUser(c, user)
+	baseURL := tenantBaseURLFromCtx(c, h.resetBaseURL)
+	rpID, err := webAuthnRPID(baseURL)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Passkeys are not configured"})
+	}
+	passkeyUser, records, err := h.loadPasskeyUserForRPID(c, user, rpID)
 	if err != nil {
 		utils.Logger(c).Error("failed loading passkey credentials", zap.Error(err))
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to begin sign in"})
@@ -204,7 +214,7 @@ func (h *AuthHandler) BeginPasskeyLoginHandler(c fiber.Ctx) error {
 	if len(records) == 0 {
 		return c.JSON(fiber.Map{"passkey": false})
 	}
-	webAuthn, err := h.webAuthnForRequest(c, tenantID)
+	webAuthn, err := h.webAuthnForBaseURL(c, tenantID, baseURL)
 	if err != nil {
 		utils.Logger(c).Error("failed configuring WebAuthn", zap.Error(err))
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Passkeys are not configured"})
@@ -237,11 +247,6 @@ func (h *AuthHandler) FinishPasskeyLoginHandler(c fiber.Ctx) error {
 	if err := h.db.WithContext(c.Context()).Where("tenant_id = ? AND email = ?", tenantID, strings.TrimSpace(req.Email)).First(&user).Error; err != nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Passkey sign in failed"})
 	}
-	passkeyUser, _, err := h.loadPasskeyUser(c, user)
-	if err != nil {
-		utils.Logger(c).Error("failed loading passkey credentials", zap.Error(err))
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Passkey sign in failed"})
-	}
 	session, err := h.consumePasskeyChallenge(c, tenantID, user.ID, passkeyChallengeLogin, req.ChallengeID)
 	if err != nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Passkey sign in failed"})
@@ -250,7 +255,12 @@ func (h *AuthHandler) FinishPasskeyLoginHandler(c fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Passkey sign in failed"})
 	}
-	webAuthn, err := h.webAuthnForRequest(c, tenantID)
+	passkeyUser, _, err := h.loadPasskeyUserForRPID(c, user, session.RelyingPartyID)
+	if err != nil {
+		utils.Logger(c).Error("failed loading passkey credentials", zap.Error(err))
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Passkey sign in failed"})
+	}
+	webAuthn, err := h.webAuthnForRPID(c, tenantID, session.RelyingPartyID, []string{tenantWebAuthnOrigin(c, h.resetBaseURL)})
 	if err != nil {
 		utils.Logger(c).Error("failed configuring WebAuthn", zap.Error(err))
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Passkeys are not configured"})
@@ -268,8 +278,8 @@ func (h *AuthHandler) FinishPasskeyLoginHandler(c fiber.Ctx) error {
 	now := time.Now()
 	credentialIDHash := passkeyCredentialHash(credential.ID)
 	update := h.db.WithContext(c.Context()).Model(&models.PasskeyCredential{}).
-		Where("tenant_id = ? AND user_id = ? AND credential_id_hash = ?", tenantID, user.ID, credentialIDHash).
-		Updates(map[string]interface{}{"credential_data": encodedCredential, "last_used_at": now})
+		Where("tenant_id = ? AND user_id = ? AND credential_id_hash = ? AND (rp_id = ? OR rp_id = '')", tenantID, user.ID, credentialIDHash, session.RelyingPartyID).
+		Updates(map[string]interface{}{"credential_data": encodedCredential, "last_used_at": now, "rp_id": session.RelyingPartyID})
 	if update.Error != nil || update.RowsAffected != 1 {
 		utils.Logger(c).Error("failed updating passkey after sign-in", zap.Error(update.Error))
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Passkey sign in failed"})
@@ -281,6 +291,103 @@ func (h *AuthHandler) FinishPasskeyLoginHandler(c fiber.Ctx) error {
 	}
 	setAuthSessionCookie(c, token)
 	return c.JSON(fiber.Map{"authenticated": true})
+}
+
+// BeginHostedPasskeyLogin starts a ceremony from the configured SaaS origin while
+// retaining the tenant hostname as the credential's RP ID.
+func (h *AuthHandler) BeginHostedPasskeyLogin(c fiber.Ctx, hostedLogin *services.HostedLoginService, email string) (fiber.Map, error) {
+	if h.hostedPasskeyOrigin == "" {
+		fmt.Printf("h: %+v\n", h)
+		fmt.Println("returning false b ecause hostedPasskeyOrigin is empty")
+		return fiber.Map{"passkey": false}, nil
+	}
+	identity, user, err := h.hostedPasskeyIdentity(c, hostedLogin, email)
+	if err != nil {
+		return nil, err
+	}
+	_, records, err := h.loadPasskeyUser(c, user)
+	if err != nil {
+		return nil, err
+	}
+	if len(records) == 0 {
+		return fiber.Map{"passkey": false}, nil
+	}
+	legacyRPID, err := webAuthnRPID(identity.RedirectURL)
+	if err != nil {
+		return nil, err
+	}
+	groups := passkeyRecordsByRPID(records, legacyRPID)
+	rpIDs := make([]string, 0, len(groups))
+	for rpID := range groups {
+		rpIDs = append(rpIDs, rpID)
+	}
+	sort.Strings(rpIDs)
+	options := make([]fiber.Map, 0, len(rpIDs))
+	for _, rpID := range rpIDs {
+		passkeyUser, err := passkeyUserFromRecords(user, groups[rpID])
+		if err != nil {
+			return nil, err
+		}
+		webAuthn, err := h.webAuthnForRPID(c, identity.TenantID, rpID, []string{h.hostedPasskeyOrigin})
+		if err != nil {
+			return nil, err
+		}
+		assertion, session, err := webAuthn.BeginLogin(passkeyUser, webauthn.WithUserVerification(protocol.VerificationRequired))
+		if err != nil {
+			return nil, err
+		}
+		challengeID, err := h.storePasskeyChallenge(c, identity.TenantID, user.ID, passkeyChallengeHostedLogin, *session)
+		if err != nil {
+			return nil, err
+		}
+		options = append(options, fiber.Map{"challenge_id": challengeID, "public_key": assertion.Response})
+	}
+	return fiber.Map{"passkey": len(options) > 0, "options": options}, nil
+}
+
+func (h *AuthHandler) FinishHostedPasskeyLogin(c fiber.Ctx, hostedLogin *services.HostedLoginService, email, challengeID string, credentialJSON json.RawMessage) (*services.HostedLoginResult, error) {
+	if h.hostedPasskeyOrigin == "" {
+		return nil, errors.New("hosted passkey login is unavailable")
+	}
+	identity, user, err := h.hostedPasskeyIdentity(c, hostedLogin, email)
+	if err != nil {
+		return nil, err
+	}
+	session, err := h.consumePasskeyChallenge(c, identity.TenantID, user.ID, passkeyChallengeHostedLogin, challengeID)
+	if err != nil {
+		return nil, errHostedPasskeyVerificationFailed
+	}
+	passkeyUser, _, err := h.loadPasskeyUserForRPID(c, user, session.RelyingPartyID)
+	if err != nil {
+		return nil, err
+	}
+	parsedCredential, err := protocol.ParseCredentialRequestResponseBytes(credentialJSON)
+	if err != nil {
+		return nil, errHostedPasskeyVerificationFailed
+	}
+	webAuthn, err := h.webAuthnForRPID(c, identity.TenantID, session.RelyingPartyID, []string{h.hostedPasskeyOrigin})
+	if err != nil {
+		return nil, err
+	}
+	credential, err := webAuthn.ValidateLogin(passkeyUser, session, parsedCredential)
+	if err != nil {
+		return nil, errHostedPasskeyVerificationFailed
+	}
+	encodedCredential, err := json.Marshal(credential)
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now()
+	update := h.db.WithContext(c.Context()).Model(&models.PasskeyCredential{}).
+		Where("tenant_id = ? AND user_id = ? AND credential_id_hash = ? AND (rp_id = ? OR rp_id = '')", identity.TenantID, user.ID, passkeyCredentialHash(credential.ID), session.RelyingPartyID).
+		Updates(map[string]interface{}{"credential_data": encodedCredential, "last_used_at": now, "rp_id": session.RelyingPartyID})
+	if update.Error != nil || update.RowsAffected != 1 {
+		if update.Error != nil {
+			return nil, update.Error
+		}
+		return nil, errors.New("passkey credential was not found")
+	}
+	return hostedLogin.IssueHandoff(*identity)
 }
 
 func (h *AuthHandler) RenamePasskeyHandler(c fiber.Ctx) error {
@@ -355,6 +462,21 @@ func (h *AuthHandler) currentPasskeyUser(c fiber.Ctx) (models.User, error) {
 	return user, nil
 }
 
+func (h *AuthHandler) hostedPasskeyIdentity(c fiber.Ctx, hostedLogin *services.HostedLoginService, email string) (*services.HostedLoginIdentity, models.User, error) {
+	if hostedLogin == nil {
+		return nil, models.User{}, errors.New("hosted login is unavailable")
+	}
+	identity, err := hostedLogin.Resolve(email)
+	if err != nil {
+		return nil, models.User{}, err
+	}
+	var user models.User
+	if err := h.db.WithContext(c.Context()).Where("tenant_id = ? AND id = ?", identity.TenantID, identity.UserID).First(&user).Error; err != nil {
+		return nil, models.User{}, err
+	}
+	return identity, user, nil
+}
+
 func passkeyUserError(c fiber.Ctx, err error) error {
 	var fiberErr *fiber.Error
 	if errors.As(err, &fiberErr) {
@@ -372,15 +494,53 @@ func (h *AuthHandler) loadPasskeyUser(c fiber.Ctx, user models.User) (passkeyUse
 	if err != nil {
 		return passkeyUser{}, nil, err
 	}
+	loadedUser, err := passkeyUserFromRecords(user, records)
+	if err != nil {
+		return passkeyUser{}, nil, err
+	}
+	return loadedUser, records, nil
+}
+
+func (h *AuthHandler) loadPasskeyUserForRPID(c fiber.Ctx, user models.User, rpID string) (passkeyUser, []models.PasskeyCredential, error) {
+	records, err := h.listPasskeyCredentialRecords(c, user.TenantID, user.ID)
+	if err != nil {
+		return passkeyUser{}, nil, err
+	}
+	selected := make([]models.PasskeyCredential, 0, len(records))
+	for _, record := range records {
+		if record.RPID == "" || record.RPID == rpID {
+			selected = append(selected, record)
+		}
+	}
+	loadedUser, err := passkeyUserFromRecords(user, selected)
+	if err != nil {
+		return passkeyUser{}, nil, err
+	}
+	return loadedUser, selected, nil
+}
+
+func passkeyUserFromRecords(user models.User, records []models.PasskeyCredential) (passkeyUser, error) {
 	credentials := make([]webauthn.Credential, 0, len(records))
 	for _, record := range records {
 		var credential webauthn.Credential
 		if err := json.Unmarshal(record.CredentialData, &credential); err != nil {
-			return passkeyUser{}, nil, fmt.Errorf("decode credential %s: %w", record.ID, err)
+			return passkeyUser{}, fmt.Errorf("decode credential %s: %w", record.ID, err)
 		}
 		credentials = append(credentials, credential)
 	}
-	return passkeyUser{user: user, credentials: credentials}, records, nil
+	return passkeyUser{user: user, credentials: credentials}, nil
+}
+
+func passkeyRecordsByRPID(records []models.PasskeyCredential, legacyRPID string) map[string][]models.PasskeyCredential {
+	groups := make(map[string][]models.PasskeyCredential)
+	for _, record := range records {
+		rpID := record.RPID
+		if rpID == "" {
+			rpID = legacyRPID
+		}
+		groups[rpID] = append(groups[rpID], record)
+	}
+	return groups
 }
 
 func (h *AuthHandler) listPasskeyCredentialRecords(c fiber.Ctx, tenantID, userID string) ([]models.PasskeyCredential, error) {
@@ -390,15 +550,37 @@ func (h *AuthHandler) listPasskeyCredentialRecords(c fiber.Ctx, tenantID, userID
 }
 
 func (h *AuthHandler) webAuthnForRequest(c fiber.Ctx, tenantID string) (*webauthn.WebAuthn, error) {
-	baseURL, err := url.Parse(tenantBaseURLFromCtx(c, h.resetBaseURL))
+	return h.webAuthnForBaseURL(c, tenantID, tenantBaseURLFromCtx(c, h.resetBaseURL))
+}
+
+func (h *AuthHandler) webAuthnForBaseURL(c fiber.Ctx, tenantID, publicBaseURL string) (*webauthn.WebAuthn, error) {
+	baseURL, err := url.Parse(publicBaseURL)
 	if err != nil || baseURL.Scheme == "" || baseURL.Hostname() == "" {
 		return nil, errors.New("invalid public base URL")
 	}
 	origin := baseURL.Scheme + "://" + baseURL.Host
+	return h.webAuthnForRPID(c, tenantID, baseURL.Hostname(), []string{origin})
+}
+
+func (h *AuthHandler) webAuthnForRPID(c fiber.Ctx, tenantID, rpID string, origins []string) (*webauthn.WebAuthn, error) {
+	rpID = strings.TrimSpace(strings.ToLower(rpID))
+	if rpID == "" {
+		return nil, errors.New("invalid relying party ID")
+	}
+	allowedOrigins := make([]string, 0, len(origins))
+	for _, origin := range origins {
+		origin = normalizeWebAuthnOrigin(origin)
+		if origin != "" {
+			allowedOrigins = append(allowedOrigins, origin)
+		}
+	}
+	if len(allowedOrigins) == 0 {
+		return nil, errors.New("invalid relying party origin")
+	}
 	return webauthn.New(&webauthn.Config{
 		RPDisplayName: h.siteTitleForTenant(c, tenantID),
-		RPID:          baseURL.Hostname(),
-		RPOrigins:     []string{origin},
+		RPID:          rpID,
+		RPOrigins:     allowedOrigins,
 		AuthenticatorSelection: protocol.AuthenticatorSelection{
 			UserVerification: protocol.VerificationRequired,
 		},
@@ -407,6 +589,53 @@ func (h *AuthHandler) webAuthnForRequest(c fiber.Ctx, tenantID string) (*webauth
 			Registration: webauthn.TimeoutConfig{Enforce: true, Timeout: passkeyChallengeTTL},
 		},
 	})
+}
+
+func webAuthnRPID(publicBaseURL string) (string, error) {
+	parsed, err := url.Parse(publicBaseURL)
+	if err != nil || parsed.Scheme == "" || parsed.Hostname() == "" {
+		return "", errors.New("invalid public base URL")
+	}
+	return strings.ToLower(parsed.Hostname()), nil
+}
+
+func tenantWebAuthnOrigin(c fiber.Ctx, fallback string) string {
+	baseURL, err := url.Parse(tenantBaseURLFromCtx(c, fallback))
+	if err != nil || baseURL.Scheme == "" || baseURL.Host == "" {
+		return ""
+	}
+	return baseURL.Scheme + "://" + baseURL.Host
+}
+
+func (h *AuthHandler) RelatedOriginsHandler(c fiber.Ctx) error {
+	tenantID := tenantIDFromCtx(c)
+	if h.hostedPasskeyOrigin == "" || tenantID == "" || !h.isRegisteredTenantHostname(c, tenantID) {
+		return c.SendStatus(fiber.StatusNotFound)
+	}
+	c.Set(fiber.HeaderCacheControl, "public, max-age=300")
+	return c.JSON(fiber.Map{"origins": []string{h.hostedPasskeyOrigin}})
+}
+
+func (h *AuthHandler) isRegisteredTenantHostname(c fiber.Ctx, tenantID string) bool {
+	hostname := strings.ToLower(strings.TrimSpace(c.Hostname()))
+	if hostname == "" {
+		return false
+	}
+	var count int64
+	if err := h.db.WithContext(c.Context()).Model(&models.TenantDomain{}).
+		Where("tenant_id = ? AND LOWER(domain) = ?", tenantID, hostname).
+		Count(&count).Error; err != nil {
+		return false
+	}
+	return count > 0
+}
+
+func normalizeWebAuthnOrigin(value string) string {
+	parsed, err := url.Parse(strings.TrimSpace(value))
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return ""
+	}
+	return parsed.Scheme + "://" + parsed.Host
 }
 
 func (h *AuthHandler) storePasskeyChallenge(c fiber.Ctx, tenantID, userID, purpose string, session webauthn.SessionData) (string, error) {
@@ -423,6 +652,7 @@ func (h *AuthHandler) storePasskeyChallenge(c fiber.Ctx, tenantID, userID, purpo
 		TenantID:    tenantID,
 		UserID:      userID,
 		Purpose:     purpose,
+		RPID:        session.RelyingPartyID,
 		SessionData: payload,
 		ExpiresAt:   expiresAt,
 		CreatedAt:   now,
@@ -452,6 +682,9 @@ func (h *AuthHandler) consumePasskeyChallenge(c fiber.Ctx, tenantID, userID, pur
 	}
 	var session webauthn.SessionData
 	if err := json.Unmarshal(challenge.SessionData, &session); err != nil {
+		return webauthn.SessionData{}, errPasskeyChallengeInvalid
+	}
+	if challenge.RPID != "" && challenge.RPID != session.RelyingPartyID {
 		return webauthn.SessionData{}, errPasskeyChallengeInvalid
 	}
 	return session, nil

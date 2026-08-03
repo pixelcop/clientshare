@@ -127,24 +127,20 @@ export const useAuthStore = defineStore('auth', () => {
     passkeyEnrollmentPrompt.value = false;
   }
 
-  async function acceptRedirectToken(jwt: string) {
-    const trimmed = jwt.trim();
-    if (!trimmed) {
+  async function acceptHostedLoginHandoff(code: string) {
+    if (!code.trim()) {
       return false;
     }
 
-    token.value = trimmed;
-    setAuthHeader(trimmed);
-    user.value = null;
-
-    const authenticatedUser = await fetchMe();
-    if (!authenticatedUser) {
+    try {
+      await axios.post('/api/auth/hosted-login/exchange', { code: code.trim() });
+      clearLegacyToken();
+      return (await fetchMe(true)) !== null;
+    } catch {
       clearLegacyToken();
       user.value = null;
       return false;
     }
-
-    return true;
   }
 
   async function logout() {
@@ -169,7 +165,7 @@ export const useAuthStore = defineStore('auth', () => {
     passkeyEnrollmentPrompt,
     login,
     loginWithPasskey,
-    acceptRedirectToken,
+    acceptHostedLoginHandoff,
     logout,
     fetchMe,
     offerPasskeyEnrollment,
