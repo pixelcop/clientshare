@@ -20,7 +20,6 @@ database:
   # Examples:
   #   postgres://user:pass@localhost:5432/clientshare?sslmode=disable
   #   user:pass@tcp(localhost:3306)/clientshare?charset=utf8mb4
-  dsn: ""
 
 storage:
   type: "local"

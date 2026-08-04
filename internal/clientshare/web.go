@@ -123,7 +123,7 @@ func NewWebApp(cfg *Config, db *gorm.DB, logger *zap.Logger, emailQueue emailpkg
 	}
 	vitePort := cfg.Server.VitePort
 	if vitePort == 0 {
-		vitePort = 5193
+		vitePort = DefaultVitePort
 	}
 	if err := web.SetupStaticFileServing(app, cfg.DevMode, vitePort, webFS); err != nil {
 		return nil, fmt.Errorf("setup static file serving: %w", err)
