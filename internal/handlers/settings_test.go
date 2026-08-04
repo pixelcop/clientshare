@@ -44,7 +44,7 @@ func TestSettingsHandlers_GetAndUpdate(t *testing.T) {
 	}
 	service := services.NewTenantSettingsService(db)
 	fallbackBaseURL := "https://fallback.example.test"
-	handler := handlerspkg.NewSettingsHandler(service, publicDir, fallbackBaseURL, tenantctx.ModeSingle)
+	handler := handlerspkg.NewSettingsHandler(service, publicDir, fallbackBaseURL, tenantctx.ModeSingle, "https://clientshare.example.test/")
 
 	app := fiber.New()
 	app.Use(func(c fiber.Ctx) error {
@@ -71,6 +71,9 @@ func TestSettingsHandlers_GetAndUpdate(t *testing.T) {
 	}
 	if brandingBody["effective_public_base_url"] != "http://tenant.example.test" {
 		t.Fatalf("expected effective branding url to use request host, got %#v", brandingBody["effective_public_base_url"])
+	}
+	if brandingBody["account_dashboard_url"] != "https://clientshare.example.test/account" {
+		t.Fatalf("expected account dashboard url from hosted origin, got %#v", brandingBody["account_dashboard_url"])
 	}
 
 	invalidColorReq := jsonRequest(http.MethodPut, "/branding", map[string]any{"primary_color": "blue"})
@@ -179,7 +182,7 @@ func TestSettingsHandlers_RejectDuplicateTenantPublicBaseURLHost(t *testing.T) {
 		tenantctx.SetLocal(c, tenantctx.RequestContext{ID: tenantctx.DefaultTenantID, Slug: tenantctx.DefaultTenantSlug, Name: tenantctx.DefaultTenantName, Resolution: "test"})
 		return c.Next()
 	})
-	handler := handlerspkg.NewSettingsHandler(service, t.TempDir(), "https://fallback.example.test", tenantctx.ModeSingle)
+	handler := handlerspkg.NewSettingsHandler(service, t.TempDir(), "https://fallback.example.test", tenantctx.ModeSingle, "")
 	app.Put("/tenant", handler.UpdateTenantSettings)
 
 	req := jsonRequest(http.MethodPut, "/tenant", map[string]any{

@@ -259,6 +259,7 @@ export interface User {
   email: string;
   role: string;
   name: string;
+  is_initial_admin?: boolean;
   client_ids?: string[];
   invite_accepted: boolean;
   created_at: string;

@@ -29,6 +29,10 @@ var (
 
 type HostedLoginResult struct {
 	HandoffCode string `json:"handoff_code"`
+	TenantID    string `json:"tenant_id"`
+	TenantSlug  string `json:"tenant_slug"`
+	UserID      string `json:"user_id"`
+	Role        string `json:"role"`
 	RedirectURL string `json:"redirect_url"`
 }
 
@@ -137,6 +141,10 @@ func (s *HostedLoginService) IssueHandoff(identity HostedLoginIdentity) (*Hosted
 	}
 	return &HostedLoginResult{
 		HandoffCode: code,
+		TenantID:    identity.TenantID,
+		TenantSlug:  identity.TenantSlug,
+		UserID:      identity.UserID,
+		Role:        identity.Role,
 		RedirectURL: identity.RedirectURL,
 	}, nil
 }

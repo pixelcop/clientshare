@@ -114,8 +114,18 @@ func (h *AuthHandler) ExchangeHostedLoginHandler(c fiber.Ctx) error {
 		utils.Logger(c).Error("failed generating hosted login session", zap.Error(err))
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not complete sign in"})
 	}
+	passkeyEnrollment := false
+	var user models.User
+	if err := h.db.WithContext(c.Context()).Where("tenant_id = ? AND id = ?", identity.TenantID, identity.UserID).First(&user).Error; err != nil {
+		utils.Logger(c).Warn("failed loading hosted login user for passkey enrollment", zap.Error(err))
+	} else {
+		passkeyEnrollment = h.shouldOfferPasskeyEnrollment(c, user)
+	}
 	setAuthSessionCookie(c, token)
-	return c.JSON(fiber.Map{"authenticated": true})
+	return c.JSON(fiber.Map{
+		"authenticated":      true,
+		"passkey_enrollment": passkeyEnrollment,
+	})
 }
 
 func (h *AuthHandler) siteTitleForTenant(c fiber.Ctx, tenantID string) string {
@@ -460,12 +470,21 @@ func (h *AuthHandler) MeHandler(c fiber.Ctx) error {
 	if err := h.db.WithContext(c.Context()).Model(&models.UserClient{}).Where("tenant_id = ? AND user_id = ?", tenantID, userID).Order("client_id ASC").Pluck("client_id", &clientIDs).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load client assignments"})
 	}
+	isInitialAdmin := false
+	if user.Role == "admin" {
+		var initialAdmin models.User
+		if err := h.db.WithContext(c.Context()).Select("id").Where("tenant_id = ? AND role = ?", tenantID, "admin").Order("created_at ASC, id ASC").First(&initialAdmin).Error; err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to identify initial administrator"})
+		}
+		isInitialAdmin = initialAdmin.ID == user.ID
+	}
 	return c.JSON(fiber.Map{
-		"id":         user.ID,
-		"email":      user.Email,
-		"role":       user.Role,
-		"name":       user.Name,
-		"client_ids": clientIDs,
+		"id":               user.ID,
+		"email":            user.Email,
+		"role":             user.Role,
+		"name":             user.Name,
+		"client_ids":       clientIDs,
+		"is_initial_admin": isInitialAdmin,
 	})
 }
 

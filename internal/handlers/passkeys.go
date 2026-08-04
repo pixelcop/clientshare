@@ -297,8 +297,6 @@ func (h *AuthHandler) FinishPasskeyLoginHandler(c fiber.Ctx) error {
 // retaining the tenant hostname as the credential's RP ID.
 func (h *AuthHandler) BeginHostedPasskeyLogin(c fiber.Ctx, hostedLogin *services.HostedLoginService, email string) (fiber.Map, error) {
 	if h.hostedPasskeyOrigin == "" {
-		fmt.Printf("h: %+v\n", h)
-		fmt.Println("returning false b ecause hostedPasskeyOrigin is empty")
 		return fiber.Map{"passkey": false}, nil
 	}
 	identity, user, err := h.hostedPasskeyIdentity(c, hostedLogin, email)

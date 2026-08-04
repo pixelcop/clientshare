@@ -50,6 +50,18 @@ func TestInternalAuthHandlerHostedLogin(t *testing.T) {
 	if body.RedirectURL != "https://frontend.local" {
 		t.Fatalf("redirect_url = %q, want primary tenant domain", body.RedirectURL)
 	}
+	if body.TenantID != env.adminUser.TenantID {
+		t.Fatalf("tenant_id = %q, want %q", body.TenantID, env.adminUser.TenantID)
+	}
+	if body.TenantSlug != tenantctx.DefaultTenantSlug {
+		t.Fatalf("tenant_slug = %q, want %q", body.TenantSlug, tenantctx.DefaultTenantSlug)
+	}
+	if body.UserID != env.adminUser.ID {
+		t.Fatalf("user_id = %q, want %q", body.UserID, env.adminUser.ID)
+	}
+	if body.Role != env.adminUser.Role {
+		t.Fatalf("role = %q, want %q", body.Role, env.adminUser.Role)
+	}
 	var handoff models.HostedLoginHandoff
 	if err := env.db.Where("tenant_id = ? AND user_id = ?", env.adminUser.TenantID, env.adminUser.ID).First(&handoff).Error; err != nil {
 		t.Fatalf("expected stored hosted login handoff: %v", err)
