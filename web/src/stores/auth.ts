@@ -133,9 +133,16 @@ export const useAuthStore = defineStore('auth', () => {
     }
 
     try {
-      await axios.post('/api/auth/hosted-login/exchange', { code: code.trim() });
+      const response = await axios.post<{ passkey_enrollment?: boolean }>(
+        '/api/auth/hosted-login/exchange',
+        { code: code.trim() },
+      );
       clearLegacyToken();
-      return (await fetchMe(true)) !== null;
+      const authenticatedUser = await fetchMe(true);
+      if (authenticatedUser && response.data.passkey_enrollment) {
+        offerPasskeyEnrollment();
+      }
+      return authenticatedUser !== null;
     } catch {
       clearLegacyToken();
       user.value = null;

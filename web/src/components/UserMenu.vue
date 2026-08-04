@@ -4,6 +4,7 @@ import Avatar from 'primevue/avatar';
 import Menu from 'primevue/menu';
 
 import { useLayout } from '@/composables/useLayout';
+import { useBrandingStore } from '@/stores/branding';
 
 import { useAuthStore } from '../stores/auth';
 
@@ -11,6 +12,7 @@ const { isDarkTheme, toggleDarkMode } = useLayout();
 const router = useRouter();
 const auth = useAuthStore();
 const { user } = storeToRefs(auth);
+const { branding } = storeToRefs(useBrandingStore());
 
 const menuRef = ref();
 
@@ -56,6 +58,14 @@ const menuItems = computed(() => {
       label: 'Security',
       icon: 'pi pi-shield',
       command: () => router.push({ name: 'Security' }),
+    });
+  }
+
+  if (user.value?.is_initial_admin && branding.value.accountDashboardURL) {
+    items.push({
+      label: 'Account & billing',
+      icon: 'pi pi-external-link',
+      url: branding.value.accountDashboardURL,
     });
   }
 

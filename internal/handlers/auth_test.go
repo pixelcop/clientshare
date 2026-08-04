@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/go-webauthn/webauthn/webauthn"
+	"github.com/pixelcop/clientshare/internal/auth"
 	"github.com/pixelcop/clientshare/internal/models"
 	"github.com/pixelcop/clientshare/internal/services"
 	"github.com/pixelcop/clientshare/internal/services/links"
@@ -59,6 +60,15 @@ func TestAuthHandlers_LoginMeAndLogout(t *testing.T) {
 	if !strings.Contains(setCookie, "SameSite=Lax") {
 		t.Fatalf("expected SameSite=Lax cookie, got %q", setCookie)
 	}
+	var meBody struct {
+		IsInitialAdmin bool `json:"is_initial_admin"`
+	}
+	if err := json.NewDecoder(meResp.Body).Decode(&meBody); err != nil {
+		t.Fatalf("decode me response: %v", err)
+	}
+	if !meBody.IsInitialAdmin {
+		t.Fatal("expected initial admin to be identified")
+	}
 
 	logoutReq := jsonRequest(http.MethodPost, "/api/auth/logout", nil)
 	logoutResp, err := env.app.Test(logoutReq)
@@ -71,6 +81,45 @@ func TestAuthHandlers_LoginMeAndLogout(t *testing.T) {
 	clearCookie := logoutResp.Header.Get("Set-Cookie")
 	if !strings.Contains(clearCookie, "jwt=") {
 		t.Fatalf("expected logout to clear jwt cookie, got %q", clearCookie)
+	}
+}
+
+func TestAuthHandlers_MeDoesNotIdentifyLaterAdminAsInitial(t *testing.T) {
+	env := setupOtherHandlersEnv(t)
+	laterAdmin := &models.User{
+		TenantID:     env.adminUser.TenantID,
+		Email:        "later-admin@example.com",
+		PasswordHash: "unused",
+		Role:         "admin",
+		Name:         "Later Admin",
+		CreatedAt:    env.adminUser.CreatedAt.Add(time.Second),
+		UpdatedAt:    env.adminUser.CreatedAt.Add(time.Second),
+	}
+	if err := env.db.Create(laterAdmin).Error; err != nil {
+		t.Fatalf("create later admin: %v", err)
+	}
+	token, err := auth.GenerateJWT(laterAdmin.ID, laterAdmin.Role, laterAdmin.TenantID)
+	if err != nil {
+		t.Fatalf("generate later admin token: %v", err)
+	}
+
+	req := jsonAuthRequest(http.MethodGet, "/api/auth/me", token, nil)
+	resp, err := env.app.Test(req)
+	if err != nil {
+		t.Fatalf("me request failed: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+	var body struct {
+		IsInitialAdmin bool `json:"is_initial_admin"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode me response: %v", err)
+	}
+	if body.IsInitialAdmin {
+		t.Fatal("later admin was identified as initial admin")
 	}
 }
 
@@ -87,6 +136,9 @@ func TestAuthHandlers_HostedLoginHandoffIsSingleUse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("IssueHandoff() error = %v", err)
 	}
+	if handoff.TenantID != env.adminUser.TenantID || handoff.TenantSlug != tenantctx.DefaultTenantSlug || handoff.UserID != env.adminUser.ID || handoff.Role != env.adminUser.Role {
+		t.Fatalf("handoff identity = %#v, want complete hosted identity", handoff)
+	}
 
 	exchangeReq := jsonRequest(http.MethodPost, "/api/auth/hosted-login/exchange", map[string]any{"code": handoff.HandoffCode})
 	exchangeResp, err := env.app.Test(exchangeReq)
@@ -99,6 +151,13 @@ func TestAuthHandlers_HostedLoginHandoffIsSingleUse(t *testing.T) {
 	}
 	if !strings.Contains(exchangeResp.Header.Get("Set-Cookie"), "jwt=") {
 		t.Fatalf("expected exchange to set jwt cookie, got %q", exchangeResp.Header.Get("Set-Cookie"))
+	}
+	var exchangeBody map[string]any
+	if err := json.NewDecoder(exchangeResp.Body).Decode(&exchangeBody); err != nil {
+		t.Fatalf("decode exchange response: %v", err)
+	}
+	if exchangeBody["passkey_enrollment"] != true {
+		t.Fatalf("expected hosted exchange to offer passkey enrollment, got %#v", exchangeBody)
 	}
 
 	replayReq := jsonRequest(http.MethodPost, "/api/auth/hosted-login/exchange", map[string]any{"code": handoff.HandoffCode})

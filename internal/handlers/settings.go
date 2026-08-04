@@ -22,23 +22,30 @@ import (
 )
 
 type SettingsHandler struct {
-	service         *services.TenantSettingsService
-	publicDir       string
-	fallbackBaseURL string
-	tenancyMode     string
+	service             *services.TenantSettingsService
+	publicDir           string
+	fallbackBaseURL     string
+	tenancyMode         string
+	accountDashboardURL string
 }
 
-func NewSettingsHandler(service *services.TenantSettingsService, publicDir, fallbackBaseURL, tenancyMode string) *SettingsHandler {
+func NewSettingsHandler(service *services.TenantSettingsService, publicDir, fallbackBaseURL, tenancyMode, hostedPasskeyOrigin string) *SettingsHandler {
+	accountDashboardURL := ""
+	if origin := strings.TrimRight(strings.TrimSpace(hostedPasskeyOrigin), "/"); origin != "" {
+		accountDashboardURL = origin + "/account"
+	}
+
 	return &SettingsHandler{
-		service:         service,
-		publicDir:       publicDir,
-		fallbackBaseURL: fallbackBaseURL,
-		tenancyMode:     normalizeTenancyMode(tenancyMode),
+		service:             service,
+		publicDir:           publicDir,
+		fallbackBaseURL:     fallbackBaseURL,
+		tenancyMode:         normalizeTenancyMode(tenancyMode),
+		accountDashboardURL: accountDashboardURL,
 	}
 }
 
-func RegisterSettingsRoutes(insecureAPI, api fiber.Router, service *services.TenantSettingsService, publicDir, fallbackBaseURL, tenancyMode string) {
-	handler := NewSettingsHandler(service, publicDir, fallbackBaseURL, tenancyMode)
+func RegisterSettingsRoutes(insecureAPI, api fiber.Router, service *services.TenantSettingsService, publicDir, fallbackBaseURL, tenancyMode, hostedPasskeyOrigin string) {
+	handler := NewSettingsHandler(service, publicDir, fallbackBaseURL, tenancyMode, hostedPasskeyOrigin)
 
 	insecureAPI.Get("/settings/branding", handler.GetBranding)
 	api.Get("/settings/tenant", middleware.RoleRequired("admin"), handler.GetTenantSettings)
@@ -83,7 +90,7 @@ func (h *SettingsHandler) GetBranding(c fiber.Ctx) error {
 		utils.Logger(c).Error("failed loading tenant branding", zap.Error(err))
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load branding settings"})
 	}
-	return c.JSON(brandingResponse(settings, effectiveTenantBaseURL(c, settings.PublicBaseURL, h.fallbackBaseURL)))
+	return c.JSON(brandingResponse(settings, effectiveTenantBaseURL(c, settings.PublicBaseURL, h.fallbackBaseURL), h.accountDashboardURL))
 }
 
 func (h *SettingsHandler) GetTenantSettings(c fiber.Ctx) error {
@@ -111,7 +118,7 @@ func (h *SettingsHandler) UpdateBranding(c fiber.Ctx) error {
 		return c.Status(err.Code).JSON(fiber.Map{"error": err.Message})
 	}
 
-	return c.JSON(brandingResponse(updated, effectiveTenantBaseURL(c, updated.PublicBaseURL, h.fallbackBaseURL)))
+	return c.JSON(brandingResponse(updated, effectiveTenantBaseURL(c, updated.PublicBaseURL, h.fallbackBaseURL), h.accountDashboardURL))
 }
 
 func (h *SettingsHandler) UpdateTenantSettings(c fiber.Ctx) error {
@@ -291,12 +298,13 @@ func isValidAbsoluteURL(value string) bool {
 	return parsed.Scheme != "" && parsed.Host != ""
 }
 
-func brandingResponse(settings *models.TenantSettings, effectivePublicBaseURL string) fiber.Map {
+func brandingResponse(settings *models.TenantSettings, effectivePublicBaseURL, accountDashboardURL string) fiber.Map {
 	return fiber.Map{
 		"site_title":                settings.SiteTitle,
 		"logo_path":                 settings.LogoPath,
 		"primary_color":             settings.PrimaryColor,
 		"effective_public_base_url": effectivePublicBaseURL,
+		"account_dashboard_url":     accountDashboardURL,
 	}
 }
 
