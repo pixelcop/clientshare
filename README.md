@@ -140,6 +140,18 @@ Useful defaults and options include:
 - `branding`: site title, logo path, and primary color
 - `internal_api`: disabled by default for self-hosted installs
 
+Verify a config file against the schema built into the current server version:
+
+```sh
+./clientshare config verify --config config/config.yaml
+```
+
+The report lists missing required and optional fields, including a default value where the server has one and an introduction date for versioned settings. Structural errors such as unknown fields or incorrect value types prevent server startup; missing optional fields produce a startup warning. To inspect or save the generated JSON Schema:
+
+```sh
+./clientshare config schema
+```
+
 For local development overrides, see [docs/env.md](./docs/env.md).
 
 ## Stack

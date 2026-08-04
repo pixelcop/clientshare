@@ -1,11 +1,13 @@
 package clientshare
 
 import (
+	"encoding/json"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/pixelcop/clientshare/pkg/configschema"
 	"github.com/pixelcop/clientshare/pkg/db"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
@@ -116,17 +118,78 @@ func TestConfigUnmarshal(t *testing.T) {
 	require.Equal(t, "secret", cfg.Admin.BootstrapPassword)
 }
 
+func TestConfigSchemaContainsUnconditionalRequirements(t *testing.T) {
+	schemaData, err := configschema.Generate(Config{}, ConfigSchemaOptions()...)
+	require.NoError(t, err)
+
+	var schema map[string]any
+	require.NoError(t, json.Unmarshal(schemaData, &schema))
+	require.ElementsMatch(t, []any{"auth", "database", "secure_links", "storage"}, schema["required"])
+
+	properties := schema["properties"].(map[string]any)
+	auth := properties["auth"].(map[string]any)
+	require.ElementsMatch(t, []any{"jwt_secret", "invite_token_secret"}, auth["required"])
+	authProperties := auth["properties"].(map[string]any)
+	require.Equal(t, float64(1), authProperties["jwt_secret"].(map[string]any)["minLength"])
+	require.Equal(t, `.*\S.*`, authProperties["jwt_secret"].(map[string]any)["pattern"])
+
+	storage := properties["storage"].(map[string]any)
+	require.Equal(t, []any{"local", "s3"}, storage["properties"].(map[string]any)["type"].(map[string]any)["enum"])
+}
+
 func TestLoadConfigDefaultsVitePort(t *testing.T) {
 	tmpfile, err := os.CreateTemp("", "config-*.yaml")
 	require.NoError(t, err)
 	defer os.Remove(tmpfile.Name())
-	_, err = tmpfile.WriteString("server:\n  port: 8320\n")
+	_, err = tmpfile.WriteString(requiredConfigYAML + "server:\n  port: 8320\n")
 	require.NoError(t, err)
 	require.NoError(t, tmpfile.Close())
 
 	cfg, err := LoadConfig(tmpfile.Name())
 	require.NoError(t, err)
 	require.Equal(t, 5193, cfg.Server.VitePort)
+}
+
+func TestLoadConfigRejectsUnknownFields(t *testing.T) {
+	tmpfile, err := os.CreateTemp("", "config-*.yaml")
+	require.NoError(t, err)
+	defer os.Remove(tmpfile.Name())
+	_, err = tmpfile.WriteString("unknown_field: true\n")
+	require.NoError(t, err)
+	require.NoError(t, tmpfile.Close())
+
+	_, err = LoadConfig(tmpfile.Name())
+	require.ErrorIs(t, err, configschema.ErrInvalid)
+	require.ErrorContains(t, err, "unknown_field")
+}
+
+func TestLoadConfigReportsRequiredSectionsForEmptyFile(t *testing.T) {
+	tmpfile, err := os.CreateTemp("", "config-*.yaml")
+	require.NoError(t, err)
+	defer os.Remove(tmpfile.Name())
+	require.NoError(t, tmpfile.Close())
+
+	cfg, report, err := LoadConfigWithReport(tmpfile.Name())
+	require.ErrorIs(t, err, configschema.ErrInvalid)
+	require.Nil(t, cfg)
+	require.False(t, report.Valid())
+	require.Equal(t, []string{"auth", "database", "secure_links", "storage"}, report.MissingRequired)
+	require.Equal(t, "2026-01-17", report.MissingFieldSince["auth"])
+	require.Contains(t, report.MissingOptional, "server")
+}
+
+func TestLoadConfigRejectsBlankRequiredSecrets(t *testing.T) {
+	content := "auth:\n  jwt_secret: '   '\n  invite_token_secret: ''\ndatabase:\n  path: ':memory:'\nsecure_links:\n  signing_key: ''\nstorage:\n  type: local\n"
+	tmpfile, err := os.CreateTemp("", "config-*.yaml")
+	require.NoError(t, err)
+	defer os.Remove(tmpfile.Name())
+	_, err = tmpfile.WriteString(content)
+	require.NoError(t, err)
+	require.NoError(t, tmpfile.Close())
+
+	_, report, err := LoadConfigWithReport(tmpfile.Name())
+	require.ErrorIs(t, err, configschema.ErrInvalid)
+	require.Len(t, report.Issues, 4)
 }
 
 func TestApplyBuildInfo(t *testing.T) {
@@ -162,3 +225,5 @@ func TestApplyBuildInfoRejectsInvalidBuildTime(t *testing.T) {
 	err := ApplyBuildInfo(&Config{})
 	require.Error(t, err)
 }
+
+const requiredConfigYAML = "auth:\n  jwt_secret: jwt-secret\n  invite_token_secret: invite-secret\ndatabase:\n  path: ':memory:'\nsecure_links:\n  signing_key: signing-key\nstorage:\n  type: local\n"
