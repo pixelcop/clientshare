@@ -62,10 +62,13 @@ const menuItems = computed(() => {
   }
 
   if (user.value?.is_initial_admin && branding.value.accountDashboardURL) {
+    const accountURL = new URL(branding.value.accountDashboardURL);
+    // Keep the email hint out of HTTP requests and Referer headers.
+    accountURL.hash = `email=${encodeURIComponent(user.value.email)}`;
     items.push({
       label: 'Account & billing',
       icon: 'pi pi-external-link',
-      url: branding.value.accountDashboardURL,
+      url: accountURL.toString(),
     });
   }
 
