@@ -43,6 +43,6 @@ describe('App', () => {
       },
     });
 
-    expect(wrapper.text()).toContain('Pixelcop Research');
+    expect(wrapper.find('.layout-footer').exists()).toBe(false);
   });
 });
