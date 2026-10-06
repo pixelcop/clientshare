@@ -30,7 +30,7 @@ internal/static/dist/index.html:
 internal/services/email/generated/password_reset.html:
 	cd web && make build-emails
 
-run: internal/static/dist migrate internal/services/email/generated/password_reset.html
+run: internal/static/dist internal/services/email/generated/password_reset.html
 	export DEBUG=1; \
 		$(GO_CMD) run ./cmd/server/main.go
 
