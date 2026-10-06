@@ -15,6 +15,7 @@ COPY web/package.json web/bun.lock ./web/
 RUN --mount=type=cache,target=/root/.bun/install/cache \
     cd web && bun install --frozen-lockfile
 COPY web ./web
+COPY shared ./shared
 
 FROM web-base AS web-build
 

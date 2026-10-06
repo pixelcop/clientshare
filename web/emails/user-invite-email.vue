@@ -14,6 +14,7 @@ import {
   Text,
 } from '@vue-email/components';
 
+import inviteWelcomeText from '../../shared/invite-welcome.txt?raw';
 import { tailwindConfig } from './tailwindConfig';
 
 defineProps({
@@ -35,8 +36,7 @@ defineProps({
   },
   welcomeText: {
     type: String,
-    default:
-      'Welcome to your 2025 tax year portal. Use this secure site to upload documents, review shared files, and message our team safely in one place.',
+    default: inviteWelcomeText.trim(),
   },
 });
 </script>

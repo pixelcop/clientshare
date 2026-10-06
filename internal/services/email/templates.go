@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/pixelcop/clientshare/internal/models"
+	"github.com/pixelcop/clientshare/shared"
 	"go.uber.org/zap"
 )
 
@@ -27,8 +28,6 @@ var (
 	userInviteHTMLTemplate         = html.Must(html.ParseFS(templateFS, "generated/user_invite.html"))
 	userInviteTextTemplate         = template.Must(template.ParseFS(templateFS, "generated/user_invite.txt"))
 )
-
-const defaultUserInviteWelcomeText = "Welcome to ClientShare. Use this secure site to upload documents, review shared files, and message our team safely in one place."
 
 type uploadNotificationTemplateData struct {
 	ClientName  string
@@ -149,7 +148,7 @@ func RenderUserInviteEmail(displayName, inviteURL, productName, welcomeText stri
 
 	resolvedWelcomeText := strings.TrimSpace(welcomeText)
 	if resolvedWelcomeText == "" {
-		resolvedWelcomeText = defaultUserInviteWelcomeText
+		resolvedWelcomeText = shared.DefaultInviteWelcomeText
 	}
 
 	resolvedDisplayName := strings.TrimSpace(displayName)
