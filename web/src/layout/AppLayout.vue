@@ -5,7 +5,6 @@ import { useLayout } from '@/composables/useLayout';
 import PasskeyEnrollmentDialog from '@/components/PasskeyEnrollmentDialog.vue';
 import { useAuthStore } from '@/stores/auth';
 
-import AppFooter from './AppFooter.vue';
 import AppTopbar from './AppTopbar.vue';
 
 const { user } = storeToRefs(useAuthStore());
@@ -24,7 +23,6 @@ const { isPublicLayout } = useLayout();
     </div>
   </div>
 
-  <AppFooter />
   <PasskeyEnrollmentDialog />
   <ConfirmDialog />
   <Toast />
