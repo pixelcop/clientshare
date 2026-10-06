@@ -159,6 +159,30 @@ export interface WebAuthnChallenge {
   used_at?: string;
   created_at: string;
 }
+/**
+ * HostedLoginHandoff is a short-lived, single-use code used to transfer a
+ * hosted SaaS sign-in to its tenant portal without exposing a session JWT.
+ */
+export interface HostedLoginHandoff {
+  id: string;
+  tenant_id: string;
+  user_id: string;
+  role: string;
+  expires_at: string;
+  used_at?: string;
+  created_at: string;
+}
+
+//////////
+// source: passkey_signup.go
+
+/**
+ * PasskeySignup holds a registration before its tenant/user has been provisioned.
+ * The random bearer token is stored only as a hash. Reserved registrations survive
+ * checkout and email verification delays; provisioning consumes them atomically.
+ */
+export interface PasskeySignup {
+}
 
 //////////
 // source: queued_email.go
@@ -259,7 +283,6 @@ export interface User {
   email: string;
   role: string;
   name: string;
-  is_initial_admin?: boolean;
   client_ids?: string[];
   invite_accepted: boolean;
   created_at: string;

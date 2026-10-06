@@ -71,6 +71,10 @@ async function onEmailSubmit() {
   error.value = null;
   try {
     const response = await beginPasskeySignIn(email.value.trim());
+    if (response.passkey && response.redirect_url) {
+      window.location.assign(response.redirect_url);
+      return;
+    }
     if (!response.passkey || !response.challenge_id || !response.public_key) {
       usePasswordInstead();
       return;

@@ -125,9 +125,10 @@ func (h *InternalTenantsHandler) CreateAdminUser(c fiber.Ctx) error {
 	}
 
 	var req struct {
-		Email        string `json:"email"`
-		Name         string `json:"name"`
-		PasswordHash string `json:"password_hash"`
+		Email              string `json:"email"`
+		Name               string `json:"name"`
+		PasswordHash       string `json:"password_hash"`
+		PasskeySignupToken string `json:"passkey_signup_token"`
 	}
 	if err := c.Bind().Body(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
@@ -135,16 +136,23 @@ func (h *InternalTenantsHandler) CreateAdminUser(c fiber.Ctx) error {
 	if strings.TrimSpace(req.Email) == "" {
 		return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{"error": "email is required"})
 	}
-	if strings.TrimSpace(req.PasswordHash) == "" {
-		return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{"error": "password_hash is required"})
+	if strings.TrimSpace(req.PasswordHash) == "" && strings.TrimSpace(req.PasskeySignupToken) == "" {
+		return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{"error": "password_hash or passkey_signup_token is required"})
+	}
+	if req.PasswordHash != "" && req.PasskeySignupToken != "" {
+		return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{"error": "choose password or passkey"})
 	}
 
 	user, err := h.svc.CreateAdminUser(tenantID, services.CreateAdminUserInput{
-		Email:        req.Email,
-		Name:         req.Name,
-		PasswordHash: req.PasswordHash,
+		Email:              req.Email,
+		Name:               req.Name,
+		PasswordHash:       req.PasswordHash,
+		PasskeySignupToken: req.PasskeySignupToken,
 	})
 	if err != nil {
+		if errors.Is(err, services.ErrPasskeySignupInvalid) {
+			return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{"error": "invalid passkey signup"})
+		}
 		if isNotFoundErr(err) {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "tenant not found"})
 		}
