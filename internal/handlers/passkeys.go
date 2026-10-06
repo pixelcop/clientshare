@@ -20,6 +20,7 @@ import (
 	"github.com/pixelcop/clientshare/pkg/utils"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 const (
@@ -212,6 +213,20 @@ func (h *AuthHandler) BeginPasskeyLoginHandler(c fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to begin sign in"})
 	}
 	if len(records) == 0 {
+		// Signup credentials belong to the SaaS RP, so authenticate on that
+		// origin and use the existing single-use handoff back to this portal.
+		if h.hostedPasskeyOrigin != "" {
+			hostedRPID, err := webAuthnRPID(h.hostedPasskeyOrigin)
+			if err == nil && hostedRPID != rpID {
+				_, hostedRecords, err := h.loadPasskeyUserForRPID(c, user, hostedRPID)
+				if err != nil {
+					return c.SendStatus(fiber.StatusInternalServerError)
+				}
+				if len(hostedRecords) > 0 {
+					return c.JSON(fiber.Map{"passkey": true, "redirect_url": h.hostedPasskeyOrigin + "/login#email=" + url.QueryEscape(user.Email)})
+				}
+			}
+		}
 		return c.JSON(fiber.Map{"passkey": false})
 	}
 	webAuthn, err := h.webAuthnForBaseURL(c, tenantID, baseURL)
@@ -422,13 +437,40 @@ func (h *AuthHandler) DeletePasskeyHandler(c fiber.Ctx) error {
 	if err != nil {
 		return passkeyUserError(c, err)
 	}
-	result := h.db.WithContext(c.Context()).Where("tenant_id = ? AND user_id = ? AND id = ?", user.TenantID, user.ID, c.Params("id")).Delete(&models.PasskeyCredential{})
-	if result.Error != nil {
-		utils.Logger(c).Error("failed deleting passkey", zap.Error(result.Error))
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not delete passkey"})
+	lastCredential := errors.New("add another passkey or set a password before deleting your last passkey")
+	err = h.db.WithContext(c.Context()).Transaction(func(tx *gorm.DB) error {
+		// Serialize removals for this user so concurrent requests cannot remove
+		// both remaining credentials from a passwordless account.
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&user, "id = ? AND tenant_id = ?", user.ID, user.TenantID).Error; err != nil {
+			return err
+		}
+		if user.PasswordHash == "" {
+			var count int64
+			if err := tx.Model(&models.PasskeyCredential{}).Where("tenant_id = ? AND user_id = ?", user.TenantID, user.ID).Count(&count).Error; err != nil {
+				return err
+			}
+			if count <= 1 {
+				return lastCredential
+			}
+		}
+		result := tx.Where("tenant_id = ? AND user_id = ? AND id = ?", user.TenantID, user.ID, c.Params("id")).Delete(&models.PasskeyCredential{})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return gorm.ErrRecordNotFound
+		}
+		return nil
+	})
+	if errors.Is(err, lastCredential) {
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": lastCredential.Error()})
 	}
-	if result.RowsAffected == 0 {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Passkey not found"})
+	}
+	if err != nil {
+		utils.Logger(c).Error("failed deleting passkey", zap.Error(err))
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not delete passkey"})
 	}
 	return c.SendStatus(fiber.StatusNoContent)
 }

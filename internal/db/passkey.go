@@ -13,6 +13,7 @@ var PasskeyCredential = struct {
 	CredentialID     field.String
 	CredentialIDHash field.String
 	CredentialData   field.Bytes
+	RPID             field.String
 	Name             field.String
 	CreatedAt        field.Time
 	LastUsedAt       field.Time
@@ -23,6 +24,7 @@ var PasskeyCredential = struct {
 	CredentialID:     field.String{}.WithColumn("credential_id"),
 	CredentialIDHash: field.String{}.WithColumn("credential_id_hash"),
 	CredentialData:   field.Bytes{}.WithColumn("credential_data"),
+	RPID:             field.String{}.WithColumn("rp_id"),
 	Name:             field.String{}.WithColumn("name"),
 	CreatedAt:        field.Time{}.WithColumn("created_at"),
 	LastUsedAt:       field.Time{}.WithColumn("last_used_at"),
@@ -33,6 +35,7 @@ var WebAuthnChallenge = struct {
 	TenantID    field.String
 	UserID      field.String
 	Purpose     field.String
+	RPID        field.String
 	SessionData field.Bytes
 	ExpiresAt   field.Time
 	UsedAt      field.Time
@@ -42,8 +45,29 @@ var WebAuthnChallenge = struct {
 	TenantID:    field.String{}.WithColumn("tenant_id"),
 	UserID:      field.String{}.WithColumn("user_id"),
 	Purpose:     field.String{}.WithColumn("purpose"),
+	RPID:        field.String{}.WithColumn("rp_id"),
 	SessionData: field.Bytes{}.WithColumn("session_data"),
 	ExpiresAt:   field.Time{}.WithColumn("expires_at"),
 	UsedAt:      field.Time{}.WithColumn("used_at"),
 	CreatedAt:   field.Time{}.WithColumn("created_at"),
+}
+
+var HostedLoginHandoff = struct {
+	ID        field.String
+	TenantID  field.String
+	UserID    field.String
+	Role      field.String
+	CodeHash  field.String
+	ExpiresAt field.Time
+	UsedAt    field.Time
+	CreatedAt field.Time
+}{
+	ID:        field.String{}.WithColumn("id"),
+	TenantID:  field.String{}.WithColumn("tenant_id"),
+	UserID:    field.String{}.WithColumn("user_id"),
+	Role:      field.String{}.WithColumn("role"),
+	CodeHash:  field.String{}.WithColumn("code_hash"),
+	ExpiresAt: field.Time{}.WithColumn("expires_at"),
+	UsedAt:    field.Time{}.WithColumn("used_at"),
+	CreatedAt: field.Time{}.WithColumn("created_at"),
 }

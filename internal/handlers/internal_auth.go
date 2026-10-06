@@ -26,6 +26,9 @@ func NewInternalAuthHandler(svc *services.HostedLoginService, passkeyAuth ...*Au
 
 func RegisterInternalAuthRoutes(router fiber.Router, svc *services.HostedLoginService, passkeyAuth ...*AuthHandler) {
 	h := NewInternalAuthHandler(svc, passkeyAuth...)
+	for _, action := range []string{"options", "verify", "reserve"} {
+		router.Post("/auth/hosted-signup/passkey/"+action, func(c fiber.Ctx) error { return h.passkeySignup(c, action) })
+	}
 	router.Post("/auth/hosted-login/passkey/options", h.HostedPasskeyOptions)
 	router.Post("/auth/hosted-login/passkey/verify", h.HostedPasskeyVerify)
 	router.Post("/auth/hosted-login", h.HostedLogin)

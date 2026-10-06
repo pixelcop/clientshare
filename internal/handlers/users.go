@@ -178,9 +178,9 @@ func (h *UsersHandler) userListQuery(ctx context.Context, tenantID, search, role
 	}
 	switch inviteStatusFilter {
 	case "accepted":
-		q = q.Where("TRIM(COALESCE(users.password_hash, '')) <> ''")
+		q = q.Where(userHasSignInCredentialSQL)
 	case "pending":
-		q = q.Where("TRIM(COALESCE(users.password_hash, '')) = ''")
+		q = q.Where("NOT " + userHasSignInCredentialSQL)
 	}
 	if clientIDFilter != "" {
 		assignedUserIDs := h.db.WithContext(ctx).Table("user_clients").Select("user_id").Where("tenant_id = ? AND client_id = ?", tenantID, clientIDFilter)
@@ -268,8 +268,16 @@ func (h *UsersHandler) issuePasswordResetForUser(tx *gorm.DB, tenantID string, u
 	return record, rawToken, nil
 }
 
+const userHasSignInCredentialSQL = "(TRIM(COALESCE(users.password_hash, '')) <> '' OR EXISTS (SELECT 1 FROM passkey_credentials p WHERE p.tenant_id = users.tenant_id AND p.user_id = users.id))"
+
 func (h *UsersHandler) userInviteAccepted(user models.User) bool {
-	return strings.TrimSpace(user.PasswordHash) != ""
+	if strings.TrimSpace(user.PasswordHash) != "" {
+		return true
+	}
+	var count int64
+	err := h.db.Model(&models.PasskeyCredential{}).Where("tenant_id = ? AND user_id = ?", user.TenantID, user.ID).Count(&count).Error
+	// Do not allow an invite reset when credential lookup is unavailable.
+	return err != nil || count > 0
 }
 
 func (h *UsersHandler) attachInviteStatus(users []models.User) {
@@ -472,7 +480,7 @@ func (h *UsersHandler) ResendAllInvitesHandler(c fiber.Ctx) error {
 	}
 
 	users := make([]models.User, 0)
-	if err := h.db.WithContext(c.Context()).Where("tenant_id = ? AND COALESCE(password_hash, '') = ''", tenantID).Order("created_at DESC").Find(&users).Error; err != nil {
+	if err := h.db.WithContext(c.Context()).Where("tenant_id = ?", tenantID).Where("NOT " + userHasSignInCredentialSQL).Order("created_at DESC").Find(&users).Error; err != nil {
 		utils.Logger(c).Error("error loading pending invite users", zap.Error(err))
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}

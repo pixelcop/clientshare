@@ -9,6 +9,7 @@ export type Passkey = {
 
 type BeginPasskeyLoginResponse = {
   passkey: boolean;
+  redirect_url?: string;
   challenge_id?: string;
   public_key?: PublicKeyCredentialRequestOptionsJSON;
 };

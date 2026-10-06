@@ -205,17 +205,33 @@ func (s *TenantProvisioningService) UpdateTenant(id string, input UpdateTenantIn
 
 // CreateAdminUserInput defines fields for provisioning an admin user.
 type CreateAdminUserInput struct {
-	Email        string
-	Name         string
-	PasswordHash string
+	PasskeySignupToken string
+	Email              string
+	Name               string
+	PasswordHash       string
 }
 
-// CreateAdminUser creates an admin user in the given tenant with an initial password hash.
+// CreateAdminUser creates an admin with a password hash or a verified signup passkey.
 func (s *TenantProvisioningService) CreateAdminUser(tenantID string, input CreateAdminUserInput) (*models.User, error) {
 	tenantID = strings.TrimSpace(tenantID)
 	email := strings.ToLower(strings.TrimSpace(input.Email))
 	name := strings.TrimSpace(input.Name)
 	passwordHash := strings.TrimSpace(input.PasswordHash)
+	if input.PasskeySignupToken != "" {
+		if passwordHash != "" {
+			return nil, errors.New("choose password or passkey")
+		}
+		var user *models.User
+		err := s.db.Transaction(func(tx *gorm.DB) error {
+			var err error
+			user, err = createPasskeyAdmin(tx, tenantID, input)
+			if err != nil {
+				return err
+			}
+			return s.logAuditEvent(tx, &tenantID, "internal-api", "admin_user.created", &user.ID, map[string]any{"email": email})
+		})
+		return user, err
+	}
 	if tenantID == "" {
 		return nil, errors.New("tenantID is required")
 	}
