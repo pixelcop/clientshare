@@ -8,6 +8,7 @@ import { defaultBrandingTitle, useBrandingStore } from '@/stores/branding';
 import { useTenantSettingsStore } from '@/stores/tenantSettings';
 import type { QueuedEmail } from '@/types/models';
 
+import inviteWelcomeText from '../../../shared/invite-welcome.txt?raw';
 import { formatDate } from '../types/util';
 
 const brandingStore = useBrandingStore();
@@ -32,6 +33,7 @@ type SystemSettings = {
 const fallbackLogLevelOptions = ['debug', 'info', 'warn', 'error', 'dpanic', 'panic', 'fatal'];
 const defaultPrimaryColor = '#3B82F6';
 const defaultSecureLinkExpiryDays = 90;
+const defaultInviteWelcomeText = inviteWelcomeText.trim();
 
 const form = reactive({
   siteTitle: '',
@@ -381,8 +383,11 @@ onMounted(() => {
                 v-model="form.inviteWelcomeText"
                 rows="4"
                 class="w-full rounded border px-3 py-2"
-                placeholder="Welcome to your client portal."
+                :placeholder="defaultInviteWelcomeText"
               />
+              <p class="text-xs text-muted-color">
+                Leave blank to use the default message shown in the preview.
+              </p>
             </div>
 
             <div class="flex flex-col gap-2">
@@ -444,7 +449,7 @@ onMounted(() => {
             <div class="rounded border p-3 space-y-1 text-sm text-slate-600">
               <p>
                 <span class="font-medium text-slate-900">Invite copy:</span>
-                {{ form.inviteWelcomeText || 'Default invite email copy will be used.' }}
+                {{ form.inviteWelcomeText.trim() || defaultInviteWelcomeText }}
               </p>
               <p>
                 <span class="font-medium text-slate-900">Default link expiry:</span>
