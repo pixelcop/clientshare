@@ -71,21 +71,21 @@ const router = createRouter({
       alias: '/folders/:folderId',
       name: 'FolderView',
       component: ClientFiles,
-      meta: { public: false, roles: ['client'] },
+      meta: { public: false, roles: ['admin', 'manager', 'client', 'link'] },
       props: true,
     },
     {
       path: '/folder',
       name: 'FolderRootView',
       component: ClientFiles,
-      meta: { public: false, roles: ['client'] },
+      meta: { public: false, roles: ['admin', 'manager', 'client', 'link'] },
       props: { folderId: null },
     },
     {
       path: '/files',
       name: 'ClientFiles',
       component: ClientFiles,
-      meta: { public: false, roles: ['client'] },
+      meta: { public: false, roles: ['admin', 'manager', 'client', 'link'] },
       beforeEnter: (_to, _from) => {
         const { user } = useAuthStore();
         if (user?.role === 'link' || user?.role === 'client') {
