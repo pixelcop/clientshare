@@ -33,6 +33,12 @@ Server storage, database, email credentials, and deployment configuration are ma
 
 ## User Guide destination
 
-The **User Guide** menu link is configured by the server operator using `server.docs_url`. With no override, all portals open their built-in `/docs/` guide, regardless of tenancy mode. An external documentation site is used only when the operator explicitly configures one.
+The **User Guide** menu link is configured by the server operator using `server.docs.url`. With no override, all portals open their built-in `/docs/` guide, regardless of tenancy mode. An external documentation site is used only when the operator explicitly configures one.
 
 This setting is deployment-wide and is not edited on the portal Settings screen. Ask the server operator if your organization uses a different documentation address.
+
+## Returning from the guide to your site
+
+In a single-tenant portal's bundled guide, **Back to portal** uses the portal's public URL. A multi-tenant installation shows no return link until the operator chooses a destination, such as a central login or organization website.
+
+The operator can customize or hide this link with `server.docs.site_link`. A separate docs container has its own `DOCS_SITE_LINK_*` settings. The ClientShare logo always leads to the guide's homepage.
