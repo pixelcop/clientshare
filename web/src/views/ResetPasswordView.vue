@@ -52,7 +52,7 @@ async function onSubmit() {
     <div class="w-full max-w-md p-5 sm:p-6 bg-white rounded shadow">
       <div class="flex flex-col items-center justify-center">
         <img v-if="branding.logo" :src="branding.logo" alt="Logo" class="max-w-1/2" />
-        <Logo v-else class="!text-7xl" />
+        <Logo v-else class="!text-7xl" style="--clientshare-logo-color: #020617" />
       </div>
       <h1 class="text-2xl font-bold mb-6 text-center">Set a new password</h1>
       <div v-if="tokenMissing" class="text-red-600 text-center">

@@ -35,7 +35,7 @@ async function onSubmit() {
     <div class="w-full max-w-md p-5 sm:p-6 bg-white rounded shadow">
       <div class="flex flex-col items-center justify-center">
         <img v-if="branding.logo" :src="branding.logo" alt="Logo" class="max-w-1/2" />
-        <Logo v-else class="!text-7xl" />
+        <Logo v-else class="!text-7xl" style="--clientshare-logo-color: #020617" />
       </div>
       <h1 class="text-2xl font-bold mb-6 text-center">Reset Password</h1>
       <p class="text-sm text-gray-600 mb-8! text-center">
