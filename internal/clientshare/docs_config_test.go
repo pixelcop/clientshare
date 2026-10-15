@@ -16,7 +16,8 @@ func TestDocsURLBranding(t *testing.T) {
 	}{
 		{"default single", "", "", "/docs/"},
 		{"single", "single", "", "/docs/"},
-		{"hosted", "hosted", "", "https://docs.clientshare.app"},
+		{"hosted", "hosted", "", "/docs/"},
+		{"hosted blank override", "hosted", "   ", "/docs/"},
 		{"hosted override", "hosted", " https://help.example.com/guide/ ", "https://help.example.com/guide/"},
 		{"single override", "single", "https://help.example.com", "https://help.example.com"},
 		{"relative override", "single", "/help/", "/help/"},

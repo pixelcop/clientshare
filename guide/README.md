@@ -19,23 +19,23 @@ From the repository root, the equivalent commands are `make run-guide`, `make bu
 
 ## Documentation URL configuration
 
-The app reads the menu URL at runtime from `server.docs_url` in `config/config.yaml`. Leave it empty to use the tenancy-specific default:
+The app reads the menu URL at runtime from `server.docs_url` in `config/config.yaml`. Leave it empty to use the bundled guide in every tenancy mode:
 
 | `tenancy.mode` | Default **User Guide** destination |
 | --- | --- |
 | `single` (or omitted) | `/docs/`, served by the app |
-| `hosted` | `https://docs.clientshare.app`, hosted as a separate static site |
+| `hosted` | `/docs/`, served by the app |
 
 ```yaml
 server:
-  docs_url: "" # automatic selection
+  docs_url: "" # bundled /docs/ in every tenancy mode
 tenancy:
   mode: single
 ```
 
 To use another site, set `server.docs_url: "https://help.example.com/"` and restart the server. HTTP(S) URLs and root-relative paths are supported. This is deployment configuration, not a per-tenant setting. No frontend rebuild is needed to change the URL; the old `VITE_USER_GUIDE_URL` build variable is no longer used.
 
-## Single-tenant: bundled documentation
+## Bundled documentation (default)
 
 `make run`, `make build`, and `make test` generate the embedded guide when its sources change. The Docker build also bundles it. No separate docs hosting or DNS is needed.
 
@@ -52,14 +52,14 @@ Docker builds disable Git-derived last-updated timestamps because the image has 
 
 In development, the backend serves the bundled guide before its frontend proxy. The frontend Vite server proxies `/docs` back to the backend, so the same menu link works from either origin. After editing guide content, rebuild the embedded guide and restart the backend, or use `make run-guide` for standalone live editing.
 
-## Hosted mode: publish the static site
+## Optional: publish a separate static site
 
 1. Configure your static host's root directory as `guide`.
 2. Install with `bun install --frozen-lockfile`.
 3. Build with `bun run --bun build`.
 4. Publish `.vitepress/dist` to the documentation domain.
 
-The default hosted address is `https://docs.clientshare.app`. Configure DNS and static hosting for that domain, or set `server.docs_url` to your chosen site URL. The standalone build uses `/` as its base and stays separate from the bundled `/docs/` build.
+Configure DNS and static hosting for your chosen domain, then explicitly set `server.docs_url` to that site's URL. The core app does not default to the public SaaS documentation site, even in hosted mode. The standalone build uses `/` as its base and stays separate from the bundled `/docs/` build.
 
 The default `.html` URLs work on ordinary static hosts without SPA fallback rules. For a subdirectory deployment, configure VitePress `base` and set the app's guide URL to match. The guide is public and requires no portal session.
 
@@ -78,6 +78,6 @@ The docs header and homepage reuse `web/src/components/Logo.vue`, the app's Sora
 
 The app's **User Guide** item is in the main navigation for administrators, managers, clients, and secure-link recipients, including the mobile menu. It opens the server-provided documentation URL in a new tab.
 
-For local hosted-site integration testing, run the guide preview and set `server.docs_url: "http://localhost:4174"` in your development server config. For single-tenant testing, leave the override empty and use the bundled `/docs/` route.
+For local external-site integration testing, run the guide preview and set `server.docs_url: "http://localhost:4174"` in your development server config. To test the default in any tenancy mode, leave the override empty and use the bundled `/docs/` route.
 
 Upstream references: [getting started](https://vitepress.dev/guide/getting-started), [sidebar](https://vitepress.dev/reference/default-theme-sidebar), [local search](https://vitepress.dev/reference/default-theme-search), [deployment](https://vitepress.dev/guide/deploy).

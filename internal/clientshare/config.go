@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pixelcop/clientshare/internal/tenant"
 	"github.com/pixelcop/clientshare/pkg/configschema"
 	"github.com/pixelcop/clientshare/pkg/db"
 	"github.com/spf13/viper"
@@ -229,13 +228,10 @@ func validateStorageReport(cfg *Config, report *configschema.Report) {
 	}
 }
 
-// DocsURL resolves the deployment-wide guide link. A blank override follows tenancy mode.
+// DocsURL resolves the deployment-wide guide link. A blank override uses the bundled guide.
 func (cfg *Config) DocsURL() string {
 	if value := strings.TrimSpace(cfg.Server.DocsURL); value != "" {
 		return value
-	}
-	if strings.EqualFold(strings.TrimSpace(cfg.Tenancy.Mode), tenant.ModeHosted) {
-		return "https://docs.clientshare.app"
 	}
 	return "/docs/"
 }

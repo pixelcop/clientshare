@@ -3,7 +3,7 @@ server:
   host: "0.0.0.0"
   port: 8080
   base_url: "https://portal.example.com"
-  # Empty: /docs/ in single mode; https://docs.clientshare.app in hosted mode.
+  # Empty: use the bundled /docs/ guide in all tenancy modes.
   # Override with an absolute http(s) URL or a root-relative path.
   docs_url: ""
   max_body_mb: 64
