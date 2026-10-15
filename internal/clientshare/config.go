@@ -30,18 +30,29 @@ var (
 	CommitHash = ""
 )
 
+type DocsSiteLinkConfig struct {
+	Enabled *bool  `mapstructure:"enabled"`
+	URL     string `mapstructure:"url"`
+	Label   string `mapstructure:"label"`
+}
+
+type DocsConfig struct {
+	URL      string             `mapstructure:"url"`
+	SiteLink DocsSiteLinkConfig `mapstructure:"site_link"`
+}
+
 type Config struct {
 	BuildTime  *time.Time `mapstructure:"-"`
 	CommitHash string     `mapstructure:"-"`
 	DevMode    bool       `mapstructure:"dev_mode"`
 	SentryDSN  string     `mapstructure:"sentry_dsn" jsonschema_extras:"x-since=2026-04-16"`
 	Server     struct {
-		Host      string `mapstructure:"host"`
-		Port      int    `mapstructure:"port"`
-		VitePort  int    `mapstructure:"vite_port" jsonschema_extras:"x-since=2026-08-01"`
-		BaseURL   string `mapstructure:"base_url"`
-		DocsURL   string `mapstructure:"docs_url" jsonschema_extras:"x-since=2026-10-15"`
-		MaxBodyMB int    `mapstructure:"max_body_mb" jsonschema_extras:"x-since=2026-02-06"`
+		Host      string     `mapstructure:"host"`
+		Port      int        `mapstructure:"port"`
+		VitePort  int        `mapstructure:"vite_port" jsonschema_extras:"x-since=2026-08-01"`
+		BaseURL   string     `mapstructure:"base_url"`
+		Docs      DocsConfig `mapstructure:"docs" jsonschema_extras:"x-since=2026-10-15"`
+		MaxBodyMB int        `mapstructure:"max_body_mb" jsonschema_extras:"x-since=2026-02-06"`
 	} `mapstructure:"server"`
 	Tenancy struct {
 		Mode                 string `mapstructure:"mode"`
@@ -109,17 +120,20 @@ func ConfigSchemaOptions() []configschema.Option {
 	return []configschema.Option{
 		configschema.WithFieldNameTag("mapstructure"),
 		configschema.WithDefaults(map[string]any{
-			"dev_mode":                     false,
-			"server.vite_port":             DefaultVitePort,
-			"server.docs_url":              "",
-			"server.max_body_mb":           DefaultMaxBodyMB,
-			"storage.s3.path_style":        false,
-			"auth.password_reset_duration": DefaultPasswordResetDuration,
-			"auth.invite_token_duration":   DefaultInviteTokenDuration,
-			"auth.rate_limit_enabled":      true,
-			"email.enabled":                false,
-			"email.batch_delay_minutes":    DefaultEmailBatchDelayMinutes,
-			"internal_api.enabled":         false,
+			"dev_mode":                      false,
+			"server.vite_port":              DefaultVitePort,
+			"server.docs.url":               "",
+			"server.docs.site_link.enabled": true,
+			"server.docs.site_link.url":     "",
+			"server.docs.site_link.label":   "",
+			"server.max_body_mb":            DefaultMaxBodyMB,
+			"storage.s3.path_style":         false,
+			"auth.password_reset_duration":  DefaultPasswordResetDuration,
+			"auth.invite_token_duration":    DefaultInviteTokenDuration,
+			"auth.rate_limit_enabled":       true,
+			"email.enabled":                 false,
+			"email.batch_delay_minutes":     DefaultEmailBatchDelayMinutes,
+			"internal_api.enabled":          false,
 		}),
 	}
 }
@@ -230,23 +244,18 @@ func validateStorageReport(cfg *Config, report *configschema.Report) {
 
 // DocsURL resolves the deployment-wide guide link. A blank override uses the bundled guide.
 func (cfg *Config) DocsURL() string {
-	if value := strings.TrimSpace(cfg.Server.DocsURL); value != "" {
+	if value := strings.TrimSpace(cfg.Server.Docs.URL); value != "" {
 		return value
 	}
 	return "/docs/"
 }
 
 func (cfg *Config) Validate() error {
-	if value := strings.TrimSpace(cfg.Server.DocsURL); value != "" {
-		parsed, err := url.Parse(value)
-		if err != nil {
-			return fmt.Errorf("server.docs_url must be an http(s) URL or a root-relative path")
-		}
-		absolute := (parsed.Scheme == "http" || parsed.Scheme == "https") && parsed.Hostname() != "" && parsed.User == nil
-		relative := parsed.Scheme == "" && parsed.Host == "" && strings.HasPrefix(value, "/") && !strings.HasPrefix(value, "//")
-		if (!absolute && !relative) || strings.Contains(parsed.Path, "\\") {
-			return fmt.Errorf("server.docs_url must be an http(s) URL or a root-relative path")
-		}
+	if !validDocsLinkURL(cfg.DocsURL()) {
+		return fmt.Errorf("server.docs.url must be an http(s) URL or a root-relative path")
+	}
+	if value := strings.TrimSpace(cfg.Server.Docs.SiteLink.URL); value != "" && !validDocsLinkURL(value) {
+		return fmt.Errorf("server.docs.site_link.url must be an http(s) URL or a root-relative path")
 	}
 	origin := strings.TrimSpace(cfg.Auth.HostedPasskeyOrigin)
 	if origin == "" {
@@ -269,6 +278,16 @@ func (cfg *Config) Validate() error {
 		return fmt.Errorf("auth.hosted_passkey_origin requires internal_api.enabled")
 	}
 	return nil
+}
+
+func validDocsLinkURL(value string) bool {
+	parsed, err := url.Parse(value)
+	if err != nil || strings.ContainsAny(value, "\\\r\n\t") || strings.Contains(parsed.Path, "\\") {
+		return false
+	}
+	absolute := (parsed.Scheme == "http" || parsed.Scheme == "https") && parsed.Hostname() != "" && parsed.User == nil
+	relative := parsed.Scheme == "" && parsed.Host == "" && strings.HasPrefix(value, "/") && !strings.HasPrefix(value, "//")
+	return absolute || relative
 }
 
 func isLoopbackHost(hostname string) bool {

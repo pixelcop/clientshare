@@ -19,7 +19,8 @@ server:
   port: 1234
   vite_port: 4321
   base_url: "https://test.example.com"
-  docs_url: "https://help.example.com/guide/"
+  docs:
+    url: "https://help.example.com/guide/"
 tenancy:
 	mode: "hosted"
 	internal_target_header: "X-Test-Tenant"
@@ -85,7 +86,7 @@ func TestConfigUnmarshal(t *testing.T) {
 	require.Equal(t, 1234, cfg.Server.Port)
 	require.Equal(t, 4321, cfg.Server.VitePort)
 	require.Equal(t, "https://test.example.com", cfg.Server.BaseURL)
-	require.Equal(t, "https://help.example.com/guide/", cfg.Server.DocsURL)
+	require.Equal(t, "https://help.example.com/guide/", cfg.Server.Docs.URL)
 	require.Equal(t, "hosted", cfg.Tenancy.Mode)
 	require.Equal(t, "X-Test-Tenant", cfg.Tenancy.InternalTargetHeader)
 	require.Equal(t, db.DatabaseDriverSQLite, cfg.Database.Driver)
