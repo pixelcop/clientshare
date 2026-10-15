@@ -25,6 +25,8 @@ You can include the [recipient instructions](../for-clients/send-and-receive-doc
 
 The secure-link page identifies the client and shows **Upload-only** access with an expiry. The recipient uploads through the drop area. Downloads are disabled, and creating a permanent account is not required to use the link.
 
+![Upload-only secure-link header showing its expiry and an upload area with Choose Folder.](/screenshots/upload-only-link.png)
+
 ## Confirm receipt
 
 Open the client workspace and check that the requested files are present. Review available **Activity** notifications and inspect the documents as needed. If something is missing, follow up with the recipient using your usual communication channel.

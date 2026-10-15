@@ -13,6 +13,10 @@ Activity helps you catch up on document events relevant to your account. It is o
 
 Use the page controls for longer lists. Visibility depends on your account and client access; different people may have different feeds.
 
+![Unread Activity showing Client response - demo.txt uploaded into Willow Creek Holdings' Client Uploads folder through a secure link.](/screenshots/activity-feed.png)
+
+A secure-link upload may identify the uploader as **Someone** rather than a named account. The example above records the recipient upload shown in [Send and receive documents](../for-clients/send-and-receive-documents.md).
+
 ## Clear notifications
 
 Use the individual item's clear action or **Clear all** to mark unread notifications as read. Open **Read** to review cleared items later.

@@ -135,7 +135,7 @@ Each numbered item below is one page. Sub-bullets describe that page's contents.
 - Capture screenshots in Firefox after the TOC is approved, using the public demo reached through the homepage's **View sample portal** button.
 - Initial screenshot targets: client directory, client workspace/folders, upload flow, file preview, secure-link dialog, link list, recipient file view, user invitation, activity, branding, and passkeys.
 - Use consistent viewport dimensions, readable crops, descriptive alt text, and fictional sample content. Avoid displaying live access links or setup secrets.
-- The demo opened at `https://demo.clientshare.app/clients` during this review, but displayed **No clients found**. Confirm usable demo content before capturing; ask for supplied screenshots if required screens are unavailable.
+- The initially empty demo at `https://demo.clientshare.app/clients` was populated with three fictional clients, nine folders, public sample documents, and invented text/CSV examples. Screenshot sources and capture details are recorded in `guide/demo-assets.md`.
 
 ## VitePress implementation notes
 
@@ -155,8 +155,8 @@ Each numbered item below is one page. Sub-bullets describe that page's contents.
 
 ## Approval and tracking
 
-- TOC approved. All 26 guide pages and the landing page are implemented; six screenshots from the populated demo are included.
-- Verified the Bun production build, all 27 pages, 187 local links/anchors, image loading, desktop/mobile search, mobile sidebar navigation, dark mode, and horizontal overflow. The app navigation change passes typechecking, targeted lint/format checks, and the existing app smoke test.
-- Additional folder/upload/recipient screenshots await deployment of the separate routing fix, `7c2d30a` on `fix/folder-role-navigation`. See `guide/demo-assets.md` for the sample content and capture notes.
+- TOC approved. All 26 guide pages and the landing page are implemented; 13 screenshots from the populated demo are included.
+- Verified the Bun production build, all 27 pages, 187 local links/anchors, all 13 images, desktop/mobile search, mobile sidebar navigation, dark mode, and horizontal overflow. The seven newly illustrated pages were also checked at a 390px mobile viewport. The app navigation change passes typechecking, targeted lint/format checks, and the existing app smoke test.
+- The separate routing fix, `7c2d30a` on `fix/folder-role-navigation`, was deployed and verified. Folder, upload, PDF preview, recipient, and activity screenshots are now included. See `guide/demo-assets.md` for the sample content and capture notes.
 - Public hosting/DNS for `docs.clientshare.app` remains to be configured. Build and publish instructions are in `guide/README.md`.
 - Kanboard progress tracking is required by the repository guide. No usable board connection or project URL was available during this review; the open Kanboard browser tabs were product launch pages. Record this work in the appropriate project once access is provided.
