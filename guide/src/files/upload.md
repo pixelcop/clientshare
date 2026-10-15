@@ -12,9 +12,11 @@
 
 Keep the page open until the transfer finishes. Selecting files alone does not mean they have reached the portal.
 
+![Documents to Review folder showing the upload area, client email notification option, and uploaded PDF and CSV sample files.](/screenshots/upload-and-files.png)
+
 ## Upload folders
 
-Drag a folder into the upload area to preserve its structure when your browser supports folder uploads. The app processes folders and their files; operating-system metadata files such as `.DS_Store` are skipped.
+Use **Choose Folder**, or drag a folder into the upload area, to preserve its structure when your browser supports folder uploads. The app processes folders and their files; operating-system metadata files such as `.DS_Store` are skipped.
 
 If your browser cannot read a dropped folder, [create folders](./organize-folders.md) in the portal and upload their files separately.
 
