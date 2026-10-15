@@ -9,7 +9,7 @@
 3. Use the viewer's available controls to inspect the document.
 4. Return to the file list when finished.
 
-Preview behavior depends on the file type and browser. PDF and image documents can be viewed in the app; a file without a supported preview can be downloaded and opened in an appropriate application.
+Preview behavior depends on the file type and browser. The app has viewers for PDFs, images, text, and audio; a file without a supported preview can be downloaded and opened in an appropriate application.
 
 ## Download a file
 

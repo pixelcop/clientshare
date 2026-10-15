@@ -13,7 +13,7 @@ Use deletion to remove documents that should no longer be stored in the client's
 5. Confirm that it no longer appears in the file list.
 
 ::: warning Download what you need first
-Deleting a folder removes its contents as well. The app does not offer an undo or trash view for restoring deleted items. Keep any needed copy before confirming.
+Deleting a folder removes it from normal navigation, including the route to its contents. The app does not offer an undo or trash view for restoring deleted items. Keep any needed copy before confirming.
 :::
 
 ## What deletion does not do
