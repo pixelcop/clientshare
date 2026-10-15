@@ -30,3 +30,9 @@ Use it with the server operator when diagnosing a problem. It is not an email-no
 - [Email notifications](../activity/email-notifications.md): pending messages, refresh, and send-now controls.
 
 Server storage, database, email credentials, and deployment configuration are managed outside this screen. See the [self-hosting documentation](https://github.com/pixelcop/clientshare#configuration) for those topics.
+
+## User Guide destination
+
+The **User Guide** menu link is configured by the server operator using `server.docs_url`. With no override, single-tenant portals open their built-in `/docs/` guide, while hosted portals open `https://docs.clientshare.app`.
+
+This setting is deployment-wide and is not edited on the portal Settings screen. Ask the server operator if your organization uses a different documentation address.

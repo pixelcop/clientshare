@@ -28,7 +28,9 @@ ClientShare prioritizes self-hosted deployments, with sensible defaults for smal
 
 The [ClientShare user guide](./guide/README.md) covers client workspaces, file exchange, secure links, invitations, and portal administration. Its public site is built with Bun and VitePress 2.0 alpha.
 
-Run it locally with `bun install --cwd guide` followed by `make run-guide`. Build the static site with `make build-guide`; output is written to `guide/.vitepress/dist`.
+Run it locally with `bun install --cwd guide` followed by `make run-guide`. Single-tenant deployments serve the bundled guide at `/docs/`; `make run`, `make build`, and Docker builds include it. Hosted mode links to `https://docs.clientshare.app` by default. Set `server.docs_url` in server configuration to override the menu destination without rebuilding the frontend.
+
+Build the standalone hosted site with `make build-guide` (`guide/.vitepress/dist`), or regenerate the embedded `/docs/` version with `make build-guide-embedded` (`internal/static/guide/dist`).
 
 ## Quick Start
 
