@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/getsentry/sentry-go"
-	sentryfiber "github.com/getsentry/sentry-go/fiber"
+	sentryfiber "github.com/gofiber/contrib/v3/sentry"
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/compress"
 	"github.com/gofiber/fiber/v3/middleware/requestid"
@@ -52,8 +52,8 @@ func CreateApp(maxBodyMB int, logger *zap.Logger, useColor bool) *fiber.App {
 		},
 	})
 
-	if sentry.CurrentHub().Client() != nil {
-		sentryHandler := sentryfiber.New(sentryfiber.Options{
+	if sentry.CurrentHub().Client().IsEnabled() {
+		var sentryHandler fiber.Handler = sentryfiber.New(sentryfiber.Config{
 			Repanic:         true,
 			WaitForDelivery: true,
 		})
