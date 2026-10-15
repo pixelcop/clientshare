@@ -60,7 +60,9 @@ func staticProd(app *fiber.App, webFS fs.FS) error {
 		app.Get("/*",
 			middleware.NewCachedETag(middleware.CachedETagConfig{Resolve: diskStaticETagResolver("public", "public:")}),
 			etag.New(),
-			staticmw.New("./public", staticmw.Config{Browse: false, Compress: true, MaxAge: 86400}),
+			// Disk assets can change at runtime; do not serve cached file contents
+			// after the metadata-based ETag resolver has detected a new version.
+			staticmw.New("./public", staticmw.Config{Browse: false, Compress: true, MaxAge: 86400, CacheDuration: -1}),
 		)
 	}
 

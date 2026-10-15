@@ -16,6 +16,13 @@ import (
 
 var migrationDriver = db.DatabaseDriverSQLite
 
+// sqliteMigrationTx keeps GORM's DB() from unwrapping *sql.Tx to its parent
+// pool. The SQLite migrator must reuse Goose's transaction rather than acquire
+// another connection (which both escapes rollback and locks against the tx).
+type sqliteMigrationTx struct {
+	*sql.Tx
+}
+
 func SetMigrationDriver(driver string) {
 	trimmed := strings.TrimSpace(driver)
 	if trimmed == "" {
@@ -30,7 +37,7 @@ func MigrationTxGormDB(tx *sql.Tx) (*gorm.DB, error) {
 	var dialector gorm.Dialector
 	switch migrationDriver {
 	case "", db.DatabaseDriverSQLite:
-		dialector = sqlite.New(sqlite.Config{Conn: tx})
+		dialector = sqlite.New(sqlite.Config{Conn: sqliteMigrationTx{tx}})
 	case db.DatabaseDriverPostgres:
 		dialector = postgres.New(postgres.Config{Conn: tx})
 	case db.DatabaseDriverMySQL:
