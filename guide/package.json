@@ -1,0 +1,13 @@
+{
+  "name": "@clientshare/guide",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --bun vitepress dev --port 5174",
+    "build": "bun --bun vitepress build",
+    "preview": "bun --bun vitepress preview --port 4174"
+  },
+  "devDependencies": {
+    "vitepress": "2.0.0-alpha.20"
+  }
+}
