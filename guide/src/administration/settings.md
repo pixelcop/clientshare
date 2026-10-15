@@ -33,6 +33,6 @@ Server storage, database, email credentials, and deployment configuration are ma
 
 ## User Guide destination
 
-The **User Guide** menu link is configured by the server operator using `server.docs_url`. With no override, single-tenant portals open their built-in `/docs/` guide, while hosted portals open `https://docs.clientshare.app`.
+The **User Guide** menu link is configured by the server operator using `server.docs_url`. With no override, all portals open their built-in `/docs/` guide, regardless of tenancy mode. An external documentation site is used only when the operator explicitly configures one.
 
 This setting is deployment-wide and is not edited on the portal Settings screen. Ask the server operator if your organization uses a different documentation address.

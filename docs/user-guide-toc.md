@@ -143,7 +143,7 @@ Each numbered item below is one page. Sub-bullets describe that page's contents.
 - Upstream documents ESM configuration and installation through `vitepress@next`. This project runs development, build, and preview explicitly with **Bun**; the production build has been verified with Bun 1.4.2.
 - Use the default theme with ClientShare branding, TypeScript configuration, grouped sidebar navigation, local full-text search, and previous/next links.
 - Suggested site source: `guide/` with its own package scripts and `.vitepress/config.ts`. This provides a dedicated public content root alongside the existing project notes in `docs/`.
-- Hosted-mode URL defaults to `https://docs.clientshare.app`; single-tenant mode defaults to the bundled `/docs/` guide. `server.docs_url` overrides the app's runtime menu destination.
+- All tenancy modes default to the bundled `/docs/` guide. `server.docs_url` can explicitly override the app's runtime menu destination; the core app never defaults to a public SaaS docs site.
 - Use stable task URLs, for example `/getting-started/first-client-exchange`, `/sharing/request-documents`, and `/for-clients/send-and-receive-documents`.
 - Standalone and embedded build targets use `/` and `/docs/` bases respectively. The app reads the configured guide destination from the branding API.
 
@@ -158,5 +158,5 @@ Each numbered item below is one page. Sub-bullets describe that page's contents.
 - TOC approved. All 26 guide pages and the landing page are implemented; 13 screenshots from the populated demo are included.
 - Verified the Bun production build, all 27 pages, 187 local links/anchors, all 13 images, desktop/mobile search, mobile sidebar navigation, dark mode, and horizontal overflow. The seven newly illustrated pages were also checked at a 390px mobile viewport. The app navigation change passes typechecking, targeted lint/format checks, and the existing app smoke test.
 - The separate routing fix, `7c2d30a` on `fix/folder-role-navigation`, was deployed and verified. Folder, upload, PDF preview, recipient, and activity screenshots are now included. See `guide/demo-assets.md` for the sample content and capture notes.
-- Hosted-mode public hosting/DNS for `docs.clientshare.app` remains to be configured. Single-tenant deployments serve the guide directly at `/docs/`. Build and publish instructions are in `guide/README.md`.
+- All deployments serve the guide directly at `/docs/` by default. A separate static documentation site is optional and requires an explicit `server.docs_url` override. Build and publish instructions are in `guide/README.md`.
 - Kanboard progress tracking is required by the repository guide. No usable board connection or project URL was available during this review; the open Kanboard browser tabs were product launch pages. Record this work in the appropriate project once access is provided.
