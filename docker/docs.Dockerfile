@@ -12,7 +12,9 @@ RUN DOCS_LAST_UPDATED=false bun run --cwd guide --bun build
 
 # Only Nginx and the generated static site are needed at runtime.
 FROM nginx:stable-alpine AS runtime
+RUN apk add --no-cache jq
 COPY docker/docs.nginx.conf /etc/nginx/conf.d/default.conf
+COPY --chmod=755 docker/docs-site-config.sh /docker-entrypoint.d/40-docs-site-config.sh
 COPY --from=docs-build /app/guide/.vitepress/dist/ /usr/share/nginx/html/
 
 EXPOSE 80

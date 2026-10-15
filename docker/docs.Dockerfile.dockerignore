@@ -3,6 +3,7 @@
 !docker/
 !docker/docs.Dockerfile
 !docker/docs.nginx.conf
+!docker/docs-site-config.sh
 !guide/
 !guide/package.json
 !guide/bun.lock
