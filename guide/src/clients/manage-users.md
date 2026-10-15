@@ -14,6 +14,8 @@ Create an individual user account for each person who needs ongoing access. A cl
 
 An invitation email is sent so the recipient can set a password. The directory shows **Invite pending** until they accept. Share [Accept an invitation](../for-clients/accept-invitation.md) if they need help.
 
+![New User dialog with the Customer role and Willow Creek Holdings selected under Assign Clients.](/screenshots/invite-client-user.png)
+
 ::: tip Choose the role before saving
 Customer is the client-user role. Admin and Manager are staff roles with broad access; they are not a way to give an external recipient access to just one client.
 :::

@@ -16,6 +16,8 @@ A secure link lets a recipient exchange documents without first creating a user 
 
 The new link appears in the client's **Secure Links** list. You can also generate a link while creating a new client.
 
+![New Secure Link dialog showing Read & Write access, a 90-day expiry, and email delivery switched off.](/screenshots/create-secure-link.png)
+
 ::: important Review the entire workspace
 The link applies to the client, including its folders. It is not restricted to the file or folder you last opened. Check that the workspace is appropriate for the recipient.
 :::

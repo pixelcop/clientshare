@@ -4,6 +4,8 @@
 
 A passkey lets you sign in using your device's screen lock, fingerprint, or a security key. Your browser and device handle the verification prompt.
 
+![Security page with Add passkey and Rename and Remove actions for an existing passkey.](/screenshots/account-security.png)
+
 ## Add a passkey
 
 1. Sign in to your portal account.

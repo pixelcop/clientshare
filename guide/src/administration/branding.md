@@ -4,6 +4,8 @@
 
 Make the portal recognizable with your organization's title, logo, and invitation message.
 
+![Hosted portal Settings with site title, logo upload, invitation welcome text, default link expiry, and a header preview.](/screenshots/portal-settings.png)
+
 ## Update the title and logo
 
 1. Open **Settings**.
