@@ -37,4 +37,12 @@ The default `.html` URLs work on ordinary static hosts without SPA fallback rule
 - Use fictional demo records and public sample files. Record asset sources in `demo-assets.md`.
 - Run a production build before committing. VitePress fails on broken internal links.
 
+## Branding and app navigation
+
+The docs header and homepage reuse `web/src/components/Logo.vue`, the app's Sora wordmark with its original Share gradient. Client is near-black on light surfaces and near-white in dark mode. Keep the repository's `web/` directory available when building the guide; no frontend dependency installation is needed for this shared component.
+
+The app's **User Guide** item is in the main navigation for administrators, managers, clients, and secure-link recipients, including the mobile menu. It opens the documentation in a new tab. Publish the guide and deploy the app branch to make both available together.
+
+For local integration testing, run the guide preview, then start the app frontend with `VITE_USER_GUIDE_URL=http://localhost:4174`. Production defaults to `https://docs.clientshare.app`; set that build variable if publishing elsewhere.
+
 Upstream references: [getting started](https://vitepress.dev/guide/getting-started), [sidebar](https://vitepress.dev/reference/default-theme-sidebar), [local search](https://vitepress.dev/reference/default-theme-search), [deployment](https://vitepress.dev/guide/deploy).

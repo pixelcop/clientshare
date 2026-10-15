@@ -17,3 +17,25 @@
   border-radius: 10px;
   margin: 24px 0;
 }
+
+.VPNavBarTitle .title .docs-wordmark {
+  --clientshare-logo-size: 1.5rem;
+  flex-shrink: 0;
+  margin-right: 0.75rem;
+}
+
+.VPNavBarTitle .title > span {
+  font-size: 0.75rem;
+  color: var(--vp-c-text-2);
+}
+
+.VPHome .VPHero .docs-hero-wordmark {
+  --clientshare-logo-size: clamp(2.5rem, 5vw, 3.5rem);
+  margin-bottom: 1.5rem;
+}
+
+@media (max-width: 359px) {
+  .VPNavBarTitle .title > span {
+    display: none;
+  }
+}
