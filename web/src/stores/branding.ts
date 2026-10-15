@@ -11,6 +11,7 @@ function defaultBranding() {
     primaryColor: defaultPrimaryColor,
     effectivePublicBaseURL: '',
     accountDashboardURL: '',
+    docsURL: '/docs/',
   };
 }
 
@@ -30,6 +31,7 @@ export const useBrandingStore = defineStore('branding', () => {
         primaryColor: res.data.primary_color || defaultPrimaryColor,
         effectivePublicBaseURL: res.data.effective_public_base_url || '',
         accountDashboardURL: res.data.account_dashboard_url || '',
+        docsURL: res.data.docs_url || '/docs/',
       };
     } catch {
       branding.value = {
