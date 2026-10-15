@@ -97,6 +97,11 @@ export default defineConfig(({ mode }) => {
         clientPort: frontendPort,
       },
       proxy: {
+        '/docs': {
+          target: `http://localhost:${backendPort}`,
+          changeOrigin: true,
+          secure: false,
+        },
         '/api': {
           target: `http://localhost:${backendPort}`,
           changeOrigin: true,
