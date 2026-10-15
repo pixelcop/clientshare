@@ -10,7 +10,6 @@ import { defaultBrandingTitle, useBrandingStore } from '@/stores/branding';
 const { branding } = storeToRefs(useBrandingStore());
 const { user } = storeToRefs(useAuthStore());
 const route = useRoute();
-const userGuideUrl = import.meta.env.VITE_USER_GUIDE_URL || 'https://docs.clientshare.app';
 
 const menuItems = computed<MenuItem[]>(() => {
   if (!user.value) {
@@ -62,7 +61,7 @@ const menuItems = computed<MenuItem[]>(() => {
   items.push({
     type: 'custom',
     label: 'User Guide',
-    url: userGuideUrl,
+    url: branding.value.docsURL,
     props: { active: false },
   });
   return items;

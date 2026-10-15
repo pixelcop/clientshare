@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pixelcop/clientshare/internal/tenant"
 	"github.com/pixelcop/clientshare/pkg/configschema"
 	"github.com/pixelcop/clientshare/pkg/db"
 	"github.com/spf13/viper"
@@ -40,6 +41,7 @@ type Config struct {
 		Port      int    `mapstructure:"port"`
 		VitePort  int    `mapstructure:"vite_port" jsonschema_extras:"x-since=2026-08-01"`
 		BaseURL   string `mapstructure:"base_url"`
+		DocsURL   string `mapstructure:"docs_url" jsonschema_extras:"x-since=2026-10-15"`
 		MaxBodyMB int    `mapstructure:"max_body_mb" jsonschema_extras:"x-since=2026-02-06"`
 	} `mapstructure:"server"`
 	Tenancy struct {
@@ -110,6 +112,7 @@ func ConfigSchemaOptions() []configschema.Option {
 		configschema.WithDefaults(map[string]any{
 			"dev_mode":                     false,
 			"server.vite_port":             DefaultVitePort,
+			"server.docs_url":              "",
 			"server.max_body_mb":           DefaultMaxBodyMB,
 			"storage.s3.path_style":        false,
 			"auth.password_reset_duration": DefaultPasswordResetDuration,
@@ -226,7 +229,29 @@ func validateStorageReport(cfg *Config, report *configschema.Report) {
 	}
 }
 
+// DocsURL resolves the deployment-wide guide link. A blank override follows tenancy mode.
+func (cfg *Config) DocsURL() string {
+	if value := strings.TrimSpace(cfg.Server.DocsURL); value != "" {
+		return value
+	}
+	if strings.EqualFold(strings.TrimSpace(cfg.Tenancy.Mode), tenant.ModeHosted) {
+		return "https://docs.clientshare.app"
+	}
+	return "/docs/"
+}
+
 func (cfg *Config) Validate() error {
+	if value := strings.TrimSpace(cfg.Server.DocsURL); value != "" {
+		parsed, err := url.Parse(value)
+		if err != nil {
+			return fmt.Errorf("server.docs_url must be an http(s) URL or a root-relative path")
+		}
+		absolute := (parsed.Scheme == "http" || parsed.Scheme == "https") && parsed.Hostname() != "" && parsed.User == nil
+		relative := parsed.Scheme == "" && parsed.Host == "" && strings.HasPrefix(value, "/") && !strings.HasPrefix(value, "//")
+		if (!absolute && !relative) || strings.Contains(parsed.Path, "\\") {
+			return fmt.Errorf("server.docs_url must be an http(s) URL or a root-relative path")
+		}
+	}
 	origin := strings.TrimSpace(cfg.Auth.HostedPasskeyOrigin)
 	if origin == "" {
 		return nil
