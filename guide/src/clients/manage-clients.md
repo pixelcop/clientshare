@@ -29,7 +29,7 @@ Renaming the client is different from changing a user's name or email. Manage th
 
 ## Delete a client
 
-Open the client's action dropdown, select **Delete**, and read the confirmation before proceeding. Client deletion removes the workspace and its associated data, including files. Download anything you need to retain first.
+Open the client's action dropdown, select **Delete**, and read the confirmation before proceeding. Client deletion removes the workspace from the portal and moves its document storage out of the active client area. Download anything you need to retain first.
 
 ::: warning Deletion is not an access toggle
 To stop a particular recipient's access while keeping documents, manage their user assignment or revoke their secure link instead. The app does not provide a trash/recovery workflow for deleted client workspaces.
