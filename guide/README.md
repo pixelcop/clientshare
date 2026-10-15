@@ -68,7 +68,7 @@ The default `.html` URLs work on ordinary static hosts without SPA fallback rule
 - Add task pages under `src/` and register them in `.vitepress/config.ts`.
 - State the role required, use actual UI labels, and include the expected result.
 - Use relative Markdown links so the build checks page destinations.
-- Store screenshots in `src/public/screenshots/` and use `<Screenshot src="/screenshots/example.png" alt="Describe the screen" />`. This component uses VitePress `withBase` so screenshots resolve correctly in both `/` and `/docs/` builds.
+- Store screenshots in `src/public/screenshots/` with descriptive alt text, using Markdown such as `![Describe the screen](/screenshots/example.png)`. VitePress adjusts these paths for the selected deployment base.
 - Use fictional demo records and public sample files. Record asset sources in `demo-assets.md`.
 - Run a production build before committing. VitePress fails on broken internal links.
 
