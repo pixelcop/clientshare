@@ -19,7 +19,7 @@ From the repository root, the equivalent commands are `make run-guide`, `make bu
 
 ## Documentation URL configuration
 
-The app reads the menu URL at runtime from `server.docs_url` in `config/config.yaml`. Leave it empty to use the bundled guide in every tenancy mode:
+Documentation settings live under `server.docs` in `config/config.yaml`. `server.docs.url` controls the app's **User Guide** menu destination. Leave it empty to use the bundled guide in every tenancy mode:
 
 | `tenancy.mode` | Default **User Guide** destination |
 | --- | --- |
@@ -28,12 +28,31 @@ The app reads the menu URL at runtime from `server.docs_url` in `config/config.y
 
 ```yaml
 server:
-  docs_url: "" # bundled /docs/ in every tenancy mode
+  docs:
+    url: "" # app menu -> bundled /docs/ in every tenancy mode
+    site_link:
+      enabled: true
+      url: "" # docs header -> automatic single-tenant portal link; otherwise hidden
+      label: ""
 tenancy:
   mode: single
 ```
 
-To use another site, set `server.docs_url: "https://help.example.com/"` and restart the server. HTTP(S) URLs and root-relative paths are supported. This is deployment configuration, not a per-tenant setting. No frontend rebuild is needed to change the URL; the old `VITE_USER_GUIDE_URL` build variable is no longer used.
+To use another docs site, set `server.docs.url` to `https://help.example.com/` and restart the server. HTTP(S) URLs and root-relative paths are supported. These are deployment settings, not per-tenant settings. No frontend rebuild is needed to change them.
+
+### Docs header site link
+
+`server.docs.site_link` controls the link **from the bundled guide back to your site**, independently of the app's menu destination:
+
+- `enabled: false` always hides it, even if a URL is configured.
+- A nonempty `url` chooses the destination in any tenancy mode. Its default label is **Website**.
+- With a blank `url`, single-tenant mode uses the tenant's public URL, then `server.base_url`, then same-origin `/`. Its default label is **Back to portal**.
+- With a blank `url`, multi-tenant (`hosted`) mode hides the link: a central login, organization website, or signup page must be selected explicitly.
+- `label` overrides the default text.
+
+The logo continues to link to the docs homepage. The site link performs a normal full-page navigation, including when returning to `/` on the same origin. No referrer or visitor-supplied return URL determines the destination.
+
+These settings apply only to the app-served `/docs/` guide. The separate Nginx container uses its own runtime environment settings described below. Standalone static builds hide the link by default; other static hosts can supply a `site-config.json` containing `{"site_link":{"url":"https://example.com/","label":"Website"}}` alongside `index.html`, with caching disabled for that file.
 
 ## Bundled documentation (default)
 
@@ -59,7 +78,7 @@ In development, the backend serves the bundled guide before its frontend proxy. 
 3. Build with `bun run --bun build`.
 4. Publish `.vitepress/dist` to the documentation domain.
 
-Configure DNS and static hosting for your chosen domain, then explicitly set `server.docs_url` to that site's URL. The core app does not default to the public SaaS documentation site, even in hosted mode. The standalone build uses `/` as its base and stays separate from the bundled `/docs/` build.
+Configure DNS and static hosting for your chosen domain, then explicitly set `server.docs.url` to that site's URL. The core app does not default to the public SaaS documentation site, even in hosted mode. The standalone build uses `/` as its base and stays separate from the bundled `/docs/` build.
 
 The default `.html` URLs work on ordinary static hosts without SPA fallback rules. For a subdirectory deployment, configure VitePress `base` and set the app's guide URL to match. The guide is public and requires no portal session.
 
@@ -94,10 +113,30 @@ Configure the separate app deployment to link to it:
 
 ```yaml
 server:
-  docs_url: "https://docs.clientshare.app/"
+  docs:
+    url: "https://docs.clientshare.app/"
 ```
 
-Restart the app after changing that setting. Rebuild and redeploy the docs image when guide content changes. Omitting `server.docs_url` still defaults the app to its own bundled `/docs/` guide.
+Restart the app after changing that setting. Rebuild and redeploy the docs image when guide content changes. Omitting `server.docs.url` still defaults the app to its own bundled `/docs/` guide.
+
+### Configure the container's header link at runtime
+
+By default, the standalone image has no link back to a website. To show a link to the public SaaS entry point, for example:
+
+```sh
+docker run -d --name clientshare-docs -p 8081:80 \
+  -e DOCS_SITE_LINK_URL=https://clientshare.app/ \
+  -e DOCS_SITE_LINK_LABEL=ClientShare \
+  clientshare-docs
+```
+
+| Environment variable | Default | Effect |
+| --- | --- | --- |
+| `DOCS_SITE_LINK_ENABLED` | `true` | Set to `false` to hide the link regardless of URL. |
+| `DOCS_SITE_LINK_URL` | empty | Empty hides the link; otherwise an HTTP(S) URL or root-relative path. |
+| `DOCS_SITE_LINK_LABEL` | `Website` when a URL is set | Visible link text. |
+
+The Nginx entrypoint writes `site-config.json` on each container start using JSON-safe escaping. Changing these variables requires recreating the container with the new environment, not rebuilding the image. The file is served with `Cache-Control: no-store`. The guide shows the link only after successfully loading its runtime config, so there is no initial SaaS link or incorrect destination while loading. If config is unavailable, the optional link stays hidden.
 
 ## Editing
 
@@ -114,6 +153,6 @@ The docs header and homepage reuse `web/src/components/Logo.vue`, the app's Sora
 
 The app's **User Guide** item is in the main navigation for administrators, managers, clients, and secure-link recipients, including the mobile menu. It opens the server-provided documentation URL in a new tab.
 
-For local external-site integration testing, run the guide preview and set `server.docs_url: "http://localhost:4174"` in your development server config. To test the default in any tenancy mode, leave the override empty and use the bundled `/docs/` route.
+For local external-site integration testing, run the guide preview and set `server.docs.url` to `http://localhost:4174` in your development server config. To test the default in any tenancy mode, leave the override empty and use the bundled `/docs/` route.
 
 Upstream references: [getting started](https://vitepress.dev/guide/getting-started), [sidebar](https://vitepress.dev/reference/default-theme-sidebar), [local search](https://vitepress.dev/reference/default-theme-search), [deployment](https://vitepress.dev/guide/deploy).
