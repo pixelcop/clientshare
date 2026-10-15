@@ -14,6 +14,8 @@ Willow Creek Holdings
 
 Folder names help people navigate; they do not create separate access permissions within a client's workspace.
 
+![Willow Creek Holdings workspace with an upload area, New Folder action, and four folders for organizing the exchange.](/screenshots/client-workspace.png)
+
 ## Create and open a folder
 
 1. Open **Clients**, then the client's **View Files** action.
@@ -25,7 +27,7 @@ Use the breadcrumb above the file list to move back through parent folders. Chec
 
 ## Upload an existing folder
 
-The upload area supports dragging a folder from your computer in browsers that expose folder entries. Its structure is recreated under the current destination. Wait for all uploads to finish before navigating away.
+Select **Choose Folder** in the upload area to pick a folder from your computer, or drag a folder into the area in browsers that support it. Its structure is recreated under the current destination. Wait for all uploads to finish before navigating away.
 
 If folder drag-and-drop is not supported by your browser, create the destination folders and upload the files separately. See [Upload files](./upload.md) for duplicate-name prompts and errors.
 

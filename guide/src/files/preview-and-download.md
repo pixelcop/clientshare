@@ -11,6 +11,8 @@
 
 Preview behavior depends on the file type and browser. The app has viewers for PDFs, images, text, and audio; a file without a supported preview can be downloaded and opened in an appropriate application.
 
+![File Preview displaying a blank public IRS Form W-9, PDF zoom and navigation controls, and the Download action.](/screenshots/pdf-preview.png)
+
 ## Download a file
 
 Select the download action on the file's row. Staff see a main download button with an action dropdown; client recipients see a download icon alongside **Preview**.
