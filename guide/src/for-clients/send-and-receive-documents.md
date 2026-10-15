@@ -14,6 +14,8 @@ Open your organization's portal and sign in, or follow the secure link the sende
 
 You can select multiple files. For a large batch, keep the page open until every transfer has finished. If an error appears, check which files arrived before trying again.
 
+![Client Uploads folder after a recipient uploaded Client response - demo.txt; the new document appears alongside the existing fictional project brief.](/screenshots/recipient-upload.png)
+
 No upload area? You may have a **Read-only** link. Ask the sender for upload access.
 
 ## Receive documents

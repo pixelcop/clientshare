@@ -19,6 +19,8 @@ You can use a secure link without creating an account. The sender chooses the cl
 
 The portal may offer account creation for continued access. That offer is separate from using the current link; you do not need to accept it to perform the actions allowed by the link.
 
+![Recipient workspace showing the client name, Read & upload permission, expiry, upload area, and available folders.](/screenshots/recipient-workspace.png)
+
 ## Use the correct access session
 
 Opening a secure link establishes a link-access session for that client. If you also have a staff or client account, sign in again when you need your account's normal navigation. A separate browser profile can help keep staff and recipient sessions separate.
