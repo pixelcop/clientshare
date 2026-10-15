@@ -30,7 +30,7 @@ internal/static/dist/index.html:
 internal/services/email/generated/password_reset.html:
 	cd web && make build-emails
 
-run: internal/static/dist internal/services/email/generated/password_reset.html
+run: internal/static/dist internal/static/guide/dist/index.html internal/services/email/generated/password_reset.html
 	export DEBUG=1; \
 		$(GO_CMD) run ./cmd/server/main.go
 
@@ -38,19 +38,20 @@ import-clients: migrate internal/services/email/generated/password_reset.html
 	@test -n "$(CSV)" || (echo "CSV=/path/to/clients.csv is required" && exit 1)
 	$(GO_CMD) run ./cmd/importclients -csv "$(CSV)" $(if $(INVITED_BY),-invited-by "$(INVITED_BY)",) $(if $(filter false,$(SEND_NOW)),-send-now=false,)
 
-build:
+build: internal/static/guide/dist/index.html
 	$(GO_BUILD_ARCH) $(GO_CMD) build -ldflags '$(GO_BUILD_INFO_LDFLAGS)' -o $(BUILD_PATH)$(APP_NAME) ./cmd/server
 	$(GO_BUILD_ARCH) $(GO_CMD) build -ldflags '$(GO_BUILD_INFO_LDFLAGS)' -o $(BUILD_PATH)goose ./internal/database/migrations
 	$(GO_BUILD_ARCH) $(GO_CMD) build -ldflags '$(GO_BUILD_INFO_LDFLAGS)' -o $(BUILD_PATH)importclients ./cmd/importclients
 
 clean:
 	rm -rf internal/static/dist
+	rm -rf internal/static/guide/dist
 	rm -rf internal/services/email/generated/
 	rm -f $(BUILD_PATH)$(APP_NAME)
 	rm -f $(BUILD_PATH)goose
 	rm -f $(BUILD_PATH)importclients
 
-test: internal/static/dist/index.html internal/services/email/generated/password_reset.html
+test: internal/static/dist/index.html internal/static/guide/dist/index.html internal/services/email/generated/password_reset.html
 	$(GO_CMD) test ./...
 
 test-web:
@@ -74,13 +75,22 @@ migrate-create:
 run-web:
 	cd web && make run
 
-.PHONY: run-guide build-guide preview-guide
+.PHONY: run-guide build-guide build-guide-embedded preview-guide
 
 run-guide: ## Run the user guide with Bun on port 5174
 	bun run --cwd guide --bun dev
 
 build-guide: ## Build the static user guide with Bun
 	bun run --cwd guide --bun build
+
+GUIDE_SOURCES := $(wildcard guide/src/*.md guide/src/*/*.md guide/src/public/screenshots/* guide/.vitepress/*.ts guide/.vitepress/theme/* guide/package.json guide/bun.lock web/src/components/Logo.vue)
+
+internal/static/guide/dist/index.html: $(GUIDE_SOURCES)
+	$(MAKE) build-guide-embedded
+
+build-guide-embedded: ## Build the bundled guide for the app's /docs/ route
+	bun install --cwd guide --frozen-lockfile
+	bun run --cwd guide --bun build:embedded
 
 preview-guide: ## Preview the built user guide on port 4174
 	bun run --cwd guide --bun preview

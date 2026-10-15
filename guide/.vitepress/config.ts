@@ -1,11 +1,17 @@
 import { defineConfig } from 'vitepress';
 
+const embedded = process.env.DOCS_EMBEDDED === 'true';
+
 export default defineConfig({
   title: 'ClientShare',
   description: 'Send files, collect documents, and manage your client portal with the ClientShare user guide.',
   lang: 'en-US',
   srcDir: './src',
-  lastUpdated: true,
+  base: embedded ? '/docs/' : '/',
+  outDir: embedded ? '../internal/static/guide/dist' : undefined,
+  lastUpdated: process.env.DOCS_LAST_UPDATED !== 'false',
+  // The shared app logo lives outside this package; use the guide's Vue runtime.
+  vite: { resolve: { dedupe: ['vue'] } },
   themeConfig: {
     siteTitle: 'User Guide',
     nav: [

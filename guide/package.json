@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "bun --bun vitepress dev --port 5174",
     "build": "bun --bun vitepress build",
+    "build:embedded": "DOCS_EMBEDDED=true bun --bun vitepress build",
+    "preview:embedded": "DOCS_EMBEDDED=true bun --bun vitepress preview --port 4175",
     "preview": "bun --bun vitepress preview --port 4174"
   },
   "devDependencies": {

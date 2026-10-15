@@ -117,6 +117,12 @@ func NewWebApp(cfg *Config, db *gorm.DB, logger *zap.Logger, emailQueue emailpkg
 	}
 
 	// setup static serving last due to catch-all routes
+	docsFS, err := static.GetEmbeddedGuideFS(cfg.BuildTime)
+	if err != nil {
+		return nil, fmt.Errorf("load embedded guide: %w", err)
+	}
+	web.SetupDocsServing(app, docsFS)
+
 	webFS, err := static.GetEmbeddedWebFS(cfg.BuildTime)
 	if err != nil {
 		return nil, fmt.Errorf("load embedded frontend: %w", err)

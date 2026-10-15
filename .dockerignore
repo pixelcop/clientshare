@@ -9,6 +9,9 @@
 
 web/dist
 internal/static/dist
+internal/static/guide/dist
+guide/.vitepress/dist
+guide/.vitepress/cache
 storage
 data
 config/config.yaml

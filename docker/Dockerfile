@@ -31,6 +31,17 @@ FROM web-base AS web-test
 RUN --mount=type=cache,target=/root/.bun/install/cache \
     cd web && bun run vitest run
 
+# Documentation build (bundled at /docs/ for self-hosted deployments)
+FROM --platform=$BUILDPLATFORM oven/bun:1 AS guide-build
+WORKDIR /app
+COPY guide/package.json guide/bun.lock ./guide/
+RUN --mount=type=cache,target=/root/.bun/install/cache \
+    bun install --cwd guide --frozen-lockfile
+COPY guide ./guide
+COPY web/src/components/Logo.vue ./web/src/components/Logo.vue
+# Docker contexts omit Git history, so do not request Git-derived timestamps.
+RUN DOCS_LAST_UPDATED=false bun run --cwd guide --bun build:embedded
+
 # Backend build
 FROM --platform=$BUILDPLATFORM golang:1-alpine AS go-base
 
@@ -46,8 +57,9 @@ USER nobody
 COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod,uid=65534 \
     go mod download
-COPY --exclude=web/ . .
+COPY --exclude=web/ --exclude=guide/ . .
 COPY --from=web-build /app/internal/static/dist ./internal/static/dist
+COPY --from=guide-build /app/internal/static/guide/dist ./internal/static/guide/dist
 COPY --from=web-build /app/internal/services/email/generated ./internal/services/email/generated
 
 FROM go-base AS go-build
