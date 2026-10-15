@@ -7,6 +7,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/etag"
@@ -45,10 +46,19 @@ func staticDevProxy(app *fiber.App, vitePort int) error {
 		app.Use("/*", staticmw.New("./public", staticmw.Config{Browse: false}))
 	}
 
-	// Proxy all requests to Vite (including websockets)
-	app.Use(func(c fiber.Ctx) error {
-		return proxy.Do(c, viteURL+c.OriginalURL())
-	})
+	// Vite is a fixed loopback upstream. Scope the private-IP exception to
+	// this dev-only proxy rather than changing Fiber's global proxy policy.
+	policy := proxy.DefaultSecurityPolicy()
+	policy.AllowPrivateIPs = true
+	app.Use(proxy.Balancer(proxy.Config{
+		Servers:        []string{viteURL},
+		SecurityPolicy: &policy,
+		Timeout:        30 * time.Second, // Allow Vite's initial compilation.
+		ModifyRequest: func(c fiber.Ctx) error {
+			c.Request().Header.SetHost(fmt.Sprintf("127.0.0.1:%d", vitePort))
+			return nil
+		},
+	}))
 
 	return nil
 }
