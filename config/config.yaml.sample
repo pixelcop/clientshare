@@ -3,9 +3,21 @@ server:
   host: "0.0.0.0"
   port: 8080
   base_url: "https://portal.example.com"
-  # Empty: use the bundled /docs/ guide in all tenancy modes.
-  # Override with an absolute http(s) URL or a root-relative path.
-  docs_url: ""
+  docs:
+    # Where the APP'S "User Guide" menu goes. Blank uses bundled /docs/ in ALL
+    # tenancy modes. Set an http(s) URL to use a separately hosted docs site.
+    url: ""
+    site_link:
+      # Controls the optional link FROM the bundled DOCS HEADER back to your site.
+      # false always hides it. With true and a blank url: single-tenant mode uses
+      # the tenant's public URL, then server.base_url, then /; hosted mode hides it.
+      # These settings affect bundled /docs/ only. A standalone docs container
+      # uses DOCS_SITE_LINK_ENABLED, DOCS_SITE_LINK_URL and DOCS_SITE_LINK_LABEL.
+      enabled: true
+      # Explicit http(s) URL or root-relative path; overrides the automatic choice.
+      url: ""
+      # Blank means "Back to portal" for the automatic link, "Website" for a custom URL.
+      label: ""
   max_body_mb: 64
 
 tenancy:
