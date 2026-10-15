@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import type { MenuItem } from '@embedpdf/vue-pdf-viewer';
 import { storeToRefs } from 'pinia';
+import type { MenuItem } from 'primevue/menuitem';
 
 import Logo from '@/components/Logo.vue';
 import UserMenu from '@/components/UserMenu.vue';
@@ -10,6 +10,7 @@ import { defaultBrandingTitle, useBrandingStore } from '@/stores/branding';
 const { branding } = storeToRefs(useBrandingStore());
 const { user } = storeToRefs(useAuthStore());
 const route = useRoute();
+const userGuideUrl = import.meta.env.VITE_USER_GUIDE_URL || 'https://docs.clientshare.app';
 
 const menuItems = computed<MenuItem[]>(() => {
   if (!user.value) {
@@ -58,6 +59,12 @@ const menuItems = computed<MenuItem[]>(() => {
       props: { active: route.path.startsWith('/activity') },
     });
   }
+  items.push({
+    type: 'custom',
+    label: 'User Guide',
+    url: userGuideUrl,
+    props: { active: false },
+  });
   return items;
 });
 </script>
@@ -80,7 +87,18 @@ const menuItems = computed<MenuItem[]>(() => {
     </template>
 
     <template #item="{ item, props }">
+      <a
+        v-if="item.url"
+        v-bind="props.action"
+        :href="item.url"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="p-menuitem-link"
+      >
+        <span class="p-menuitem-text">{{ item.label }}</span>
+      </a>
       <router-link
+        v-else
         :to="item.to"
         v-bind="props.action"
         class="p-menuitem-link"
