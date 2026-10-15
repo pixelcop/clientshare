@@ -13,7 +13,9 @@ bun run --bun build
 bun run --bun preview
 ```
 
-Development uses port 5174 and preview uses port 4174, leaving the app's port 5173 free. Scripts force the Bun runtime. The VitePress version is pinned in `package.json` and dependencies are locked in `bun.lock`.
+Development uses port 5174 and preview uses port 4174 so the guide can run alongside the app. Scripts force the Bun runtime. The VitePress version is pinned in `package.json` and dependencies are locked in `bun.lock`.
+
+From the repository root, the equivalent commands are `make run-guide`, `make build-guide`, and `make preview-guide` (after installing dependencies).
 
 ## Publish
 
