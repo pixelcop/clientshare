@@ -4,6 +4,8 @@
 
 A client is the workspace that holds an organization's or person's documents. Create the workspace before assigning users to it.
 
+![Client directory showing three fictional clients, the search field, and View Files actions.](/screenshots/client-directory.png)
+
 ## Create a client
 
 1. Open **Clients** → **New Client**.

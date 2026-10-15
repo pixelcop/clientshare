@@ -6,6 +6,8 @@
 
 Open **Clients**, then choose **Links** from the client's action dropdown.
 
+![Secure Links list for Willow Creek Holdings showing an active Read & Write link with Copy and Revoke actions.](/screenshots/secure-links.png)
+
 The table shows:
 
 | Column | Meaning |
