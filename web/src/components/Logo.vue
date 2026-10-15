@@ -1,5 +1,5 @@
 <template>
-  <p class="landing-wordmark text-slate-950">
+  <p class="landing-wordmark">
     <span>Client</span><span class="landing-wordmark-accent">Share</span>
   </p>
 </template>
@@ -9,7 +9,8 @@
 .landing-wordmark {
   --font-wordmark: 'Sora', 'Avenir Next', 'Segoe UI', sans-serif;
   font-family: var(--font-wordmark);
-  font-size: clamp(1.45rem, 1.2rem + 0.9vw, 2rem);
+  color: var(--clientshare-logo-color, #020617);
+  font-size: var(--clientshare-logo-size, clamp(1.45rem, 1.2rem + 0.9vw, 2rem));
   font-weight: 700;
   letter-spacing: -0.09em;
   span:first-child {
@@ -32,5 +33,10 @@
     padding-right: 0.1em;
     margin-right: -0.1em;
   }
+}
+
+.app-dark .landing-wordmark,
+.dark .landing-wordmark {
+  color: var(--clientshare-logo-color, #f8fafc);
 }
 </style>

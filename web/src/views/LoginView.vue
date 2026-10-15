@@ -145,7 +145,7 @@ onMounted(async () => {
     <div class="w-full max-w-md p-5 sm:p-6 bg-white rounded shadow">
       <div class="flex flex-col items-center justify-center">
         <img v-if="branding.logo" :src="branding.logo" alt="Logo" class="max-w-1/2" />
-        <Logo v-else class="!text-7xl" />
+        <Logo v-else class="!text-7xl" style="--clientshare-logo-color: #020617" />
         <h1 class="text-2xl font-bold mt-2 mb-6 text-center">Sign In</h1>
       </div>
       <form v-if="!showPassword" @submit.prevent="onEmailSubmit">
