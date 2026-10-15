@@ -15,6 +15,7 @@ GO_BUILD_ARCH ?=
 PLATFORMS ?= linux/amd64
 PULL ?= false
 PUSH ?= false
+DOCS_IMAGE ?= ghcr.io/pixelcop/clientshare-docs
 comma := ,
 
 watch:
@@ -75,7 +76,7 @@ migrate-create:
 run-web:
 	cd web && make run
 
-.PHONY: run-guide build-guide build-guide-embedded preview-guide
+.PHONY: run-guide build-guide build-guide-embedded preview-guide build-docs-docker
 
 run-guide: ## Run the user guide with Bun on port 5174
 	bun run --cwd guide --bun dev
@@ -94,6 +95,17 @@ build-guide-embedded: ## Build the bundled guide for the app's /docs/ route
 
 preview-guide: ## Preview the built user guide on port 4174
 	bun run --cwd guide --bun preview
+
+build-docs-docker: ## Build the standalone Nginx documentation image
+	docker buildx build \
+		$(if $(filter true,$(PULL)),--pull,) \
+		$(if $(filter true,$(PUSH)),--push,) \
+		$(if $(findstring $(comma),$(PLATFORMS)),,--load) \
+		--platform $(PLATFORMS) \
+		-f docker/docs.Dockerfile \
+		-t $(DOCS_IMAGE):latest \
+		-t $(DOCS_IMAGE):g-$(COMMIT_HASH) \
+		.
 
 generate-types:
 	gorm gen -i ./internal/models/

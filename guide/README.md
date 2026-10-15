@@ -63,6 +63,42 @@ Configure DNS and static hosting for your chosen domain, then explicitly set `se
 
 The default `.html` URLs work on ordinary static hosts without SPA fallback rules. For a subdirectory deployment, configure VitePress `base` and set the app's guide URL to match. The guide is public and requires no portal session.
 
+## Standalone Nginx container
+
+Build from the repository root:
+
+```sh
+make build-docs-docker
+# Or choose your own image name:
+make build-docs-docker DOCS_IMAGE=registry.example.com/clientshare-docs
+```
+
+The target uses `docker/docs.Dockerfile` and tags the image with `latest` and `g-<commit>`. It supports the same `PLATFORMS`, `PULL`, and `PUSH` options as the app image build. For example, to publish both architectures:
+
+```sh
+make build-docs-docker PLATFORMS=linux/amd64,linux/arm64 PUSH=true
+```
+
+To build directly with Docker:
+
+```sh
+docker build -f docker/docs.Dockerfile -t clientshare-docs .
+docker run -d --name clientshare-docs -p 8081:80 clientshare-docs
+```
+
+Open `http://localhost:8081/`. The image uses Bun only in the build stage; the runtime is Nginx serving the standalone guide at `/`. It needs no database, app configuration, volumes, or connection to the app container.
+
+Route your documentation hostname (for example, `docs.clientshare.app`) to this container's **port 80**, and terminate HTTPS at your reverse proxy or hosting platform. Forward the path unchanged: `/` is the docs homepage. `/healthz` returns HTTP 200 for health checks. Hashed assets are cached for a year; HTML and screenshots revalidate. Missing pages return the guide's `404.html` with HTTP 404.
+
+Configure the separate app deployment to link to it:
+
+```yaml
+server:
+  docs_url: "https://docs.clientshare.app/"
+```
+
+Restart the app after changing that setting. Rebuild and redeploy the docs image when guide content changes. Omitting `server.docs_url` still defaults the app to its own bundled `/docs/` guide.
+
 ## Editing
 
 - Add task pages under `src/` and register them in `.vitepress/config.ts`.

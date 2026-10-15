@@ -1,0 +1,18 @@
+# Send only the documentation sources and shared logo to this build.
+**
+!docker/
+!docker/docs.Dockerfile
+!docker/docs.nginx.conf
+!guide/
+!guide/package.json
+!guide/bun.lock
+!guide/src/
+!guide/src/**
+!guide/.vitepress/
+!guide/.vitepress/config.ts
+!guide/.vitepress/theme/
+!guide/.vitepress/theme/**
+!web/
+!web/src/
+!web/src/components/
+!web/src/components/Logo.vue
