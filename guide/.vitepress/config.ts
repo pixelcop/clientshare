@@ -7,7 +7,7 @@ export default defineConfig({
   srcDir: './src',
   lastUpdated: true,
   themeConfig: {
-    siteTitle: 'ClientShare · User Guide',
+    siteTitle: 'User Guide',
     nav: [
       { text: 'User Guide', link: '/getting-started/welcome' },
       { text: 'For Clients', link: '/for-clients/send-and-receive-documents' },

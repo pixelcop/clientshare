@@ -2,7 +2,6 @@
 layout: home
 title: User Guide
 hero:
-  name: ClientShare
   text: A clearer way to work with client documents.
   tagline: Learn how to send files, collect uploads, and give every client the right access.
   actions:
