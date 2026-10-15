@@ -17,7 +17,6 @@ export default defineConfig({
     nav: [
       { text: 'User Guide', link: '/getting-started/welcome' },
       { text: 'For Clients', link: '/for-clients/send-and-receive-documents' },
-      { text: 'ClientShare', link: 'https://clientshare.app' },
     ],
     search: { provider: 'local' },
     outline: [2, 3],

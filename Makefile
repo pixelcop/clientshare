@@ -84,7 +84,7 @@ run-guide: ## Run the user guide with Bun on port 5174
 build-guide: ## Build the static user guide with Bun
 	bun run --cwd guide --bun build
 
-GUIDE_SOURCES := $(wildcard guide/src/*.md guide/src/*/*.md guide/src/public/screenshots/* guide/.vitepress/*.ts guide/.vitepress/theme/* guide/package.json guide/bun.lock web/src/components/Logo.vue)
+GUIDE_SOURCES := $(wildcard guide/src/*.md guide/src/*/*.md guide/src/public/* guide/src/public/screenshots/* guide/.vitepress/*.ts guide/.vitepress/theme/* guide/package.json guide/bun.lock web/src/components/Logo.vue)
 
 internal/static/guide/dist/index.html: $(GUIDE_SOURCES)
 	$(MAKE) build-guide-embedded
