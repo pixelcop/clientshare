@@ -24,6 +24,12 @@ ClientShare prioritizes self-hosted deployments, with sensible defaults for smal
 - Local-first self-hosting defaults with optional hosted-oriented tenancy mode
 - Vue frontend bundled into the Go app for a single deployable service
 
+## User Guide
+
+The [ClientShare user guide](./guide/README.md) covers client workspaces, file exchange, secure links, invitations, and portal administration. Its public site is built with Bun and VitePress 2.0 alpha.
+
+Run it locally with `bun install --cwd guide` followed by `make run-guide`. Build the static site with `make build-guide`; output is written to `guide/.vitepress/dist`.
+
 ## Quick Start
 
 ### Prerequisites

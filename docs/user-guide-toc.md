@@ -1,6 +1,6 @@
 # ClientShare user guide — proposed table of contents
 
-Status: awaiting approval before site implementation or screenshot capture.
+Status: approved; guide implemented in `guide/` with Bun and VitePress 2.0.0-alpha.20.
 Branch: `docs/user-guide`.
 
 ## Purpose and audience
@@ -137,10 +137,10 @@ Each numbered item below is one page. Sub-bullets describe that page's contents.
 - Use consistent viewport dimensions, readable crops, descriptive alt text, and fictional sample content. Avoid displaying live access links or setup secrets.
 - The demo opened at `https://demo.clientshare.app/clients` during this review, but displayed **No clients found**. Confirm usable demo content before capturing; ask for supplied screenshots if required screens are unavailable.
 
-## VitePress implementation notes for the next phase
+## VitePress implementation notes
 
-- Official documentation currently displays **2.0.0-alpha.20**. Pin the agreed 2.0 alpha release when implementing, and recheck the current release then.
-- Current getting-started documentation specifies **Node.js 22+**, ESM configuration, and installation through `vitepress@next`.
+- Implemented with **2.0.0-alpha.20**, pinned in `guide/package.json` and locked with Bun.
+- Upstream documents ESM configuration and installation through `vitepress@next`. This project runs development, build, and preview explicitly with **Bun**; the production build has been verified with Bun 1.4.2.
 - Use the default theme with ClientShare branding, TypeScript configuration, grouped sidebar navigation, local full-text search, and previous/next links.
 - Suggested site source: `guide/` with its own package scripts and `.vitepress/config.ts`. This provides a dedicated public content root alongside the existing project notes in `docs/`.
 - Suggested URL: `docs.clientshare.app`, pending deployment approval. Both app navigation and the future SaaS navigation should link to the same public guide.
@@ -155,5 +155,8 @@ Each numbered item below is one page. Sub-bullets describe that page's contents.
 
 ## Approval and tracking
 
-- Approve or revise this TOC before scaffolding the site and writing the pages.
+- TOC approved. All 26 guide pages and the landing page are implemented; six screenshots from the populated demo are included.
+- Verified the Bun production build, all 27 pages, 187 local links/anchors, image loading, desktop/mobile search, mobile sidebar navigation, dark mode, and horizontal overflow. The app navigation change passes typechecking, targeted lint/format checks, and the existing app smoke test.
+- Additional folder/upload/recipient screenshots await deployment of the separate routing fix, `7c2d30a` on `fix/folder-role-navigation`. See `guide/demo-assets.md` for the sample content and capture notes.
+- Public hosting/DNS for `docs.clientshare.app` remains to be configured. Build and publish instructions are in `guide/README.md`.
 - Kanboard progress tracking is required by the repository guide. No usable board connection or project URL was available during this review; the open Kanboard browser tabs were product launch pages. Record this work in the appropriate project once access is provided.

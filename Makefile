@@ -74,6 +74,17 @@ migrate-create:
 run-web:
 	cd web && make run
 
+.PHONY: run-guide build-guide preview-guide
+
+run-guide: ## Run the user guide with Bun on port 5174
+	bun run --cwd guide --bun dev
+
+build-guide: ## Build the static user guide with Bun
+	bun run --cwd guide --bun build
+
+preview-guide: ## Preview the built user guide on port 4174
+	bun run --cwd guide --bun preview
+
 generate-types:
 	gorm gen -i ./internal/models/
 	tygo generate
