@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { breakpointsTailwind, useBreakpoints } from '@vueuse/core';
-import { SplitButton } from 'primevue';
-import type { MenuItem } from 'primevue/menuitem';
+import { SplitButton } from 'openvue';
+import type { MenuItem } from 'openvue/menuitem';
 
 import type { Client } from '@/types/models';
 

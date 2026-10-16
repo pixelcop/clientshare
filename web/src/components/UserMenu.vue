@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import Avatar from 'openvue/avatar';
+import Menu from 'openvue/menu';
 import { storeToRefs } from 'pinia';
-import Avatar from 'primevue/avatar';
-import Menu from 'primevue/menu';
 
 import { useLayout } from '@/composables/useLayout';
 import { useBrandingStore } from '@/stores/branding';

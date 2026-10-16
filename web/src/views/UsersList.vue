@@ -1,8 +1,8 @@
 <script setup lang="ts">
+import type { PageState } from 'openvue';
+import { Button } from 'openvue';
+import { useToast } from 'openvue/usetoast';
 import { storeToRefs } from 'pinia';
-import type { PageState } from 'primevue';
-import { Button } from 'primevue';
-import { useToast } from 'primevue/usetoast';
 
 import DeleteUserModal from '@/components/DeleteUserModal.vue';
 import UserListItem from '@/components/UserListItem.vue';

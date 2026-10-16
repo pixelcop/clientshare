@@ -1,6 +1,6 @@
 <script setup lang="ts">
+import type { MenuItem } from 'openvue/menuitem';
 import { storeToRefs } from 'pinia';
-import type { MenuItem } from 'primevue/menuitem';
 
 import Logo from '@/components/Logo.vue';
 import UserMenu from '@/components/UserMenu.vue';

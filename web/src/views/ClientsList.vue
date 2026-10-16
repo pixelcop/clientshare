@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import axios from 'axios';
+import type { PageState } from 'openvue';
+import { Button } from 'openvue';
 import { storeToRefs } from 'pinia';
-import type { PageState } from 'primevue';
-import { Button } from 'primevue';
 
 import { useTenantSettingsStore } from '@/stores/tenantSettings';
 import type { Client } from '@/types/models';

@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import axios from 'axios';
 import { formatDistance } from 'date-fns';
+import { Button, Dialog, InputText } from 'openvue';
 import { storeToRefs } from 'pinia';
-import { Button, Dialog, InputText } from 'primevue';
 
 import { useAuthStore } from '@/stores/auth';
 import type { QueuedEmail } from '@/types/models';

@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 
-import { PrimeVueResolver } from '@primevue/auto-import-resolver';
+import { PrimeVueResolver as OpenVueResolver } from '@openvue/auto-import-resolver';
 import { sentryVitePlugin } from '@sentry/vite-plugin';
 import tailwindcss from '@tailwindcss/vite';
 import vue from '@vitejs/plugin-vue';
@@ -31,7 +31,7 @@ export default defineConfig(({ mode }) => {
       tailwindcss(),
 
       Components({
-        resolvers: [PrimeVueResolver()],
+        resolvers: [OpenVueResolver()],
       }),
 
       AutoImport({

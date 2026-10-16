@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Button, Dialog, InputText } from 'primevue';
+import { Button, Dialog, InputText } from 'openvue';
 
 import SecureLinkModal from '@/components/SecureLinkModal.vue';
 

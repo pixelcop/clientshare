@@ -1,6 +1,6 @@
 <script setup lang="ts">
+import { FloatLabel, type SelectChangeEvent } from 'openvue';
 import { storeToRefs } from 'pinia';
-import { FloatLabel, type SelectChangeEvent } from 'primevue';
 
 import Dropzone from '@/components/Dropzone.vue';
 import FileList from '@/components/FileList.vue';

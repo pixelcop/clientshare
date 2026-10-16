@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Dialog, InputText } from 'primevue';
+import { Dialog, InputText } from 'openvue';
 
 import { useFileManagerStore } from '@/stores/fileManager';
 

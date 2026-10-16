@@ -1,6 +1,6 @@
 <script setup lang="ts">
+import { Button, InputText, Password } from 'openvue';
 import { storeToRefs } from 'pinia';
-import { Button, InputText, Password } from 'primevue';
 
 import { useAuthStore } from '@/stores/auth';
 import { usePublicLinkStore } from '@/stores/publicLink';

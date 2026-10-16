@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { breakpointsTailwind, useBreakpoints } from '@vueuse/core';
-import type { MenuItem } from 'primevue/menuitem';
+import type { MenuItem } from 'openvue/menuitem';
 
 import { useClientsStore } from '@/stores/clients';
 import type { Client, User } from '@/types/models';

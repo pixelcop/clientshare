@@ -1,6 +1,6 @@
 <script setup lang="ts">
+import type { PageState } from 'openvue';
 import { storeToRefs } from 'pinia';
-import type { PageState } from 'primevue';
 
 import ActivityFeedItem from '@/components/ActivityFeedItem.vue';
 import { useActivitiesStore } from '@/stores/activities';

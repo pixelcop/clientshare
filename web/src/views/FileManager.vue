@@ -1,6 +1,6 @@
 <script setup lang="ts">
+import { Button } from 'openvue';
 import { storeToRefs } from 'pinia';
-import { Button } from 'primevue';
 
 import FileList from '@/components/FileList.vue';
 import PendingEmail from '@/components/PendingEmail.vue';

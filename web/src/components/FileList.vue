@@ -1,6 +1,6 @@
 <script setup lang="ts">
+import type { PageState } from 'openvue';
 import { storeToRefs } from 'pinia';
-import type { PageState } from 'primevue';
 
 import { useAuthStore } from '@/stores/auth';
 import type { FileSortField } from '@/stores/fileManager';
