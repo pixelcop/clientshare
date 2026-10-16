@@ -2,12 +2,12 @@ import '@/assets/main.css';
 import '@/assets/tailwind.css';
 import '@/assets/styles.scss';
 
-import Aura from '@primeuix/themes/aura';
+import Aura from '@openvue/themes/aura';
 import * as Sentry from '@sentry/vue';
+import OpenVue from 'openvue/config';
+import ConfirmationService from 'openvue/confirmationservice';
+import ToastService from 'openvue/toastservice';
 import { createPinia } from 'pinia';
-import PrimeVue from 'primevue/config';
-import ConfirmationService from 'primevue/confirmationservice';
-import ToastService from 'primevue/toastservice';
 
 import App from './App.vue';
 import router from './router';
@@ -27,7 +27,7 @@ if (sentryDSN) {
 
 app.use(pinia);
 app.use(router);
-app.use(PrimeVue, {
+app.use(OpenVue, {
   unstyled: false,
   theme: {
     preset: Aura,

@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import { Breadcrumb, type Tag } from 'openvue';
+import type { MenuItem } from 'openvue/menuitem';
 import { storeToRefs } from 'pinia';
-import { Breadcrumb, type Tag } from 'primevue';
-import type { MenuItem } from 'primevue/menuitem';
 
 import { useFileManagerStore } from '@/stores/fileManager';
 import type { FileItem } from '@/types/models';

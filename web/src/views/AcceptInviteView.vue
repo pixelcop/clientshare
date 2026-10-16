@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import axios from 'axios';
+import { Button, FloatLabel, Password } from 'openvue';
 import { storeToRefs } from 'pinia';
-import { Button, FloatLabel, Password } from 'primevue';
 import { computed, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import Logo from '@/components/Logo.vue';
-import { useBrandingStore } from '@/stores/branding';
 import { useAuthStore } from '@/stores/auth';
+import { useBrandingStore } from '@/stores/branding';
 
 const { branding } = storeToRefs(useBrandingStore());
 const route = useRoute();

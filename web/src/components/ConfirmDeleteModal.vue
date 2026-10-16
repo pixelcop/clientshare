@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { Button, Dialog } from 'primevue';
+import { Button, Dialog } from 'openvue';
 
 import { useFileManagerStore } from '@/stores/fileManager';
 

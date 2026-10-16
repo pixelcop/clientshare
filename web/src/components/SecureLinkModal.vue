@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Button, Dialog, InputText, Select } from 'primevue';
+import { Button, Dialog, InputText, Select } from 'openvue';
 
 const props = defineProps<{
   show?: boolean;

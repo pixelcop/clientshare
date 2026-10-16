@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import axios from 'axios';
+import { Button, FileUpload, type FileUploadSelectEvent, Select, useToast } from 'openvue';
 import { storeToRefs } from 'pinia';
-import { Button, FileUpload, type FileUploadSelectEvent, Select, useToast } from 'primevue';
 
 import Logo from '@/components/Logo.vue';
 import { defaultBrandingTitle, useBrandingStore } from '@/stores/branding';

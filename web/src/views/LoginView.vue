@@ -1,6 +1,6 @@
 <script setup lang="ts">
+import { Button, FloatLabel, InputText } from 'openvue';
 import { storeToRefs } from 'pinia';
-import { Button, FloatLabel, InputText } from 'primevue';
 import { onMounted } from 'vue';
 
 import Logo from '@/components/Logo.vue';

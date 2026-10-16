@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import axios from 'axios';
+import { Button } from 'openvue';
 import { storeToRefs } from 'pinia';
-import { Button } from 'primevue';
 
 import SecureLinkModal from '@/components/SecureLinkModal.vue';
 import { useSecureLinksStore } from '@/stores/secureLinks';

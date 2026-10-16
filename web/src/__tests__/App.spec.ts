@@ -1,7 +1,7 @@
 import { mount } from '@vue/test-utils';
+import ConfirmationService from 'openvue/confirmationservice';
+import ToastService from 'openvue/toastservice';
 import { createPinia, setActivePinia } from 'pinia';
-import ConfirmationService from 'primevue/confirmationservice';
-import ToastService from 'primevue/toastservice';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMemoryHistory, createRouter } from 'vue-router';
 

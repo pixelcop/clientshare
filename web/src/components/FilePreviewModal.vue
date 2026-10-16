@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { breakpointsTailwind, useBreakpoints } from '@vueuse/core';
+import { Button, Dialog } from 'openvue';
 import { storeToRefs } from 'pinia';
-import { Button, Dialog } from 'primevue';
 
 import { useFile } from '@/composables/useFile';
 import { useBrandingStore } from '@/stores/branding';

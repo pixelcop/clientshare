@@ -1,14 +1,14 @@
 <script setup lang="ts">
-import { Button, Dialog, InputText, useConfirm, useToast } from 'primevue';
+import { Button, Dialog, InputText, useConfirm, useToast } from 'openvue';
 
 import {
   deletePasskey,
   listPasskeys,
+  type Passkey,
   passkeyErrorMessage,
   passkeysSupported,
   registerPasskey,
   renamePasskey,
-  type Passkey,
 } from '@/services/passkeys';
 
 const toast = useToast();

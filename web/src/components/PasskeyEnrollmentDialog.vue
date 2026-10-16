@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Button, Dialog, useToast } from 'primevue';
+import { Button, Dialog, useToast } from 'openvue';
 
 import {
   dismissPasskeyPrompt,

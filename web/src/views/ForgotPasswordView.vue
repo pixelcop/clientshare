@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import axios from 'axios';
+import { Button, FloatLabel, InputText } from 'openvue';
 import { storeToRefs } from 'pinia';
-import { Button, FloatLabel, InputText } from 'primevue';
 import { ref } from 'vue';
 
 import Logo from '@/components/Logo.vue';
