@@ -44,7 +44,7 @@ async function loadTextContent() {
     .then((text) => {
       textContent.value = text;
     })
-    .catch((e) => {
+    .catch(() => {
       textContent.value = 'Error loading file.';
     });
 }

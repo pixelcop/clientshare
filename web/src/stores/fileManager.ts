@@ -154,7 +154,7 @@ export const useFileManagerStore = defineStore('fileManager', () => {
       return file;
     } catch (e: any) {
       console.error('Failed to fetch file', e);
-      throw new Error(e.response?.data?.error || 'Failed to fetch file');
+      throw new Error(e.response?.data?.error || 'Failed to fetch file', { cause: e });
     }
   }
 

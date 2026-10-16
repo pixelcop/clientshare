@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia';
 
-import { useLayout } from '@/composables/useLayout';
 import PasskeyEnrollmentDialog from '@/components/PasskeyEnrollmentDialog.vue';
+import { useLayout } from '@/composables/useLayout';
 import { useAuthStore } from '@/stores/auth';
 
 import AppTopbar from './AppTopbar.vue';
