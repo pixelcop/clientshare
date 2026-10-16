@@ -20,18 +20,18 @@ export const useClientsStore = defineStore('clients', () => {
     if (loadingPromise) {
       return loadingPromise;
     }
-    loadingPromise = new Promise(async (resolve) => {
-      error.value = null;
-      try {
-        const res = await axios.get('/api/clients');
+    error.value = null;
+    loadingPromise = axios
+      .get<Client[]>('/api/clients')
+      .then((res) => {
         clients.value = res.data;
-      } catch (e: any) {
-        error.value = e.response?.data?.error || 'Failed to fetch clients';
-      } finally {
+      })
+      .catch((e: unknown) => {
+        error.value = (axios.isAxiosError(e) && e.response?.data?.error) || 'Failed to fetch clients';
+      })
+      .finally(() => {
         loadingPromise = null;
-        resolve();
-      }
-    });
+      });
 
     return loadingPromise;
   }

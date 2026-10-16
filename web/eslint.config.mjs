@@ -1,22 +1,22 @@
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import fs from 'node:fs';
 
 import { includeIgnoreFile } from '@eslint/compat';
 import js from '@eslint/js';
-import { createTypeScriptImportResolver } from 'eslint-import-resolver-typescript';
 import pluginVitest from '@vitest/eslint-plugin';
 import skipFormatting from '@vue/eslint-config-prettier/skip-formatting';
 import { defineConfigWithVueTs, vueTsConfigs } from '@vue/eslint-config-typescript';
 import { defineConfig, globalIgnores } from 'eslint/config';
 import { configs, plugins } from 'eslint-config-airbnb-extended';
 import { rules as prettierConfigRules } from 'eslint-config-prettier';
+import { createTypeScriptImportResolver } from 'eslint-import-resolver-typescript';
 import { createNodeResolver } from 'eslint-plugin-import-x';
 import prettierPlugin from 'eslint-plugin-prettier';
 import simpleImportSort from 'eslint-plugin-simple-import-sort';
 import pluginVue from 'eslint-plugin-vue';
 
 const autoImportConfig = JSON.parse(
-  fs.readFileSync(new URL('./.eslintrc-auto-import.json', import.meta.url)),
+  await readFile(new URL('./.eslintrc-auto-import.json', import.meta.url), 'utf8'),
 );
 
 const gitignorePath = path.resolve('.', '.gitignore');
@@ -89,8 +89,11 @@ export default defineConfig([
 
   // JavaScript config
   ...jsConfig,
-  // Node config
-  ...nodeConfig,
+  // Node rules only apply to build tooling, not browser APIs in src/.
+  {
+    files: ['*.{js,cjs,mjs}', '*config.{ts,mts}', 'scripts/**/*.{ts,js,mjs,cjs}'],
+    extends: nodeConfig,
+  },
   // TypeScript config
   ...typescriptConfig,
   {
@@ -124,6 +127,22 @@ export default defineConfig([
   ...defineConfigWithVueTs(vueTsConfigs.recommended),
 
   {
+    files: ['scripts/**/*.{ts,js,mjs,cjs}', '*config.{ts,mts,js,mjs,cjs}'],
+    rules: {
+      'import-x/no-extraneous-dependencies': ['error', { devDependencies: true }],
+    },
+  },
+
+  {
+    files: ['emails/upload-notification-email.vue'],
+    rules: {
+      // The email compiler uses ${ ... }; {{ ... }} is Go template syntax.
+      // vue-eslint-parser cannot parse these custom interpolation delimiters.
+      'vue/no-parsing-error': 'off',
+    },
+  },
+
+  {
     ...pluginVitest.configs.recommended,
     files: ['src/**/__tests__/*'],
   },
@@ -153,7 +172,7 @@ export default defineConfig([
           ignorePatterns: [
             'router-link',
             'router-view',
-            // primevue components pulled from llms.txt
+            // OpenVue components pulled from llms.txt
             'Accordion',
             'AutoComplete',
             'Avatar',

@@ -1,23 +1,23 @@
 import axios from 'axios';
 
-export type Passkey = {
+export interface Passkey {
   id: string;
   name: string;
   created_at: string;
   last_used_at?: string;
-};
+}
 
-type BeginPasskeyLoginResponse = {
+interface BeginPasskeyLoginResponse {
   passkey: boolean;
   redirect_url?: string;
   challenge_id?: string;
   public_key?: PublicKeyCredentialRequestOptionsJSON;
-};
+}
 
-type BeginPasskeyRegistrationResponse = {
+interface BeginPasskeyRegistrationResponse {
   challenge_id: string;
   public_key: PublicKeyCredentialCreationOptionsJSON;
-};
+}
 
 type PublicKeyCredentialDescriptorJSON = Omit<PublicKeyCredentialDescriptor, 'id'> & {
   id: string;
@@ -40,14 +40,14 @@ type PublicKeyCredentialCreationOptionsJSON = Omit<
   excludeCredentials?: PublicKeyCredentialDescriptorJSON[];
 };
 
-type SerializedCredential = {
+interface SerializedCredential {
   id: string;
   rawId: string;
   type: string;
   response: Record<string, string | string[] | null>;
   clientExtensionResults: AuthenticationExtensionsClientOutputs;
   authenticatorAttachment: string | null;
-};
+}
 
 function base64URLToBuffer(value: string): ArrayBuffer {
   const padding = '='.repeat((4 - (value.length % 4)) % 4);
@@ -62,10 +62,7 @@ function base64URLToBuffer(value: string): ArrayBuffer {
 
 function bufferToBase64URL(value: ArrayBuffer): string {
   const bytes = new Uint8Array(value);
-  let binary = '';
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte);
-  }
+  const binary = Array.from(bytes, (byte) => String.fromCharCode(byte)).join('');
   return window.btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
@@ -110,7 +107,7 @@ function serializeCredential(credential: PublicKeyCredential): SerializedCredent
     clientExtensionResults: credential.getClientExtensionResults(),
     authenticatorAttachment: credential.authenticatorAttachment,
   };
-  const response = credential.response;
+  const { response } = credential;
 
   if (response instanceof AuthenticatorAttestationResponse) {
     return {

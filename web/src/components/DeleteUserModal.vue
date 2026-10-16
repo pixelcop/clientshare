@@ -1,6 +1,6 @@
 <script setup lang="ts">
-const props = defineProps<{ show: boolean; userName: string; error?: string }>();
-const emit = defineEmits(['delete', 'close']);
+defineProps<{ show: boolean; userName: string; error?: string }>();
+defineEmits(['delete', 'close']);
 </script>
 
 <template>
