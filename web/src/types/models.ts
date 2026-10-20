@@ -220,6 +220,19 @@ export interface SecureLink {
 }
 
 //////////
+// source: storage_reservation.go
+
+/**
+ * StorageReservation accounts for in-flight uploads across server processes.
+ */
+export interface StorageReservation {
+  ID: string;
+  TenantID: string;
+  Bytes: number /* int64 */;
+  ExpiresAt: string;
+}
+
+//////////
 // source: tenant.go
 
 export interface Tenant {

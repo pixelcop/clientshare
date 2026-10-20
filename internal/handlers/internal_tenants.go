@@ -160,6 +160,9 @@ func (h *InternalTenantsHandler) CreateAdminUser(c fiber.Ctx) error {
 		if errors.Is(err, services.ErrPasskeySignupInvalid) {
 			return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{"error": "invalid passkey signup"})
 		}
+		if respondQuotaError(c, err) {
+			return nil
+		}
 		if isNotFoundErr(err) {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "tenant not found"})
 		}
