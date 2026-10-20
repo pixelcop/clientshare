@@ -51,6 +51,7 @@ func RegisterSettingsRoutes(insecureAPI, api fiber.Router, service *services.Ten
 
 	insecureAPI.Get("/settings/branding", handler.GetBranding)
 	api.Get("/settings/tenant", middleware.RoleRequired("admin"), handler.GetTenantSettings)
+	api.Get("/settings/usage", middleware.RoleRequired("admin"), handler.GetUsage)
 	api.Put("/settings/tenant", middleware.RoleRequired("admin"), handler.UpdateTenantSettings)
 	api.Get("/settings/system", middleware.RoleRequired("admin"), handler.GetSystemSettings)
 	api.Put("/settings/branding", middleware.RoleRequired("admin"), handler.UpdateBranding)

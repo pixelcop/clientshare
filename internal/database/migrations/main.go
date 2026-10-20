@@ -16,6 +16,7 @@ func main() {
 		migration.NewGoMigration(38, upAddPasskeySupport, downAddPasskeySupport),
 		migration.NewGoMigration(39, upAddHostedPasskeyHandoffs, downAddHostedPasskeyHandoffs),
 		migration.NewGoMigration(40, upAddPasskeySignups, downAddPasskeySignups),
+		migration.NewGoMigration(41, upAddStorageReservations, downAddStorageReservations),
 	}
 
 	migration.Run(goMigrations, func(path string) (db.DatabaseConfig, error) {

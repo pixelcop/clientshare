@@ -176,6 +176,9 @@ func createPasskeyAdmin(tx *gorm.DB, tenantID string, input CreateAdminUserInput
 		return nil, ErrPasskeySignupInvalid
 	}
 	user := models.User{ID: record.UserID, TenantID: tenantID, Email: record.Email, Name: strings.TrimSpace(input.Name), Role: "admin"}
+	if err := CheckStaffQuota(tx, &user); err != nil {
+		return nil, err
+	}
 	if err := tx.Create(&user).Error; err != nil {
 		return nil, err
 	}

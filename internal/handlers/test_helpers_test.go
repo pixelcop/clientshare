@@ -198,6 +198,7 @@ func setupSharedHandlersEnvWithOptions(t *testing.T, options handlersTestOptions
 		&models.TenantSettings{},
 		&models.TenantDomain{},
 		&models.TenantEntitlement{},
+		&models.StorageReservation{},
 		&models.User{},
 		&models.UserClient{},
 		&models.Client{},

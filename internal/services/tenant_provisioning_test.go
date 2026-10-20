@@ -11,6 +11,9 @@ import (
 
 func TestTenantProvisioningServiceCreateAdminUserSetsPasswordHashWithoutInvite(t *testing.T) {
 	db := openTenantProvisioningTestDB(t)
+	if err := db.Create(&models.TenantEntitlement{TenantID: "tenant-123", MaxUsers: 1}).Error; err != nil {
+		t.Fatal(err)
+	}
 	svc := NewTenantProvisioningService(db, "invite-secret", 0, nil, "https://app.test")
 	passwordHash, err := auth.HashPassword("super-secret-password")
 	if err != nil {
@@ -101,7 +104,7 @@ func openTenantProvisioningTestDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("gorm.Open() error = %v", err)
 	}
-	if err := db.AutoMigrate(&models.User{}, &models.InviteToken{}, &models.AuditEvent{}, &models.Tenant{}, &models.TenantDomain{}); err != nil {
+	if err := db.AutoMigrate(&models.User{}, &models.InviteToken{}, &models.AuditEvent{}, &models.Tenant{}, &models.TenantDomain{}, &models.TenantEntitlement{}); err != nil {
 		t.Fatalf("AutoMigrate() error = %v", err)
 	}
 

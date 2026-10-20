@@ -422,10 +422,18 @@ func (h *FileHandler) UploadFiles(c fiber.Ctx) error {
 			utils.Logger(c).Error("error opening file", zap.Error(err))
 			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 		}
-		defer f.Close()
 		dstPath := filepath.Join(folder.Path, file.Filename)
-		uploadedSize, err := tenantStore.Upload(dstPath, f)
+		fileRecord := &models.File{
+			TenantID: tenantID, ClientID: client.ID, UserID: &userID,
+			FolderID: &folder.ID, Filename: file.Filename, Path: dstPath,
+			Type: "file", UploadedAt: time.Now(),
+		}
+		err = services.UploadFile(c.Context(), h.db, tenantStore, fileRecord, f, file.Size)
+		_ = f.Close()
 		if err != nil {
+			if respondQuotaError(c, err) {
+				return nil
+			}
 			if errors.Is(err, os.ErrExist) || errors.Is(err, syscall.EEXIST) {
 				utils.Logger(c).Debug("file already exists", zap.String("filename", file.Filename))
 				return c.Status(409).JSON(fiber.Map{
@@ -438,24 +446,7 @@ func (h *FileHandler) UploadFiles(c fiber.Ctx) error {
 			utils.Logger(c).Error("error uploading file", zap.Error(err))
 			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 		}
-		// Store file metadata in DB
-		fileRecord := &models.File{
-			TenantID:   tenantID,
-			ClientID:   client.ID,
-			UserID:     &userID,
-			FolderID:   &folder.ID,
-			Filename:   file.Filename,
-			Path:       dstPath,
-			Type:       "file",
-			Size:       uploadedSize,
-			UploadedAt: time.Now(),
-		}
-		if fileRecord, err = h.fileService.CreateFileRecord(c.Context(), fileRecord); err != nil {
-			// TODO: rollback file upload?
-			utils.Logger(c).Error("error saving file metadata", zap.Error(err))
-			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
-		}
-		utils.Logger(c).Info("file uploaded", zap.String("filename", file.Filename), zap.String("client_id", client.ID), zap.Int64("size", uploadedSize))
+		utils.Logger(c).Info("file uploaded", zap.String("filename", file.Filename), zap.String("client_id", client.ID), zap.Int64("size", fileRecord.Size))
 		activity, activityErr := createFileActivity(c.Context(), h.db, tenantID, client.ID, &fileRecord.ID, &userID, nil, uploadBatchID, "upload", dstPath)
 		if activityErr != nil {
 			utils.Logger(c).Warn("error recording file activity", zap.Error(activityErr))
