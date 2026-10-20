@@ -4,6 +4,7 @@ import { Button, FileUpload, type FileUploadSelectEvent, Select, useToast } from
 import { storeToRefs } from 'pinia';
 
 import Logo from '@/components/Logo.vue';
+import TenantUsage from '@/components/TenantUsage.vue';
 import { defaultBrandingTitle, useBrandingStore } from '@/stores/branding';
 import { useTenantSettingsStore } from '@/stores/tenantSettings';
 import type { QueuedEmail } from '@/types/models';
@@ -286,6 +287,7 @@ onMounted(() => {
       </Button>
     </div>
 
+    <TenantUsage />
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <Card class="lg:col-span-2 rounded shadow">
         <template #title>
