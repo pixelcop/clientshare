@@ -79,6 +79,7 @@ func TestPasskeySignupVerificationAndProvisioning(t *testing.T) {
 	require.NoError(t, db.Model(&record).Update("expires_at", time.Now().Add(-time.Hour)).Error)
 	require.NoError(t, svc.Reserve(ctx, token, record.Email, "firm"))
 	require.NoError(t, db.Create(&models.Tenant{ID: "tenant-firm", Slug: "firm", Name: "Firm"}).Error)
+	require.NoError(t, db.Create(&models.TenantEntitlement{TenantID: "tenant-firm", MaxUsers: 1}).Error)
 	require.NoError(t, db.Create(&models.Tenant{ID: "tenant-other", Slug: "other", Name: "Other"}).Error)
 	provisioning := NewTenantProvisioningService(db, "secret", 0, nil, "https://portal.test")
 	input := CreateAdminUserInput{Email: record.Email, Name: "Owner", PasskeySignupToken: token}

@@ -259,6 +259,9 @@ func (s *TenantProvisioningService) CreateAdminUser(tenantID string, input Creat
 	}
 
 	err := s.db.Transaction(func(tx *gorm.DB) error {
+		if err := CheckStaffQuota(tx, &user); err != nil {
+			return err
+		}
 		if err := tx.Create(&user).Error; err != nil {
 			return err
 		}

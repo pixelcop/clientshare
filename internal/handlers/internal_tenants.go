@@ -24,6 +24,7 @@ func NewInternalTenantsHandler(svc *services.TenantProvisioningService) *Interna
 func RegisterInternalTenantRoutes(router fiber.Router, svc *services.TenantProvisioningService) {
 	h := NewInternalTenantsHandler(svc)
 	router.Get("/tenants/availability", h.GetAvailability)
+	router.Get("/tenants/:id/usage", h.GetUsage)
 	router.Post("/tenants", h.CreateTenant)
 	router.Patch("/tenants/:id", h.UpdateTenant)
 	router.Post("/tenants/:id/admin-users", h.CreateAdminUser)
@@ -61,6 +62,9 @@ func (h *InternalTenantsHandler) CreateTenant(c fiber.Ctx) error {
 	if strings.TrimSpace(req.Name) == "" || strings.TrimSpace(req.Slug) == "" {
 		return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{"error": "name and slug are required"})
 	}
+	if req.MaxUsers < 0 || req.MaxStorageBytes < 0 {
+		return c.Status(422).JSON(fiber.Map{"error": "limits cannot be negative"})
+	}
 
 	tenant, err := h.svc.CreateTenant(services.CreateTenantInput{
 		Name:            req.Name,
@@ -97,6 +101,9 @@ func (h *InternalTenantsHandler) UpdateTenant(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
 	}
 
+	if (req.MaxUsers != nil && *req.MaxUsers < 0) || (req.MaxStorageBytes != nil && *req.MaxStorageBytes < 0) {
+		return c.Status(422).JSON(fiber.Map{"error": "limits cannot be negative"})
+	}
 	tenant, entitlement, err := h.svc.UpdateTenant(id, services.UpdateTenantInput{
 		Name:            req.Name,
 		Slug:            req.Slug,

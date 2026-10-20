@@ -2,6 +2,7 @@ package storage
 
 import (
 	"archive/zip"
+	"errors"
 	"io"
 	"mime"
 	"os"
@@ -97,9 +98,12 @@ func (s *LocalStorage) Upload(dst string, src io.Reader) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer f.Close()
-	size, err := io.Copy(f, src)
-	return size, err
+	size, copyErr := io.Copy(f, src)
+	err = errors.Join(copyErr, f.Close())
+	if err != nil {
+		return size, errors.Join(err, os.Remove(absPath))
+	}
+	return size, nil
 }
 
 func (s *LocalStorage) Download(path string) (io.ReadCloser, error) {

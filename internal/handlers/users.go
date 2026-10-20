@@ -335,6 +335,9 @@ func (h *UsersHandler) CreateUserHandler(c fiber.Ctx) error {
 	inviteRawToken := ""
 	createdBy := strings.TrimSpace(fiber.Locals[string](c, "user_id"))
 	if err := h.db.WithContext(c.Context()).Transaction(func(tx *gorm.DB) error {
+		if err := services.CheckStaffQuota(tx, &user); err != nil {
+			return err
+		}
 		if err := tx.Create(&user).Error; err != nil {
 			return err
 		}
@@ -346,6 +349,9 @@ func (h *UsersHandler) CreateUserHandler(c fiber.Ctx) error {
 		return err
 	}); err != nil {
 		utils.Logger(c).Error("error creating invited user", zap.Error(err))
+		if respondQuotaError(c, err) {
+			return nil
+		}
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
 	user.ClientIDs = normalizedClientIDs
@@ -657,6 +663,9 @@ func (h *UsersHandler) UpdateUserHandler(c fiber.Ctx) error {
 	}
 	user.UpdatedAt = time.Now()
 	if err := h.db.WithContext(c.Context()).Transaction(func(tx *gorm.DB) error {
+		if err := services.CheckStaffQuota(tx, &user); err != nil {
+			return err
+		}
 		if err := tx.Save(&user).Error; err != nil {
 			return err
 		}
@@ -675,6 +684,9 @@ func (h *UsersHandler) UpdateUserHandler(c fiber.Ctx) error {
 		return nil
 	}); err != nil {
 		utils.Logger(c).Error("error saving user", zap.Error(err))
+		if respondQuotaError(c, err) {
+			return nil
+		}
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
 	user.InviteAccepted = h.userInviteAccepted(user)
