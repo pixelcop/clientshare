@@ -19,8 +19,8 @@ type QuotaError struct {
 
 func (e *QuotaError) Error() string { return e.Message }
 
-var ErrStaffLimit = &QuotaError{"staff_limit_reached", "Staff user limit reached. Remove a staff user or upgrade your plan."}
-var ErrStorageLimit = &QuotaError{"storage_limit_reached", "Storage limit reached. Delete files or upgrade your plan."}
+var ErrStaffLimit = &QuotaError{"staff_limit_reached", "Staff user limit reached. Remove a staff user or contact your administrator to increase the limit."}
+var ErrStorageLimit = &QuotaError{"storage_limit_reached", "Storage limit reached. Delete files or contact your administrator to increase the limit."}
 
 // lockQuota must run inside the same transaction as the protected mutation.
 // A write lock works on PostgreSQL and SQLite, including across server processes.
