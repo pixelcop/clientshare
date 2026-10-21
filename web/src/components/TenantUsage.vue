@@ -38,14 +38,18 @@ onMounted(async () => {
       </p>
       <p class="text-sm">Client users are unlimited.</p>
       <p
-        v-if="
-          (usage.max_users > 0 && usage.staff_users >= usage.max_users) ||
-          (usage.max_storage_bytes > 0 && usage.storage_bytes >= usage.max_storage_bytes)
-        "
-        class="mt-2 text-amber-700"
+        v-if="usage.max_users > 0 && usage.staff_users >= usage.max_users"
+        class="mt-2 text-sm text-muted-color"
       >
-        A configured limit has been reached. Remove staff or files, or contact your administrator to
-        increase the limit. Existing access remains available.
+        All staff seats are in use. You won’t be able to add more staff users until a seat is freed
+        or the staff limit is increased. You can still add client users.
+      </p>
+      <p
+        v-if="usage.max_storage_bytes > 0 && usage.storage_bytes >= usage.max_storage_bytes"
+        class="mt-2 text-sm text-muted-color"
+      >
+        Storage is full. You won’t be able to upload more files until space is freed or the storage
+        limit is increased. Existing files remain accessible.
       </p>
     </template>
     <p v-else>Loading usage…</p>
