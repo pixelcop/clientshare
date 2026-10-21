@@ -44,8 +44,8 @@ onMounted(async () => {
         "
         class="mt-2 text-amber-700"
       >
-        A plan limit has been reached. Remove staff or files, or ask the account owner to upgrade.
-        Existing access remains available.
+        A configured limit has been reached. Remove staff or files, or contact your administrator to
+        increase the limit. Existing access remains available.
       </p>
     </template>
     <p v-else>Loading usage…</p>

@@ -99,7 +99,7 @@ func TestStorageQuotaConcurrentReservationsAndExpiry(t *testing.T) {
 	r, err := ReserveStorage(ctx, db, "a", 10)
 	require.NoError(t, err)
 	file := &models.File{TenantID: "a", ClientID: "client", Type: "file", Size: 10}
-	// Downgrading during an upload must be rechecked at finalization.
+	// Lowering the limit during an upload must be rechecked at finalization.
 	require.NoError(t, db.Model(&models.TenantEntitlement{}).Where("tenant_id = ?", "a").Update("max_storage_bytes", 5).Error)
 	require.ErrorIs(t, FinalizeStorage(ctx, db, r, file), ErrStorageLimit)
 	require.NoError(t, ReleaseStorage(db, r))
