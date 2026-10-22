@@ -16,7 +16,7 @@ const message = ref('');
 const error = ref('');
 const receipt = ref('');
 const retry = ref<{ id: string; message: string; screen: string }>();
-const messageField = ref<{ $el?: HTMLElement } | null>(null);
+const messageField = ref<HTMLTextAreaElement | null>(null);
 const capabilities = ref<{
   provider: string;
   guide_url?: string;
@@ -31,7 +31,7 @@ const guideURL = computed(() => capabilities.value.guide_url || branding.brandin
 watch(contact, async (isContacting) => {
   if (isContacting && visible.value) {
     await nextTick();
-    messageField.value?.$el?.querySelector('textarea')?.focus();
+    messageField.value?.$el?.focus();
   }
 });
 
@@ -124,6 +124,7 @@ async function send() {
       <label for="support-message">How can we help?</label>
       <Textarea
         ref="messageField"
+        as="textarea"
         id="support-message"
         v-model="message"
         rows="6"
