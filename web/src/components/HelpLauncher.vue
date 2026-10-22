@@ -99,7 +99,6 @@ async function send() {
   >
     <div v-if="receipt" class="flex flex-col gap-4" role="status">
       <p>Thanks for reaching out! We’ve received your message and will reply by email.</p>
-      <p class="break-all">Request ID: {{ receipt }}</p>
       <Button
         label="Back to Help"
         @click="
