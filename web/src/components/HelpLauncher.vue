@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import axios from 'axios';
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 
 import HelpPanel from '@/components/HelpPanel.vue';
@@ -16,7 +16,6 @@ const message = ref('');
 const error = ref('');
 const receipt = ref('');
 const retry = ref<{ id: string; message: string; screen: string }>();
-const messageField = ref<HTMLTextAreaElement | null>(null);
 const capabilities = ref<{
   provider: string;
   guide_url?: string;
@@ -27,13 +26,6 @@ const capabilities = ref<{
   booking_url?: string;
 }>({ provider: 'none' });
 const guideURL = computed(() => capabilities.value.guide_url || branding.branding.docsURL);
-
-watch(contact, async (isContacting) => {
-  if (isContacting && visible.value) {
-    await nextTick();
-    messageField.value?.$el?.focus();
-  }
-});
 
 async function loadCapabilities() {
   loading.value = true;
@@ -123,13 +115,12 @@ async function send() {
       </p>
       <label for="support-message">How can we help?</label>
       <Textarea
-        ref="messageField"
-        as="textarea"
         id="support-message"
         v-model="message"
         rows="6"
         maxlength="8000"
         required
+        autofocus
         :disabled="sending"
         class="w-full"
       />
