@@ -25,6 +25,14 @@ tenancy:
   mode: "single"
   internal_target_header: "X-ClientShare-Tenant"
 
+# Guide destination remains server.docs.url. No commercial connection by default.
+help:
+  provider: "none" # none, operator, clientshare
+  operator_url: ""
+  operator_label: "" # e.g. Contact your portal operator
+  recipient: "" # server-only ClientShare support mailbox; requires hosted + SMTP
+  booking_url: "" # reusable public URL only; never a customer's single-use invite
+
 database:
   # Supported values: sqlite, postgres, mysql
   # Keep sqlite as the default self-hosted path.
