@@ -21,8 +21,19 @@ function portFromEnv(value: string | undefined, fallback: number, name: string):
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), 'VITE_');
-  const frontendPort = portFromEnv(env.VITE_FRONTEND_PORT, 5193, 'VITE_FRONTEND_PORT');
-  const backendPort = portFromEnv(env.VITE_BACKEND_PORT, 8320, 'VITE_BACKEND_PORT');
+  const frontendPort = portFromEnv(
+    process.env.VITE_FRONTEND_PORT || process.env.PORT || env.VITE_FRONTEND_PORT,
+    5193,
+    'VITE_FRONTEND_PORT',
+  );
+  const backendPort = portFromEnv(
+    process.env.VITE_BACKEND_PORT || env.VITE_BACKEND_PORT,
+    8320,
+    'VITE_BACKEND_PORT',
+  );
+  const publicHost = process.env.DEVCRAFT_PUBLIC_URL
+    ? new URL(process.env.DEVCRAFT_PUBLIC_URL).hostname
+    : undefined;
 
   return {
     plugins: [
@@ -91,11 +102,8 @@ export default defineConfig(({ mode }) => {
       host: '0.0.0.0',
       port: frontendPort,
       strictPort: true,
-      hmr: {
-        host: 'localhost',
-        port: frontendPort,
-        clientPort: frontendPort,
-      },
+      allowedHosts: publicHost ? [publicHost] : undefined,
+      // Let Vite derive websocket host/protocol from the browser's public URL.
       proxy: {
         '/docs': {
           target: `http://localhost:${backendPort}`,
@@ -104,7 +112,12 @@ export default defineConfig(({ mode }) => {
         },
         '/api': {
           target: `http://localhost:${backendPort}`,
-          changeOrigin: true,
+          changeOrigin: false,
+          secure: false,
+        },
+        '/links': {
+          target: `http://localhost:${backendPort}`,
+          changeOrigin: false,
           secure: false,
         },
       },

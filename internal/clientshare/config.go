@@ -8,6 +8,7 @@ import (
 	"net/mail"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -191,6 +192,11 @@ func LoadServerConfigWithReport(configPath string) (*Config, configschema.Report
 	if err != nil && (!errors.Is(err, configschema.ErrInvalid) || cfg == nil) {
 		return nil, report, err
 	}
+	if err == nil {
+		if runtimeErr := cfg.ApplyRuntimeEnvironment(); runtimeErr != nil {
+			return nil, report, runtimeErr
+		}
+	}
 
 	if cfg.InternalAPI.Enabled {
 		secret := strings.TrimSpace(cfg.InternalAPI.Secret)
@@ -207,6 +213,37 @@ func LoadServerConfigWithReport(configPath string) (*Config, configschema.Report
 		return nil, report, fmt.Errorf("validate server config: %w", err)
 	}
 	return cfg, report, nil
+}
+
+// ApplyRuntimeEnvironment supports process-local ports and preview URLs without
+// rewriting the copied runtime configuration. Migrations use the original DB config.
+func (cfg *Config) ApplyRuntimeEnvironment() error {
+	for key, target := range map[string]*int{"PORT": &cfg.Server.Port, "VITE_FRONTEND_PORT": &cfg.Server.VitePort} {
+		if value := os.Getenv(key); value != "" {
+			port, err := strconv.Atoi(value)
+			if err != nil || port < 1 || port > 65535 {
+				return fmt.Errorf("%s must be a port between 1 and 65535", key)
+			}
+			*target = port
+		}
+	}
+	if value := os.Getenv("SERVER_BASE_URL"); value != "" {
+		if !validDocsLinkURL(value) {
+			return fmt.Errorf("SERVER_BASE_URL must be a safe URL")
+		}
+		cfg.Server.BaseURL = value
+	}
+	if value := os.Getenv("DOCS_URL"); value != "" {
+		cfg.Server.Docs.URL = value
+	}
+	if value := os.Getenv("EMAIL_ENABLED"); value != "" {
+		enabled, err := strconv.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("EMAIL_ENABLED must be a boolean")
+		}
+		cfg.Email.Enabled = enabled
+	}
+	return cfg.Validate()
 }
 
 func validateDatabaseReport(cfg *Config, report *configschema.Report) {
