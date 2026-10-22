@@ -32,7 +32,7 @@ For frontend commands and conventions under `web/`, follow `web/AGENTS.md`.
 ## Conventions
 
 - Check `config/config.yaml` before running.
-- Always consult the component library's current documentation before changing UI components, props, events, focus behavior or accessibility. Use the OpenVue MCP (`https://openvue.dev/mcp`) for OpenVue; do not guess component APIs or add workarounds before checking the documented API.
+- Always consult the component library's current documentation before changing UI components, props, events, focus behavior or accessibility. Use the local OpenVue MCP (`bunx @openvue/mcp`); `https://openvue.dev/mcp` is its installation guide, not a remote endpoint. Do not guess component APIs or add workarounds before checking the documented API.
 - Use migrations for DB schema changes; do not edit applied migrations.
 - Return errors as JSON with proper HTTP status codes.
 - Follow the handler -> service -> model/storage separation instead of putting business logic directly in handlers.
