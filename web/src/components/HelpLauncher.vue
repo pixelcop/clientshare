@@ -73,7 +73,8 @@ async function send() {
     message.value = '';
     retry.value = undefined;
   } catch {
-    error.value = 'Your message could not be confirmed. Your draft is saved here. Please retry.';
+    error.value =
+      'We couldn’t confirm your message was received. Your draft is still here. Please try again.';
   } finally {
     sending.value = false;
   }
@@ -92,7 +93,7 @@ async function send() {
     @open="open"
   >
     <div v-if="receipt" class="flex flex-col gap-4" role="status">
-      <p>Your message has been received by ClientShare support.</p>
+      <p>Thanks for reaching out! We’ve received your message and will reply by email.</p>
       <p class="break-all">Request ID: {{ receipt }}</p>
       <Button
         label="Back to Help"
@@ -103,12 +104,11 @@ async function send() {
       />
     </div>
     <form v-else class="flex flex-col gap-4" @submit.prevent="send">
-      <p>Get help with your portal or tell us what isn’t working.</p>
-      <p class="font-semibold">Sending to ClientShare support</p>
-      <p class="break-words">
-        {{ capabilities.requester_name }} · Reply address: {{ capabilities.reply_email }}
+      <p>
+        Tell us what you need a hand with. Your message goes straight to the ClientShare support
+        team.
       </p>
-      <label for="support-message">What are you trying to do?</label>
+      <label for="support-message">How can we help?</label>
       <Textarea
         id="support-message"
         v-model="message"
@@ -119,6 +119,7 @@ async function send() {
         class="w-full"
       />
       <p v-if="error" role="alert">{{ error }}</p>
+      <p class="text-sm">We’ll reply by email.</p>
       <Button
         type="submit"
         label="Send message"

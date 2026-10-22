@@ -78,7 +78,7 @@ marketing input as trusted tenant identity or coupling Core to a second service.
 - Frontend build, TypeScript check, targeted ESLint and 27 existing unit tests pass.
 - `web/src/__tests__/help_browser.py`: local Playwright checks at desktop and
   390px mobile widths, keyboard opening/Escape/focus return, configured guide and
-  operator links, explicit destination/reply address, hidden unconfigured booking,
+  operator links, explicit support destination with account details hidden, hidden unconfigured booking,
   draft retention and same-key retry after a simulated 503, durable success display,
   and no external requests from Help. API responses are mocked; no customer data
   or real notifications are used. Existing app-wide font requests are blocked.
