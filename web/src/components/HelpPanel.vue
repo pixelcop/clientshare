@@ -12,7 +12,17 @@ defineEmits<{ open: [] }>();
 </script>
 
 <template>
-  <Button label="Help" severity="secondary" outlined @click="$emit('open')" />
+  <Button
+    v-if="!contactAvailable && !supportURL"
+    as="a"
+    label="User guide"
+    :href="guideURL"
+    target="_blank"
+    rel="noopener noreferrer"
+    severity="secondary"
+    outlined
+  />
+  <Button v-else label="Help" severity="secondary" outlined @click="$emit('open')" />
   <Dialog
     v-model:visible="visible"
     modal
