@@ -47,7 +47,7 @@ For frontend commands and conventions under `web/`, follow `web/AGENTS.md`.
 
 - Run `make migrate` before starting services. The Devcraft API launcher also runs migrations before starting the backend.
 - Devcraft runs `api`, `web`, and `docs` with independently allocated ports. `scripts/dev-service.sh` wires the worktree-local ports and public URLs together. Use the web public URL for the portal and docs public URL for the guide.
-- Devcraft previews disable outbound email so copied pending queues cannot send real notifications.
+- Devcraft previews disable outbound email by default. Set the API service's `EMAIL_ENABLED=true` environment override when real delivery is explicitly requested; this enables both tenant notifications and support notifications.
 - The API launcher binds preview domains to the tenant identified by the copied config's original `server.base_url`, and updates that tenant's public URL in the copied database only (`cmd/devpreview`).
 - Required secrets such as JWT, secure-link signing, and invite token secrets must be present in config for the app to start.
 - For frontend-specific rules, use the nested `web/AGENTS.md` rather than duplicating them here.
