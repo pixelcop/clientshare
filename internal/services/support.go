@@ -50,7 +50,7 @@ func (s SupportService) Notify(sender emailpkg.EmailSender) error {
 		if lease.RowsAffected != 1 {
 			continue
 		}
-		err := sender.Send(emailpkg.Email{TenantID: row.TenantID, To: row.Destination, Subject: "ClientShare support [" + row.ID + "]", Body: fmt.Sprintf("Request: %s\nProvider: %s\nTenant: %s\nRequester: %s (%s)\nReply to: %s <%s>\nSubmitted: %s\nScreen: %s\nVersion: %s\n\n%s", row.ID, row.Provider, row.TenantID, row.RequesterID, row.Role, row.Name, row.Email, row.CreatedAt.Format(time.RFC3339), row.Screen, row.Version, row.Message)})
+		err := sender.Send(emailpkg.Email{TenantID: row.TenantID, To: row.Destination, ReplyTo: row.Email, Subject: "ClientShare support [" + row.ID + "]", Body: fmt.Sprintf("Request: %s\nProvider: %s\nTenant: %s\nRequester: %s (%s)\nReply to: %s <%s>\nSubmitted: %s\nScreen: %s\nVersion: %s\n\n%s", row.ID, row.Provider, row.TenantID, row.RequesterID, row.Role, row.Name, row.Email, row.CreatedAt.Format(time.RFC3339), row.Screen, row.Version, row.Message)})
 		if err != nil {
 			continue
 		}

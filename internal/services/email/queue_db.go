@@ -32,9 +32,9 @@ func (q *DBEmailQueue) Queue(email Email, sendAt *time.Time) (*models.QueuedEmai
 	}
 
 	// look for existing queued email for the same client
-	if email.ClientID != nil {
+	if email.ClientID != nil && email.HideRecipients {
 		var existing models.QueuedEmail
-		query := q.DB.Where("client_id = ? AND sent_at IS NULL", *email.ClientID)
+		query := q.DB.Where("client_id = ? AND sent_at IS NULL AND hide_recipients = ? AND reply_to = ?", *email.ClientID, true, email.ReplyTo)
 		if strings.TrimSpace(email.TenantID) != "" {
 			query = query.Where("tenant_id = ?", strings.TrimSpace(email.TenantID))
 		}
@@ -52,7 +52,7 @@ func (q *DBEmailQueue) Queue(email Email, sendAt *time.Time) (*models.QueuedEmai
 			if err != nil {
 				return nil, err
 			}
-			query = q.DB.Where("client_id = ? AND sent_at IS NULL", *email.ClientID)
+			query = q.DB.Where("id = ?", existing.ID)
 			if strings.TrimSpace(email.TenantID) != "" {
 				query = query.Where("tenant_id = ?", strings.TrimSpace(email.TenantID))
 			}
@@ -72,15 +72,17 @@ func (q *DBEmailQueue) Queue(email Email, sendAt *time.Time) (*models.QueuedEmai
 
 	// new queue item
 	item := models.QueuedEmail{
-		TenantID:     strings.TrimSpace(email.TenantID),
-		Recipient:    email.To,
-		Subject:      email.Subject,
-		Body:         email.Body,
-		HTMLBody:     email.HTMLBody,
-		FileIDsCSV:   email.FileIDsCSV,
-		ClientID:     email.ClientID,
-		EventType:    "generic",
-		ScheduledFor: *sendAt,
+		TenantID:       strings.TrimSpace(email.TenantID),
+		Recipient:      email.To,
+		ReplyTo:        email.ReplyTo,
+		HideRecipients: email.HideRecipients,
+		Subject:        email.Subject,
+		Body:           email.Body,
+		HTMLBody:       email.HTMLBody,
+		FileIDsCSV:     email.FileIDsCSV,
+		ClientID:       email.ClientID,
+		EventType:      "generic",
+		ScheduledFor:   *sendAt,
 	}
 	if item.ScheduledFor.Before(time.Now().Add(time.Second)) {
 		go q.send(item) // send immediately
@@ -132,7 +134,7 @@ func (q *DBEmailQueue) Update(tenantID, id, recipient, subject, body string) err
 }
 
 func (q *DBEmailQueue) send(item models.QueuedEmail) error {
-	if err := q.Sender.Send(Email{TenantID: item.TenantID, To: item.Recipient, Subject: item.Subject, Body: item.Body, HTMLBody: item.HTMLBody, ClientID: item.ClientID}); err != nil {
+	if err := q.Sender.Send(ToEmail(&item)); err != nil {
 		// TODO: store err w/ item so we dont' retry? or retry max 3 times or something?
 		return err
 	}
@@ -210,7 +212,7 @@ func (q *DBEmailQueue) ProcessAll() error {
 
 func (q *DBEmailQueue) process(items []models.QueuedEmail, sentAt time.Time) error {
 	for _, item := range items {
-		if err := q.Sender.Send(Email{To: item.Recipient, Subject: item.Subject, Body: item.Body, HTMLBody: item.HTMLBody, ClientID: item.ClientID}); err != nil {
+		if err := q.Sender.Send(ToEmail(&item)); err != nil {
 			zap.L().Warn("failed to send queued email", zap.String("id", item.ID), zap.Error(err))
 			continue
 		}

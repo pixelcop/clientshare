@@ -520,13 +520,14 @@ func (h *FileHandler) sendUploadNotification(c fiber.Ctx, client *models.Client,
 
 		subject, body, htmlBody := email.RenderUploadNotification(client.Name, notificationFiles, tenantBaseURLFromCtx(c, h.baseURL), h.siteTitleForTenant(c, tenantID))
 		if _, queueErr := h.emailQueue.Queue(email.Email{
-			TenantID:   tenantID,
-			To:         recipientsTo,
-			Subject:    subject,
-			Body:       body,
-			HTMLBody:   htmlBody,
-			ClientID:   &client.ID,
-			FileIDsCSV: strings.Join(fileIDs, ","),
+			TenantID:       tenantID,
+			To:             recipientsTo,
+			HideRecipients: true,
+			Subject:        subject,
+			Body:           body,
+			HTMLBody:       htmlBody,
+			ClientID:       &client.ID,
+			FileIDsCSV:     strings.Join(fileIDs, ","),
 		}, nil); queueErr != nil {
 			utils.Logger(c).Error("error queueing upload email", zap.Error(queueErr))
 		}

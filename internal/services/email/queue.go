@@ -30,13 +30,14 @@ func (q *InMemoryEmailQueue) Queue(email Email, sendAt *time.Time) (*models.Queu
 	defer q.mu.Unlock()
 
 	// look for existing queued email for the same client
-	if email.ClientID != nil {
+	if email.ClientID != nil && email.HideRecipients {
 		for i := range q.Emails {
 			existing := &q.Emails[i]
 			if existing.Sent() {
 				continue
 			}
-			if existing.ClientID != nil && *existing.ClientID == *email.ClientID {
+			if existing.ClientID != nil && *existing.ClientID == *email.ClientID &&
+				existing.TenantID == strings.TrimSpace(email.TenantID) && existing.HideRecipients && existing.ReplyTo == email.ReplyTo {
 				existing.Recipient = mergeRecipients(existing.Recipient, email.To)
 				existing.Subject = email.Subject
 				existing.Body = mergeBodies(existing.Body, email.Body)
@@ -53,16 +54,18 @@ func (q *InMemoryEmailQueue) Queue(email Email, sendAt *time.Time) (*models.Queu
 
 	// new item
 	q.Emails = append(q.Emails, models.QueuedEmail{
-		TenantID:     strings.TrimSpace(email.TenantID),
-		ID:           ids.NewULID(),
-		Recipient:    email.To,
-		Subject:      email.Subject,
-		Body:         email.Body,
-		HTMLBody:     email.HTMLBody,
-		FileIDsCSV:   email.FileIDsCSV,
-		ClientID:     email.ClientID,
-		ScheduledFor: *sendAt,
-		CreatedAt:    time.Now(),
+		TenantID:       strings.TrimSpace(email.TenantID),
+		ID:             ids.NewULID(),
+		Recipient:      email.To,
+		ReplyTo:        email.ReplyTo,
+		HideRecipients: email.HideRecipients,
+		Subject:        email.Subject,
+		Body:           email.Body,
+		HTMLBody:       email.HTMLBody,
+		FileIDsCSV:     email.FileIDsCSV,
+		ClientID:       email.ClientID,
+		ScheduledFor:   *sendAt,
+		CreatedAt:      time.Now(),
 	})
 	if sendAt.Before(time.Now().Add(time.Second)) {
 		go q.SendNow(q.Emails[len(q.Emails)-1].TenantID, q.Emails[len(q.Emails)-1].ID)
@@ -102,12 +105,14 @@ func (q *InMemoryEmailQueue) Update(tenantID, id, recipient, subject, body strin
 
 func ToEmail(e *models.QueuedEmail) Email {
 	return Email{
-		TenantID: e.TenantID,
-		To:       e.Recipient,
-		Subject:  e.Subject,
-		Body:     e.Body,
-		HTMLBody: e.HTMLBody,
-		ClientID: e.ClientID,
+		TenantID:       e.TenantID,
+		To:             e.Recipient,
+		ReplyTo:        e.ReplyTo,
+		HideRecipients: e.HideRecipients,
+		Subject:        e.Subject,
+		Body:           e.Body,
+		HTMLBody:       e.HTMLBody,
+		ClientID:       e.ClientID,
 	}
 }
 
