@@ -76,7 +76,17 @@ with sync_playwright() as p:
         expect(dialog.get_by_text("Test Admin", exact=False)).to_have_count(0)
         expect(dialog.get_by_text("Book a 20-minute setup session")).to_have_count(0)
         field = dialog.get_by_label("How can we help?")
+        # An untouched form returns to the main Help menu when reopened.
+        page.keyboard.press("Escape")
+        help_button.click()
+        expect(dialog.get_by_role("link", name="User guide")).to_be_visible()
+        expect(field).to_have_count(0)
+        dialog.get_by_role("button", name="Contact ClientShare support").click()
         field.fill("Help me configure this portal")
+        # A started draft reopens directly in the form with its content intact.
+        page.keyboard.press("Escape")
+        help_button.click()
+        expect(field).to_have_value("Help me configure this portal")
         dialog.get_by_role("button", name="Send message").click()
         expect(dialog.get_by_role("alert")).to_be_visible()
         expect(field).to_have_value("Help me configure this portal")

@@ -44,6 +44,11 @@ async function loadCapabilities() {
 onMounted(loadCapabilities);
 
 function open() {
+  contact.value = Boolean(message.value.trim()) || sending.value;
+  if (!contact.value) {
+    error.value = '';
+    receipt.value = '';
+  }
   visible.value = true;
   void loadCapabilities();
 }
