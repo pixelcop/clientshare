@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/mail"
 	"net/url"
 	"os"
 	"strings"
@@ -42,6 +43,13 @@ type DocsConfig struct {
 }
 
 type Config struct {
+	Help struct {
+		Provider      string `mapstructure:"provider"`
+		OperatorURL   string `mapstructure:"operator_url"`
+		OperatorLabel string `mapstructure:"operator_label"`
+		Recipient     string `mapstructure:"recipient"`
+		BookingURL    string `mapstructure:"booking_url"`
+	} `mapstructure:"help"`
 	BuildTime  *time.Time `mapstructure:"-"`
 	CommitHash string     `mapstructure:"-"`
 	DevMode    bool       `mapstructure:"dev_mode"`
@@ -251,6 +259,23 @@ func (cfg *Config) DocsURL() string {
 }
 
 func (cfg *Config) Validate() error {
+	if cfg.Help.Provider != "" && cfg.Help.Provider != "none" && cfg.Help.Provider != "operator" && cfg.Help.Provider != "clientshare" {
+		return fmt.Errorf("help.provider must be none, operator or clientshare")
+	}
+	if cfg.Help.Provider == "operator" && (!validDocsLinkURL(cfg.Help.OperatorURL) || strings.TrimSpace(cfg.Help.OperatorLabel) == "") {
+		return fmt.Errorf("operator help requires a safe URL and label")
+	}
+	if cfg.Help.Provider == "clientshare" {
+		if cfg.Tenancy.Mode != "hosted" || !cfg.Email.Enabled || cfg.Email.SMTP.Host == "" {
+			return fmt.Errorf("ClientShare support requires hosted mode and SMTP email")
+		}
+		if _, err := mail.ParseAddress(cfg.Help.Recipient); err != nil {
+			return fmt.Errorf("help.recipient must be a mailbox")
+		}
+	}
+	if cfg.Help.BookingURL != "" && !validDocsLinkURL(cfg.Help.BookingURL) {
+		return fmt.Errorf("help.booking_url must be a safe reusable URL")
+	}
 	if !validDocsLinkURL(cfg.DocsURL()) {
 		return fmt.Errorf("server.docs.url must be an http(s) URL or a root-relative path")
 	}

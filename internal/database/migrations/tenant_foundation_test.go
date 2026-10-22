@@ -25,12 +25,13 @@ func TestMigrationProviderUpCreatesCurrentSchemaAndSeedsTenant(t *testing.T) {
 
 	results, err := provider.Up(context.Background())
 	require.NoError(t, err)
-	require.Len(t, results, 8)
+	require.Len(t, results, 9)
 
 	requireDefaultTenantSeeded(t, db, dbpkg.DatabaseDriverSQLite)
 	requireColumnPresent(t, db, "passkey_signups", "token_hash")
 	requireColumnPresent(t, db, "storage_reservations", "expires_at")
-	requireGooseVersionsApplied(t, db, dbpkg.DatabaseDriverSQLite, 34, 35, 36, 37, 38, 39, 40, 41)
+	requireColumnPresent(t, db, "support_messages", "notified_at")
+	requireGooseVersionsApplied(t, db, dbpkg.DatabaseDriverSQLite, 34, 35, 36, 37, 38, 39, 40, 41, 42)
 	requireColumnPresent(t, db, "files", "disk_deleted_at")
 }
 
@@ -40,12 +41,13 @@ func TestMigrationProviderUpCreatesCurrentSchemaAndSeedsTenantPostgres(t *testin
 
 	results, err := provider.Up(context.Background())
 	require.NoError(t, err)
-	require.Len(t, results, 8)
+	require.Len(t, results, 9)
 
 	requireDefaultTenantSeeded(t, db, dbpkg.DatabaseDriverPostgres)
 	requireColumnPresent(t, db, "passkey_signups", "token_hash")
 	requireColumnPresent(t, db, "storage_reservations", "expires_at")
-	requireGooseVersionsApplied(t, db, dbpkg.DatabaseDriverPostgres, 34, 35, 36, 37, 38, 39, 40, 41)
+	requireColumnPresent(t, db, "support_messages", "notified_at")
+	requireGooseVersionsApplied(t, db, dbpkg.DatabaseDriverPostgres, 34, 35, 36, 37, 38, 39, 40, 41, 42)
 	requireColumnPresent(t, db, "files", "disk_deleted_at")
 }
 
@@ -86,7 +88,7 @@ func TestMigrationProviderResetDropsManagedTables(t *testing.T) {
 
 	results, err := provider.DownTo(context.Background(), 0)
 	require.NoError(t, err)
-	require.Len(t, results, 8)
+	require.Len(t, results, 9)
 
 	requireManagedTablesMissing(t, db, dbpkg.DatabaseDriverSQLite)
 }
@@ -100,7 +102,7 @@ func TestMigrationProviderResetDropsManagedTablesPostgres(t *testing.T) {
 
 	results, err := provider.DownTo(context.Background(), 0)
 	require.NoError(t, err)
-	require.Len(t, results, 8)
+	require.Len(t, results, 9)
 
 	requireManagedTablesMissing(t, db, dbpkg.DatabaseDriverPostgres)
 }
@@ -125,6 +127,7 @@ func newMigrationProviderForTest(t *testing.T, db *sql.DB, dialect goose.Dialect
 			migration.NewGoMigration(39, upAddHostedPasskeyHandoffs, downAddHostedPasskeyHandoffs),
 			migration.NewGoMigration(40, upAddPasskeySignups, downAddPasskeySignups),
 			migration.NewGoMigration(41, upAddStorageReservations, downAddStorageReservations),
+			migration.NewGoMigration(42, upAddSupportMessages, downAddSupportMessages),
 		},
 	)
 	require.NoError(t, err)
@@ -244,6 +247,7 @@ func requireManagedTablesMissing(t *testing.T, db *sql.DB, driver string) {
 	requireTableMissing(t, db, driver, "hosted_login_handoffs")
 	requireTableMissing(t, db, driver, "passkey_signups")
 	requireTableMissing(t, db, driver, "storage_reservations")
+	requireTableMissing(t, db, driver, "support_messages")
 	requireTableMissing(t, db, driver, "audit_events")
 	requireTableMissing(t, db, driver, "feed_events")
 	requireTableMissing(t, db, driver, "user_clients")

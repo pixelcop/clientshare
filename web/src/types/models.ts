@@ -233,6 +233,31 @@ export interface StorageReservation {
 }
 
 //////////
+// source: support_message.go
+
+/**
+ * SupportMessage is a private receipt/outbox, separate from tenant-editable email queues.
+ */
+export interface SupportMessage {
+  ID: string;
+  TenantID: string;
+  RequesterID: string;
+  RetryKey: string;
+  Role: string;
+  Name: string;
+  Email: string;
+  Provider: string;
+  Destination: string;
+  Message: string;
+  Screen: string;
+  Version: string;
+  CreatedAt: string;
+  NotifiedAt?: string;
+  NextAttemptAt: string;
+  Attempts: number /* int */;
+}
+
+//////////
 // source: tenant.go
 
 export interface Tenant {

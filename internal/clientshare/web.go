@@ -85,6 +85,7 @@ func NewWebApp(cfg *Config, db *gorm.DB, logger *zap.Logger, emailQueue emailpkg
 	api := fiber.New()
 	app.Use("/api", api)
 	api.Use("/", middleware.AuthRequired)
+	handlers.RegisterHelpRoutes(api, db, handlers.HelpOptions{Hosted: cfg.Tenancy.Mode == "hosted", Provider: cfg.Help.Provider, GuideURL: cfg.DocsURL(), OperatorURL: cfg.Help.OperatorURL, OperatorLabel: cfg.Help.OperatorLabel, Recipient: cfg.Help.Recipient, BookingURL: cfg.Help.BookingURL, Version: cfg.CommitHash})
 
 	// User management endpoints (admin/manager)
 	handlers.RegisterUserRoutes(api, db, emailQueue, cfg.Server.BaseURL, inviteTokenSecret, jwtSecret, inviteTTL, resetTTL, tenantSettingsService)
@@ -148,6 +149,25 @@ func StartWebServer(cfg *Config, db *gorm.DB, logger *zap.Logger, emailQueue ema
 	cleanupWorker := services.NewFileCleanupWorker(db, store, logger)
 	cleanupWorker.Start()
 	defer cleanupWorker.Stop()
+	if cfg.Tenancy.Mode == "hosted" && cfg.Help.Provider == "clientshare" {
+		stop := make(chan struct{})
+		defer close(stop)
+		sender := &emailpkg.SMTPSender{Host: cfg.Email.SMTP.Host, Port: cfg.Email.SMTP.Port, Username: cfg.Email.SMTP.Username, Password: cfg.Email.SMTP.Password, From: cfg.Email.SMTP.From}
+		go func() {
+			ticker := time.NewTicker(30 * time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-stop:
+					return
+				case <-ticker.C:
+					if err := (services.SupportService{DB: db}).Notify(sender); err != nil {
+						logger.Error("Support outbox failed", zap.Error(err))
+					}
+				}
+			}
+		}()
+	}
 
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 	mode := "production"
