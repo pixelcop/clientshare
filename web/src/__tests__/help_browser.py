@@ -43,24 +43,32 @@ with sync_playwright() as p:
         page.goto(base + "/clients")
         page.wait_for_load_state("networkidle")
         external.clear()
+        guide_link = page.get_by_role("link", name="User guide", exact=True)
+        expect(guide_link).to_be_visible()
+        expect(guide_link).to_have_attribute("href", "/configured-guide/")
+        guide_link.focus()
+        expect(guide_link).to_be_focused()
+        expect(page.get_by_role("button", name="Help", exact=True)).to_have_count(0)
+        dialog = page.get_by_role("dialog")
+        expect(dialog).to_have_count(0)
+        assert not external, external
+
+        state["provider"] = "operator"
+        page.reload()
+        page.wait_for_load_state("networkidle")
         help_button = page.get_by_role("button", name="Help", exact=True)
-        expect(help_button).to_be_visible()
         help_button.focus()
         page.keyboard.press("Enter")
-        dialog = page.get_by_role("dialog")
         expect(dialog).to_be_visible()
         expect(dialog.get_by_role("link", name="User guide")).to_have_attribute("href", "/configured-guide/")
-        expect(dialog.get_by_text("Contact ClientShare support", exact=True)).to_have_count(0)
-        assert not external, external
+        expect(dialog.get_by_role("link", name="Contact your portal operator")).to_have_attribute("href", "https://operator.example.invalid/contact")
         page.keyboard.press("Escape")
         expect(dialog).not_to_be_visible()
         expect(help_button).to_be_focused()
-
-        state["provider"] = "operator"
-        help_button.click()
-        expect(dialog.get_by_role("link", name="Contact your portal operator")).to_have_attribute("href", "https://operator.example.invalid/contact")
-        page.keyboard.press("Escape")
         state["provider"] = "clientshare"
+        page.reload()
+        page.wait_for_load_state("networkidle")
+        external.clear()
         help_button.click()
         dialog.get_by_role("button", name="Contact ClientShare support").click()
         expect(dialog.get_by_text("Sending to ClientShare support", exact=True)).to_be_visible()

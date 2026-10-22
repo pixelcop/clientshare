@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import axios from 'axios';
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 
 import HelpPanel from '@/components/HelpPanel.vue';
@@ -27,8 +27,7 @@ const capabilities = ref<{
 }>({ provider: 'none' });
 const guideURL = computed(() => capabilities.value.guide_url || branding.branding.docsURL);
 
-async function open() {
-  visible.value = true;
+async function loadCapabilities() {
   loading.value = true;
   try {
     capabilities.value = (await axios.get('/api/help')).data;
@@ -40,6 +39,13 @@ async function open() {
     }
     loading.value = false;
   }
+}
+
+onMounted(loadCapabilities);
+
+function open() {
+  visible.value = true;
+  void loadCapabilities();
 }
 
 async function send() {
