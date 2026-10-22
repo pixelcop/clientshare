@@ -39,10 +39,38 @@ func TestSMTPSenderBuildMessage(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Equal(t, sender.From, msg.From)
-	require.Equal(t, []string{"first@example.com", "second@example.com"}, msg.Bcc)
+	require.Equal(t, []string{"first@example.com", "second@example.com"}, msg.To)
+	require.Empty(t, msg.Bcc)
 	require.Equal(t, "Queued files are ready", msg.Subject)
 	require.Equal(t, []byte("Plain text body"), msg.Text)
 	require.Equal(t, []byte("<p>HTML body</p>"), msg.HTML)
+}
+
+func TestSMTPSenderRecipientPolicyAndReplyTo(t *testing.T) {
+	sender := SMTPSender{From: "noreply@example.com"}
+	for _, tc := range []struct {
+		name, to string
+		hide     bool
+		wantBCC  bool
+	}{
+		{"support", "support@example.com", false, false},
+		{"single notification", "one@example.com", true, false},
+		{"duplicate recipient", "one@example.com,one@example.com", true, false},
+		{"private group", "one@example.com,two@example.com", true, true},
+		{"visible group", "one@example.com,two@example.com", false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			msg, err := sender.buildMessage(Email{To: tc.to, HideRecipients: tc.hide, ReplyTo: "requester@example.com"})
+			require.NoError(t, err)
+			require.Equal(t, tc.wantBCC, len(msg.Bcc) > 0)
+			require.Equal(t, !tc.wantBCC, len(msg.To) > 0)
+			require.Equal(t, []string{"<requester@example.com>"}, msg.ReplyTo)
+		})
+	}
+	for _, reply := range []string{"not an address", "one@example.com\r\nBcc: attacker@example.com"} {
+		_, err := sender.buildMessage(Email{To: "support@example.com", ReplyTo: reply})
+		require.ErrorContains(t, err, "invalid reply-to")
+	}
 }
 
 func TestSMTPSenderBuildMessageRequiresRecipients(t *testing.T) {

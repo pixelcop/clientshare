@@ -66,6 +66,11 @@ func TestSupportDurabilityAndNotificationRetry(t *testing.T) {
 	if len(sender.sent) != 2 {
 		t.Fatal("retry not delivered")
 	}
+	for _, message := range sender.sent {
+		if message.To != "support@example.invalid" || message.ReplyTo != "reply@example.invalid" || message.HideRecipients {
+			t.Fatalf("unexpected support headers: %+v", message)
+		}
+	}
 	if err = svc.Notify(sender); err != nil {
 		t.Fatal(err)
 	}

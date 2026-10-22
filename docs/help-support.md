@@ -1,6 +1,6 @@
 # Help and support
 
-Core owns authenticated support receipt and notification. Apply migration 42 before
+Core owns authenticated support receipt and notification. Apply migrations through 43 before
 starting the new server. `support_messages` is a private durable outbox, separate
 from tenant-editable email queues. No SaaS control-plane service connection is required.
 
@@ -59,11 +59,19 @@ while the component remains mounted; reload/sign-out clears them.
 
 A worker checks every 30 seconds, leasing up to 20 rows for ten minutes. SMTP
 failures remain queued; inspect `attempts`, `next_attempt_at` and `notified_at` for
-delivery health. Receipt IDs appear in notification subjects, with reply identity
-in the body. SMTP delivery is at-least-once: a crash after SMTP acceptance can
+delivery health. The support mailbox is the email's To recipient, and the trusted
+requester email is Reply-To. Receipt IDs appear in notification subjects, with
+reply identity also in the body. SMTP delivery is at-least-once: a crash after SMTP acceptance can
 duplicate a notification, not the support receipt. Back up the database and include
 this table in your support-data retention policy. Disabling the provider stops
 delivery and preserves pending receipts.
+
+Core email defaults to visible To recipients. Callers can opt a system notification
+into `Email.HideRecipients`; BCC is used only when more than one distinct recipient
+is present. File-upload notifications opt in. Individual invites and support mail
+use To. Reply-To and the privacy option persist through the email queue. Only
+private notifications with matching client, tenant and reply routing can batch.
+Migration 43 preserves the old privacy behavior for previously queued messages.
 
 The SaaS checkout inspected at ff8c62b contains a durable marketing receiver, but
 its public payload has no authenticated tenant/requester contract. This release

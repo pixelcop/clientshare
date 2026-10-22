@@ -191,6 +191,8 @@ export interface QueuedEmail {
   id: string;
   tenant_id: string;
   recipient: string;
+  reply_to: string;
+  hide_recipients: boolean;
   subject: string;
   body: string;
   html_body: string;

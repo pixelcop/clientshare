@@ -17,13 +17,16 @@ import (
 )
 
 type Email struct {
-	TenantID   string
-	To         string
-	Subject    string
-	Body       string
-	HTMLBody   string
-	ClientID   *string
-	FileIDsCSV string
+	TenantID string
+	To       string
+	ReplyTo  string
+	// HideRecipients opts multi-recipient notifications into BCC. Single recipients always use To.
+	HideRecipients bool
+	Subject        string
+	Body           string
+	HTMLBody       string
+	ClientID       *string
+	FileIDsCSV     string
 }
 
 type EmailSender interface {
@@ -88,7 +91,18 @@ func (s *SMTPSender) buildMessage(email Email) (*jwemail.Email, error) {
 
 	msg := jwemail.NewEmail()
 	msg.From = s.From
-	msg.Bcc = recipients
+	if email.HideRecipients && len(recipients) > 1 {
+		msg.Bcc = recipients
+	} else {
+		msg.To = recipients
+	}
+	if email.ReplyTo != "" {
+		address, err := mail.ParseAddress(email.ReplyTo)
+		if err != nil || strings.ContainsAny(email.ReplyTo, "\r\n") {
+			return nil, fmt.Errorf("invalid reply-to address")
+		}
+		msg.ReplyTo = []string{address.String()}
+	}
 	msg.Subject = email.Subject
 	msg.Text = []byte(email.Body)
 	if strings.TrimSpace(email.HTMLBody) != "" {
