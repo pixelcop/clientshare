@@ -32,6 +32,7 @@ For frontend commands and conventions under `web/`, follow `web/AGENTS.md`.
 ## Conventions
 
 - Check `config/config.yaml` before running.
+- Always consult the component library's current documentation before changing UI components, props, events, focus behavior or accessibility. Use the OpenVue MCP (`https://openvue.dev/mcp`) for OpenVue; do not guess component APIs or add workarounds before checking the documented API.
 - Use migrations for DB schema changes; do not edit applied migrations.
 - Return errors as JSON with proper HTTP status codes.
 - Follow the handler -> service -> model/storage separation instead of putting business logic directly in handlers.
@@ -41,6 +42,7 @@ For frontend commands and conventions under `web/`, follow `web/AGENTS.md`.
 - Keep backend changes auditable and minimal; preserve existing public routes and config shapes unless the task requires changes.
 - Always create a separate Git worktree when starting a new branch, and perform that branch's work inside its worktree. Create new worktrees under `~/work/trees/`.
 - Always copy `config/config.yaml` (or `.yml`) and `data/` from the main branch checkout into a new worktree before migrations or startup. Keep these local runtime files ignored. Use SQLite backup for an active database; do not overwrite an already-running worktree's database.
+- Also copy local/untracked `opencode.json`, `opencode.jsonc`, and `.opencode/opencode.json(c)` files from the main checkout into matching paths in a new worktree when present. Tracked config comes from the branch. OpenCode discovers config in the current directory and its ancestors, not a sibling main checkout. Preserve existing worktree overrides; inspect differences before refreshing them, and keep local-only config out of commits.
 - After merging a branch back into its target branch, remove that branch's worktree and delete the merged local branch.
 
 ## Notes
