@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun --bun vitepress dev --port 5174",
+    "dev": "bun --bun vitepress dev",
     "build": "bun --bun vitepress build",
     "build:embedded": "DOCS_EMBEDDED=true bun --bun vitepress build",
     "preview:embedded": "DOCS_EMBEDDED=true bun --bun vitepress preview --port 4175",

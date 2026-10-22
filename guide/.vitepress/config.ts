@@ -11,7 +11,14 @@ export default defineConfig({
   outDir: embedded ? '../internal/static/guide/dist' : undefined,
   lastUpdated: process.env.DOCS_LAST_UPDATED !== 'false',
   // The shared app logo lives outside this package; use the guide's Vue runtime.
-  vite: { resolve: { dedupe: ['vue'] } },
+  vite: {
+    resolve: { dedupe: ['vue'] },
+    server: {
+      port: Number(process.env.PORT || 5174),
+      strictPort: true,
+      allowedHosts: process.env.DEVCRAFT_PUBLIC_URL ? [new URL(process.env.DEVCRAFT_PUBLIC_URL).hostname] : undefined,
+    },
+  },
   themeConfig: {
     siteTitle: 'User Guide',
     nav: [
