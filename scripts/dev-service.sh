@@ -39,7 +39,7 @@ case "$1" in
     export SERVER_BASE_URL="$(cat data/devcraft/web.url)"
     wait_for_service docs
     export DOCS_URL="$(cat data/devcraft/docs.url)"
-    export EMAIL_ENABLED=false
+    export EMAIL_ENABLED="${EMAIL_ENABLED:-false}"
     make migrate
     go run ./cmd/devpreview
     exec make run
