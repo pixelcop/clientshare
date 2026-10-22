@@ -71,17 +71,18 @@ with sync_playwright() as p:
         external.clear()
         help_button.click()
         dialog.get_by_role("button", name="Contact ClientShare support").click()
-        expect(dialog.get_by_text("Sending to ClientShare support", exact=True)).to_be_visible()
-        expect(dialog.get_by_text("Test Admin · Reply address: admin@example.invalid")).to_be_visible()
+        expect(dialog.get_by_text("Tell us what you need a hand with. Your message goes straight to the ClientShare support team.")).to_be_visible()
+        expect(dialog.get_by_text("admin@example.invalid", exact=False)).to_have_count(0)
+        expect(dialog.get_by_text("Test Admin", exact=False)).to_have_count(0)
         expect(dialog.get_by_text("Book a 20-minute setup session")).to_have_count(0)
-        field = dialog.get_by_label("What are you trying to do?")
+        field = dialog.get_by_label("How can we help?")
         field.fill("Help me configure this portal")
         dialog.get_by_role("button", name="Send message").click()
         expect(dialog.get_by_role("alert")).to_be_visible()
         expect(field).to_have_value("Help me configure this portal")
         state["fail"] = False
         dialog.get_by_role("button", name="Send message").click()
-        expect(dialog.get_by_text("Your message has been received by ClientShare support.")).to_be_visible()
+        expect(dialog.get_by_text("Thanks for reaching out! We’ve received your message and will reply by email.")).to_be_visible()
         assert len(state["posts"]) == 2
         assert state["posts"][0] == state["posts"][1]
         assert set(state["posts"][0]) == {"id", "message", "screen"}
