@@ -279,6 +279,7 @@ export interface TenantDomain {
   domain: string;
   kind: string;
   is_primary: boolean;
+  redirect_to_primary: boolean;
   created_at: string;
   updated_at: string;
 }

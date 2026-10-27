@@ -43,6 +43,11 @@ func NewTenantResolver(db *gorm.DB, cfg TenantResolverConfig) fiber.Handler {
 		}
 
 		tenantctx.SetLocal(c, tenantCtx)
+		if tenantCtx.RedirectBaseURL != "" {
+			// OriginalURL retains escaped paths and the complete query (including signed links).
+			c.Set(fiber.HeaderLocation, tenantCtx.RedirectBaseURL+c.OriginalURL())
+			return c.SendStatus(fiber.StatusPermanentRedirect)
+		}
 		return c.Next()
 	}
 }
