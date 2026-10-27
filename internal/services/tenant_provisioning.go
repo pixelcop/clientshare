@@ -9,6 +9,7 @@ import (
 	"github.com/pixelcop/clientshare/internal/models"
 	emailpkg "github.com/pixelcop/clientshare/internal/services/email"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // TenantProvisioningService handles lifecycle operations for tenants.
@@ -302,8 +303,20 @@ func (s *TenantProvisioningService) RegisterDomain(tenantID string, input Regist
 
 	td := models.TenantDomain{TenantID: tenantID, Domain: domain, Kind: kind}
 	err := s.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Create(&td).Error; err != nil {
-			return err
+		result := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "domain"}}, DoNothing: true}).Create(&td)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			// Registration is retryable, but a hostname can never move between tenants.
+			td = models.TenantDomain{}
+			if err := tx.Where("domain = ?", domain).First(&td).Error; err != nil {
+				return err
+			}
+			if td.TenantID != tenantID {
+				return ErrTenantPublicBaseURLConflict
+			}
+			return nil
 		}
 		return s.logAuditEvent(tx, &tenantID, "internal-api", "tenant.domain_registered", &td.ID, map[string]any{"domain": domain, "kind": kind})
 	})
@@ -311,6 +324,37 @@ func (s *TenantProvisioningService) RegisterDomain(tenantID string, input Regist
 		return nil, err
 	}
 	return &td, nil
+}
+
+// ActivateHostedDomain switches the canonical address only after SaaS has verified
+// routing and TLS. Old domains remain reserved and redirect directly to this address.
+func (s *TenantProvisioningService) ActivateHostedDomain(tenantID, domain string) error {
+	tenantID = strings.TrimSpace(tenantID)
+	domain = strings.ToLower(strings.TrimSpace(domain))
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		var tenant models.Tenant
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&tenant, "id = ?", tenantID).Error; err != nil {
+			return err
+		}
+		var target models.TenantDomain
+		if err := tx.First(&target, "tenant_id = ? AND domain = ? AND kind = ?", tenantID, domain, "subdomain").Error; err != nil {
+			return err
+		}
+		settings := models.TenantSettings{TenantID: tenantID, PublicBaseURL: "https://" + domain}
+		if err := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "tenant_id"}}, DoUpdates: clause.AssignmentColumns([]string{"public_base_url", "updated_at"})}).Create(&settings).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&models.TenantDomain{}).Where("tenant_id = ?", tenantID).Update("is_primary", false).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&models.TenantDomain{}).Where("tenant_id = ? AND kind = ? AND id <> ?", tenantID, "subdomain", target.ID).Update("redirect_to_primary", true).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&target).Updates(map[string]any{"is_primary": true, "redirect_to_primary": false}).Error; err != nil {
+			return err
+		}
+		return s.logAuditEvent(tx, &tenantID, "internal-api", "tenant.domain_activated", &target.ID, map[string]any{"domain": domain})
+	})
 }
 
 // SetTenantStatus updates tenant entitlement status (e.g. "active", "suspended").

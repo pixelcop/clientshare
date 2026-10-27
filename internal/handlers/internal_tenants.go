@@ -29,6 +29,7 @@ func RegisterInternalTenantRoutes(router fiber.Router, svc *services.TenantProvi
 	router.Patch("/tenants/:id", h.UpdateTenant)
 	router.Post("/tenants/:id/admin-users", h.CreateAdminUser)
 	router.Post("/tenants/:id/domains", h.RegisterDomain)
+	router.Post("/tenants/:id/domains/activate", h.ActivateHostedDomain)
 	router.Post("/tenants/:id/suspend", h.SuspendTenant)
 	router.Post("/tenants/:id/resume", h.ResumeTenant)
 }
@@ -201,13 +202,31 @@ func (h *InternalTenantsHandler) RegisterDomain(c fiber.Ctx) error {
 		if isNotFoundErr(err) {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "tenant not found"})
 		}
-		if isUniqueConstraintErr(err) {
+		if isUniqueConstraintErr(err) || errors.Is(err, services.ErrTenantPublicBaseURLConflict) {
 			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "domain already registered"})
 		}
 		utils.Logger(c).Error("register domain failed", zap.Error(err), zap.String("tenant_id", tenantID))
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "internal server error"})
 	}
 	return c.Status(fiber.StatusCreated).JSON(td)
+}
+
+// POST /internal/tenants/:id/domains/activate
+func (h *InternalTenantsHandler) ActivateHostedDomain(c fiber.Ctx) error {
+	var req struct {
+		Domain string `json:"domain"`
+	}
+	if err := c.Bind().Body(&req); err != nil || strings.TrimSpace(req.Domain) == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "domain is required"})
+	}
+	if err := h.svc.ActivateHostedDomain(c.Params("id"), req.Domain); err != nil {
+		if isNotFoundErr(err) {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "hosted domain not found"})
+		}
+		utils.Logger(c).Error("activate hosted domain failed", zap.Error(err))
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "unable to activate domain"})
+	}
+	return c.SendStatus(fiber.StatusNoContent)
 }
 
 // POST /internal/tenants/:id/suspend

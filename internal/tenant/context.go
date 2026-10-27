@@ -17,12 +17,13 @@ const (
 )
 
 type RequestContext struct {
-	ID            string `json:"id"`
-	Slug          string `json:"slug"`
-	Name          string `json:"name"`
-	Hostname      string `json:"hostname"`
-	PublicBaseURL string `json:"public_base_url"`
-	Resolution    string `json:"resolution"`
+	ID              string `json:"id"`
+	Slug            string `json:"slug"`
+	Name            string `json:"name"`
+	Hostname        string `json:"hostname"`
+	PublicBaseURL   string `json:"public_base_url"`
+	Resolution      string `json:"resolution"`
+	RedirectBaseURL string `json:"-"`
 }
 
 func (c RequestContext) NormalizedBaseURL(fallback string) string {

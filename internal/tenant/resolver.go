@@ -27,10 +27,11 @@ type Resolver struct {
 }
 
 type resolvedTenant struct {
-	ID            string
-	Slug          string
-	Name          string
-	PublicBaseURL string
+	ID                string
+	Slug              string
+	Name              string
+	PublicBaseURL     string
+	RedirectToPrimary bool
 }
 
 type tenantRow struct {
@@ -94,13 +95,18 @@ func (r *Resolver) Resolve(ctx fiber.Ctx) (RequestContext, error) {
 	}
 
 	if resolved, err := r.lookupByDomain(ctx.Context(), hostname); err == nil {
+		redirectBaseURL := ""
+		if resolved.RedirectToPrimary && hostnameFromBaseURL(resolved.PublicBaseURL) != hostname {
+			redirectBaseURL = normalizeBaseURL(resolved.PublicBaseURL)
+		}
 		return RequestContext{
-			ID:            resolved.ID,
-			Slug:          resolved.Slug,
-			Name:          resolved.Name,
-			Hostname:      hostname,
-			PublicBaseURL: strings.TrimSpace(resolved.PublicBaseURL),
-			Resolution:    "hostname",
+			ID:              resolved.ID,
+			Slug:            resolved.Slug,
+			Name:            resolved.Name,
+			Hostname:        hostname,
+			PublicBaseURL:   strings.TrimSpace(resolved.PublicBaseURL),
+			Resolution:      "hostname",
+			RedirectBaseURL: redirectBaseURL,
 		}, nil
 	} else if !errors.Is(err, ErrTenantNotFound) {
 		return RequestContext{}, err
@@ -220,22 +226,23 @@ func (r *Resolver) lookupByDomain(ctx context.Context, hostname string) (resolve
 
 func (r *Resolver) lookupByTenantDomain(ctx context.Context, hostname string) (resolvedTenant, error) {
 	type domainRow struct {
-		ID            string
-		Slug          string
-		Name          string
-		PublicBaseURL string
+		ID                string
+		Slug              string
+		Name              string
+		PublicBaseURL     string
+		RedirectToPrimary bool
 	}
 
 	var row domainRow
 	err := r.DB.Table("tenant_domains AS td").
 		WithContext(ctx).
-		Select("t.id, t.slug, t.name, COALESCE(ts.public_base_url, '') AS public_base_url").
+		Select("t.id, t.slug, t.name, COALESCE(ts.public_base_url, '') AS public_base_url, td.redirect_to_primary").
 		Joins("JOIN tenants AS t ON t.id = td.tenant_id").
 		Joins("LEFT JOIN tenant_settings AS ts ON ts.tenant_id = t.id").
 		Where("LOWER(td.domain) = ?", hostname).
 		First(&row).Error
 	if err == nil {
-		return resolvedTenant{ID: row.ID, Slug: row.Slug, Name: row.Name, PublicBaseURL: row.PublicBaseURL}, nil
+		return resolvedTenant{ID: row.ID, Slug: row.Slug, Name: row.Name, PublicBaseURL: row.PublicBaseURL, RedirectToPrimary: row.RedirectToPrimary}, nil
 	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return resolvedTenant{}, err

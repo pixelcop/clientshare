@@ -7,19 +7,21 @@ import (
 )
 
 var TenantDomain = struct {
-	ID        field.String
-	TenantID  field.String
-	Domain    field.String
-	Kind      field.String
-	IsPrimary field.Bool
-	CreatedAt field.Time
-	UpdatedAt field.Time
+	ID                field.String
+	TenantID          field.String
+	Domain            field.String
+	Kind              field.String
+	IsPrimary         field.Bool
+	RedirectToPrimary field.Bool
+	CreatedAt         field.Time
+	UpdatedAt         field.Time
 }{
-	ID:        field.String{}.WithColumn("id"),
-	TenantID:  field.String{}.WithColumn("tenant_id"),
-	Domain:    field.String{}.WithColumn("domain"),
-	Kind:      field.String{}.WithColumn("kind"),
-	IsPrimary: field.Bool{}.WithColumn("is_primary"),
-	CreatedAt: field.Time{}.WithColumn("created_at"),
-	UpdatedAt: field.Time{}.WithColumn("updated_at"),
+	ID:                field.String{}.WithColumn("id"),
+	TenantID:          field.String{}.WithColumn("tenant_id"),
+	Domain:            field.String{}.WithColumn("domain"),
+	Kind:              field.String{}.WithColumn("kind"),
+	IsPrimary:         field.Bool{}.WithColumn("is_primary"),
+	RedirectToPrimary: field.Bool{}.WithColumn("redirect_to_primary"),
+	CreatedAt:         field.Time{}.WithColumn("created_at"),
+	UpdatedAt:         field.Time{}.WithColumn("updated_at"),
 }

@@ -8,13 +8,14 @@ import (
 )
 
 type TenantDomain struct {
-	ID        string    `gorm:"primaryKey;size:26" json:"id"`
-	TenantID  string    `gorm:"not null;index" json:"tenant_id"`
-	Domain    string    `gorm:"not null;uniqueIndex" json:"domain"`
-	Kind      string    `gorm:"not null;default:base_url" json:"kind"`
-	IsPrimary bool      `gorm:"not null;default:false" json:"is_primary"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID                string    `gorm:"primaryKey;size:26" json:"id"`
+	TenantID          string    `gorm:"not null;index" json:"tenant_id"`
+	Domain            string    `gorm:"not null;uniqueIndex" json:"domain"`
+	Kind              string    `gorm:"not null;default:base_url" json:"kind"`
+	IsPrimary         bool      `gorm:"not null;default:false" json:"is_primary"`
+	RedirectToPrimary bool      `gorm:"not null;default:false" json:"redirect_to_primary"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
 }
 
 func (d *TenantDomain) BeforeCreate(_ *gorm.DB) error {
