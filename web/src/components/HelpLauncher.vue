@@ -5,8 +5,10 @@ import { useRoute } from 'vue-router';
 
 import HelpPanel from '@/components/HelpPanel.vue';
 import { useBrandingStore } from '@/stores/branding';
+import { useCollectionStore } from '@/stores/collection';
 
 const branding = useBrandingStore();
+const collection = useCollectionStore();
 const route = useRoute();
 const visible = ref(false);
 const contact = ref(false);
@@ -95,6 +97,8 @@ async function send() {
     :supportURL="capabilities.support_url"
     :contactAvailable="capabilities.provider === 'clientshare'"
     :loading="loading"
+    :gettingStarted="collection.allowed"
+    @start="collection.start()"
     @open="open"
   >
     <div v-if="receipt" class="flex flex-col gap-4" role="status">

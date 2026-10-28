@@ -36,7 +36,8 @@ case "$1" in
   api)
     wait_for_service web
     export VITE_FRONTEND_PORT="$peer_port"
-    export SERVER_BASE_URL="$(cat data/devcraft/web.url)"
+    # The API is the public portal origin and proxies the private Vite server.
+    export SERVER_BASE_URL="${DEVCRAFT_PUBLIC_URL:-http://localhost:$PORT}"
     wait_for_service docs
     export DOCS_URL="$(cat data/devcraft/docs.url)"
     export EMAIL_ENABLED="${EMAIL_ENABLED:-false}"

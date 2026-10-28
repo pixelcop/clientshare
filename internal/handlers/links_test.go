@@ -42,7 +42,10 @@ func TestLinkHandlers_RouteCoverage(t *testing.T) {
 	if adminCreateResp.StatusCode != http.StatusCreated {
 		t.Fatalf("expected 201, got %d", adminCreateResp.StatusCode)
 	}
-	var createdLink models.SecureLink
+	var createdLink struct {
+		models.SecureLink
+		EmailQueued bool `json:"email_queued"`
+	}
 	if err := json.NewDecoder(adminCreateResp.Body).Decode(&createdLink); err != nil {
 		t.Fatalf("decode link failed: %v", err)
 	}
@@ -54,6 +57,9 @@ func TestLinkHandlers_RouteCoverage(t *testing.T) {
 	}
 	if len(env.queue.items) == 0 {
 		t.Fatalf("expected secure link email to be queued")
+	}
+	if !createdLink.EmailQueued {
+		t.Fatal("expected explicit queue acceptance, not a delivery claim")
 	}
 
 	listReq := jsonAuthRequest(http.MethodGet, "/api/clients/"+intToString(env.client.ID)+"/links", env.adminToken, nil)
@@ -69,7 +75,13 @@ func TestLinkHandlers_RouteCoverage(t *testing.T) {
 	if err := json.NewDecoder(listResp.Body).Decode(&listedLinks); err != nil {
 		t.Fatalf("failed decoding listed links: %v", err)
 	}
-	if len(listedLinks) == 0 || listedLinks[0].LinkURL != createdLink.LinkURL {
+	found := false
+	for _, listed := range listedLinks {
+		if listed.LinkURL == createdLink.LinkURL {
+			found = true
+		}
+	}
+	if !found {
 		t.Fatalf("expected listed secure links to include link_url %q", createdLink.LinkURL)
 	}
 

@@ -2,6 +2,9 @@
 import { Button, Dialog, InputText } from 'openvue';
 
 import SecureLinkModal from '@/components/SecureLinkModal.vue';
+import { useCollectionStore } from '@/stores/collection';
+
+const workflow = useCollectionStore();
 
 type LinkSettingsPayload = {
   name: string;
@@ -19,6 +22,7 @@ const props = defineProps<{
   error?: string;
   linkError?: string | null;
   defaultSecureLinkExpiryDays?: number;
+  collection?: boolean;
 }>();
 const emit = defineEmits<{
   (e: 'submit', payload: LinkSettingsPayload | { name: string }): void;
@@ -76,7 +80,7 @@ watch(
     if (val && isAddMode.value) {
       name.value = '';
       const stored = loadLinkSettings();
-      generateLink.value = stored.generateLink;
+      generateLink.value = props.collection ? false : stored.generateLink;
       linkSettingsRef.value?.resetSettings?.();
     }
   },
@@ -116,12 +120,17 @@ function onSubmit() {
     dismissable-mask
     closable
     @update:visible="$emit('close')"
+    @show="collection && workflow.guidance && workflow.guide('client-name')"
   >
     <template #header>
       <h2 class="mb-0!">{{ mode === 'edit' ? 'Edit Client' : 'New Client' }}</h2>
     </template>
     <form @submit.prevent="onSubmit">
+      <label v-if="mode === 'add'" for="collect-client-name" class="block mb-2 font-medium"
+        >Client name</label
+      >
       <InputText
+        :id="mode === 'add' ? 'collect-client-name' : undefined"
         autofocus
         v-model="name"
         type="text"
@@ -144,6 +153,7 @@ function onSubmit() {
           ref="linkSettingsRef"
           show
           embedded
+          :collection="collection"
           :defaultExpiryDays="defaultSecureLinkExpiryDays"
         />
       </div>

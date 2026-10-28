@@ -1,4 +1,5 @@
 import { mount, RouterLinkStub } from '@vue/test-utils';
+import { createPinia } from 'pinia';
 import { describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
 import { createMemoryHistory, createRouter } from 'vue-router';
@@ -57,7 +58,7 @@ async function mountComponent() {
       showUsers: true,
     },
     global: {
-      plugins: [router],
+      plugins: [router, createPinia()],
       stubs: {
         RouterLink: RouterLinkStub,
         SplitButton: splitButtonStub,

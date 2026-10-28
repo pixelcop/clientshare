@@ -43,14 +43,17 @@ with sync_playwright() as p:
         page.goto(base + "/clients")
         page.wait_for_load_state("networkidle")
         external.clear()
+        page.get_by_role("button", name="Help", exact=True).click()
         guide_link = page.get_by_role("link", name="User guide", exact=True)
         expect(guide_link).to_be_visible()
         expect(guide_link).to_have_attribute("href", "/configured-guide/")
         guide_link.focus()
         expect(guide_link).to_be_focused()
-        expect(page.get_by_role("button", name="Help", exact=True)).to_have_count(0)
         dialog = page.get_by_role("dialog")
-        expect(dialog).to_have_count(0)
+        expect(dialog.get_by_role("button", name="Getting started: Collect a document")).to_be_visible()
+        expect(dialog.get_by_role("button", name="Contact ClientShare support")).to_have_count(0)
+        page.keyboard.press("Escape")
+        expect(dialog).not_to_be_visible()
         assert not external, external
 
         state["provider"] = "operator"
