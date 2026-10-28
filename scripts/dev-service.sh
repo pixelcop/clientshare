@@ -36,9 +36,9 @@ case "$1" in
   api)
     wait_for_service web
     export VITE_FRONTEND_PORT="$peer_port"
-    export SERVER_BASE_URL="$(cat data/devcraft/web.url)"
-    wait_for_service docs
-    export DOCS_URL="$(cat data/devcraft/docs.url)"
+    # The API proxies Vite; all browser/auth URLs must use the API origin.
+    export SERVER_BASE_URL="$(cat data/devcraft/api.url)"
+    export DOCS_URL="/docs/"
     export EMAIL_ENABLED="${EMAIL_ENABLED:-false}"
     make migrate
     go run ./cmd/devpreview
