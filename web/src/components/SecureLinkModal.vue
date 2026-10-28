@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { Button, Dialog, InputText, Select } from 'openvue';
 
+import { useCollectionStore } from '@/stores/collection';
+
+const workflow = useCollectionStore();
+
 const props = defineProps<{
   show?: boolean;
   embedded?: boolean;
@@ -9,6 +13,7 @@ const props = defineProps<{
   defaultExpiryDays?: number;
   defaultAccessType?: 'read' | 'write' | 'readwrite';
   defaultSendEmail?: boolean;
+  collection?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -87,9 +92,9 @@ function persistStoredSettings() {
 
 function resetSettings() {
   const settings = loadStoredSettings();
-  accessType.value = settings.accessType;
+  accessType.value = props.collection ? 'write' : settings.accessType;
   expiryDays.value = settings.expiryDays;
-  sendEmail.value = settings.sendEmail;
+  sendEmail.value = props.collection ? false : settings.sendEmail;
   email.value = '';
 }
 
@@ -163,15 +168,25 @@ const dialogComponent = computed(() => (props.embedded ? 'div' : Dialog));
     :is="dialogComponent"
     :visible="!!show"
     @update:visible="onVisibleChange"
+    @show="collection && workflow.guidance && !embedded && workflow.guide('link-access')"
     modal
     header="New Secure Link"
     dismissableMask
     blockScroll
-    :style="{ width: embedded ? '' : '32rem' }"
+    :style="{ width: embedded ? '' : '32rem', maxWidth: 'calc(100vw - 2rem)' }"
   >
     <form @submit.prevent="onSubmit">
-      <label class="block text-sm font-medium text-gray-700 mb-1">Access Type</label>
+      <p v-if="collection" class="mb-4 text-sm">
+        Choose Write to let recipients upload to this client workspace without an account. Choose
+        Read & Write if they also need to view and download its files.
+      </p>
+      <label
+        :for="embedded ? 'collect-embedded-link-access' : 'collect-link-access'"
+        class="block text-sm font-medium text-gray-700 mb-1"
+        >Access Type</label
+      >
       <Select
+        :inputId="embedded ? 'collect-embedded-link-access' : 'collect-link-access'"
         v-model="accessType"
         :options="accessOptions"
         option-label="label"

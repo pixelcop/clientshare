@@ -52,6 +52,8 @@ func NewFileHandler(db *gorm.DB, store storage.Storage, emailQueue email.EmailQu
 // emailQueue may be nil if email notifications are disabled
 func RegisterFileRoutes(api fiber.Router, db *gorm.DB, store storage.Storage, emailQueue email.EmailQueue, baseURL string, tenantSettings *services.TenantSettingsService) {
 	handler := NewFileHandler(db, store, emailQueue, baseURL, tenantSettings)
+	api.Use("/folders", handler.enforceLinkFileAccess)
+	api.Use("/files", handler.enforceLinkFileAccess)
 	api.Get("/folders", handler.ListFolderFiles)
 	api.Post("/folders/exists", handler.CheckFileExists)
 
@@ -67,6 +69,31 @@ func RegisterFileRoutes(api fiber.Router, db *gorm.DB, store storage.Storage, em
 	secureFile.Get("", handler.GetFileOrFolder)
 	secureFile.Delete("", handler.DeleteFileByPublicID)
 	secureFile.Get("/download", handler.DownloadFileByPublicID)
+}
+
+// Enforce the same access and lifetime advertised by secure-link controls, including
+// sessions opened before a link was revoked or expired.
+func (h *FileHandler) enforceLinkFileAccess(c fiber.Ctx) error {
+	if fiber.Locals[string](c, "role") != "link" {
+		return c.Next()
+	}
+	var link models.SecureLink
+	if err := h.db.WithContext(c.Context()).Where("tenant_id = ? AND id = ? AND client_id = ?", tenantIDFromCtx(c), fiber.Locals[string](c, "link_id"), fiber.Locals[string](c, "client_id")).First(&link).Error; err != nil || !link.ExpiresAt.After(time.Now()) {
+		return c.Status(403).JSON(fiber.Map{"error": "This secure link is no longer available"})
+	}
+	c.Locals("access_type", link.AccessType)
+	write := link.AccessType == "write" || link.AccessType == "readwrite"
+	read := link.AccessType == "read" || link.AccessType == "readwrite" || link.AccessType == "view"
+	if c.Method() != fiber.MethodGet && !write {
+		return c.Status(403).JSON(fiber.Map{"error": "This link does not allow uploads or changes"})
+	}
+	if !read && (strings.Contains(c.Path(), "/download") || c.Method() == fiber.MethodDelete) {
+		return c.Status(403).JSON(fiber.Map{"error": "This link does not allow reading files"})
+	}
+	if !read && !write {
+		return c.Status(403).JSON(fiber.Map{"error": "Unsupported secure link access"})
+	}
+	return c.Next()
 }
 
 func (h *FileHandler) siteTitleForTenant(c fiber.Ctx, tenantID string) string {
@@ -311,6 +338,9 @@ func (h *FileHandler) ListFolderFiles(c fiber.Ctx) error {
 	}
 
 	fileType := fiber.Query[string](c, "type", "file")
+	if fiber.Locals[string](c, "role") == "link" && fiber.Locals[string](c, "access_type") == "write" && fileType != "folder" {
+		return c.JSON(fiber.Map{"pagination": models.PaginationResponse{Page: 1, PageSize: 20}, "items": []models.File{}})
+	}
 	page, pageSize := getPageParams(c)
 	sortBy := getSortBy(c)
 	sortDirection := getSortDirection(c)
@@ -336,6 +366,9 @@ func (h *FileHandler) GetFileOrFolder(c fiber.Ctx) error {
 	if file == nil {
 		utils.Logger(c).Debug("file not found")
 		return c.Status(404).JSON(fiber.Map{"error": "file not found"})
+	}
+	if file.Type != "folder" && fiber.Locals[string](c, "role") == "link" && fiber.Locals[string](c, "access_type") == "write" {
+		return c.Status(403).JSON(fiber.Map{"error": "This link does not allow reading files"})
 	}
 	return c.JSON(file)
 }
@@ -416,6 +449,12 @@ func (h *FileHandler) UploadFiles(c fiber.Ctx) error {
 
 	tenantStore := h.storeForTenant(tenantID)
 	userID := fiber.Locals[string](c, "user_id")
+	var uploadLinkID *string
+	if fiber.Locals[string](c, "role") == "link" {
+		if id := fiber.Locals[string](c, "link_id"); id != "" {
+			uploadLinkID = &id
+		}
+	}
 	for _, file := range files {
 		f, err := file.Open()
 		if err != nil {
@@ -447,7 +486,7 @@ func (h *FileHandler) UploadFiles(c fiber.Ctx) error {
 			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 		}
 		utils.Logger(c).Info("file uploaded", zap.String("filename", file.Filename), zap.String("client_id", client.ID), zap.Int64("size", fileRecord.Size))
-		activity, activityErr := createFileActivity(c.Context(), h.db, tenantID, client.ID, &fileRecord.ID, &userID, nil, uploadBatchID, "upload", dstPath)
+		activity, activityErr := createFileActivity(c.Context(), h.db, tenantID, client.ID, &fileRecord.ID, &userID, uploadLinkID, uploadBatchID, "upload", dstPath)
 		if activityErr != nil {
 			utils.Logger(c).Warn("error recording file activity", zap.Error(activityErr))
 		} else {

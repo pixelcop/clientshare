@@ -4,6 +4,8 @@ import type { PageState } from 'openvue';
 import { Button } from 'openvue';
 import { storeToRefs } from 'pinia';
 
+import CollectionInvitation from '@/components/CollectionInvitation.vue';
+import { useCollectionStore } from '@/stores/collection';
 import { useTenantSettingsStore } from '@/stores/tenantSettings';
 import type { Client } from '@/types/models';
 
@@ -27,6 +29,7 @@ type CreateClientPayload = {
 };
 
 const clientsStore = useClientsStore();
+const collection = useCollectionStore();
 const secureLinksStore = useSecureLinksStore();
 const tenantSettingsStore = useTenantSettingsStore();
 const authStore = useAuthStore();
@@ -36,6 +39,25 @@ const { error: usersError, loading: usersLoading } = storeToRefs(usersStore);
 const { settings: tenantSettings } = storeToRefs(tenantSettingsStore);
 const search = ref('');
 const showCreate = ref(false);
+const route = useRoute();
+const router = useRouter();
+watch(
+  () => route.query.collect,
+  async (action) => {
+    if (action !== 'create-client' || !collection.allowed) {
+      return;
+    }
+    await tenantSettingsStore.loadTenantSettings().catch(() => undefined);
+    if (route.query.collect !== action) {
+      return;
+    }
+    showCreate.value = true;
+    const query = { ...route.query };
+    delete query.collect;
+    void router.replace({ query });
+  },
+  { immediate: true },
+);
 const showCreateUser = ref(false);
 const showEdit = ref(false);
 const showDelete = ref(false);
@@ -162,6 +184,7 @@ function remove() {
     <div class="flex items-center justify-between mb-4">
       <h1 class="text-2xl font-bold">Clients</h1>
       <Button
+        id="collect-new-client"
         @click="
           createLinkError = null;
           showCreate = true;
@@ -177,6 +200,8 @@ function remove() {
       {{ createLinkError }}
     </div>
     <InputText
+      id="collect-client-search"
+      aria-label="Search clients"
       v-model="search"
       type="text"
       placeholder="Search clients..."
@@ -214,7 +239,10 @@ function remove() {
             />
           </tbody>
         </table>
-        <div v-else-if="!listingLoading" class="text-sm text-muted-color">No clients found.</div>
+        <div v-else-if="!listingLoading" class="text-sm text-muted-color">
+          No clients found.
+          <CollectionInvitation v-if="!search" />
+        </div>
       </template>
       <template v-if="listingPagination.total_items > 0 && !listingLoading" #footer>
         <div class="flex items-center justify-between pt-3 border-t border-surface">
@@ -244,6 +272,7 @@ function remove() {
     <ClientModal
       :show="showCreate"
       mode="add"
+      :collection="!!collection.progress && !collection.progress.clientId"
       :error="clientsStore.error ?? undefined"
       :linkError="createLinkError"
       :defaultSecureLinkExpiryDays="tenantSettings.secure_link_default_expiry_days"

@@ -48,7 +48,7 @@ For frontend commands and conventions under `web/`, follow `web/AGENTS.md`.
 ## Notes
 
 - Run `make migrate` before starting services. The Devcraft API launcher also runs migrations before starting the backend.
-- Devcraft runs `api`, `web`, and `docs` with independently allocated ports. `scripts/dev-service.sh` wires the worktree-local ports and public URLs together. Use the web public URL for the portal and docs public URL for the guide.
+- Devcraft runs `api`, `web`, and `docs` with independently allocated ports. `scripts/dev-service.sh` wires the worktree-local ports and public URLs together. Only `api` and `docs` need public endpoints: use the API public URL for the portal (it proxies the private Vite web server), and the docs public URL for the live guide. `SERVER_BASE_URL` must use the API origin, never the private web URL. The API serves built `/docs/` assets, not the live VitePress server; `DOCS_URL` points Help links to the docs public endpoint.
 - Devcraft previews disable outbound email by default. Set the API service's `EMAIL_ENABLED=true` environment override when real delivery is explicitly requested; this enables both tenant notifications and support notifications.
 - The API launcher binds preview domains to the tenant identified by the copied config's original `server.base_url`, and updates that tenant's public URL in the copied database only (`cmd/devpreview`).
 - Required secrets such as JWT, secure-link signing, and invite token secrets must be present in config for the app to start.
