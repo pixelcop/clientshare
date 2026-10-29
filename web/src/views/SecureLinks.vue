@@ -4,11 +4,13 @@ import { Button } from 'openvue';
 import { storeToRefs } from 'pinia';
 
 import SecureLinkModal from '@/components/SecureLinkModal.vue';
+import { useCollectionStore } from '@/stores/collection';
 import { useSecureLinksStore } from '@/stores/secureLinks';
 import { useTenantSettingsStore } from '@/stores/tenantSettings';
 import type { Client, SecureLink } from '@/types/models';
 
 const route = useRoute();
+const collection = useCollectionStore();
 const linksStore = useSecureLinksStore();
 const tenantSettingsStore = useTenantSettingsStore();
 const { settings: tenantSettings } = storeToRefs(tenantSettingsStore);
@@ -17,6 +19,24 @@ const client = ref<Client | null>(null);
 const clientLoading = ref(false);
 const clientError = ref<string | null>(null);
 const showCreate = ref(false);
+const router = useRouter();
+watch(
+  () => route.query.collect,
+  async (action) => {
+    if (action !== 'create-link' || !collection.allowed) {
+      return;
+    }
+    await tenantSettingsStore.loadTenantSettings().catch(() => undefined);
+    if (route.query.collect !== action) {
+      return;
+    }
+    showCreate.value = true;
+    const query = { ...route.query };
+    delete query.collect;
+    void router.replace({ query });
+  },
+  { immediate: true },
+);
 const copiedLinkId = ref<string | null>(null);
 const copyError = ref<string | null>(null);
 
@@ -28,6 +48,9 @@ async function fetchClient() {
   try {
     const res = await axios.get(`/api/clients/${clientId.value}`);
     client.value = res.data;
+    if (collection.guidance && !collection.progress?.clientId) {
+      collection.selectClient(clientId.value);
+    }
   } catch (error: unknown) {
     if (axios.isAxiosError(error)) {
       clientError.value = error.response?.data?.error || 'Failed to load client';
@@ -92,6 +115,9 @@ async function copyLink(e: PointerEvent, link: SecureLink) {
   try {
     await navigator.clipboard.writeText(url);
     copiedLinkId.value = link.id;
+    if (['write', 'readwrite'].includes(link.access_type) && !isExpired(link)) {
+      collection.shared(clientId.value, link.id, 'copied');
+    }
     setTimeout(() => {
       if (copiedLinkId.value === link.id) {
         copiedLinkId.value = null;
@@ -134,7 +160,7 @@ async function revokeLink(link: SecureLink) {
         <h1 class="text-2xl font-bold">Secure Links</h1>
         <p v-if="client" class="text-sm text-gray-600">Manage links for {{ client.name }}</p>
       </div>
-      <Button @click="showCreate = true">New Link</Button>
+      <Button id="collect-new-link" @click="showCreate = true">New Link</Button>
     </div>
 
     <div v-if="clientLoading" class="text-gray-600 mb-4">Loading client...</div>
@@ -142,61 +168,64 @@ async function revokeLink(link: SecureLink) {
     <div v-if="linksStore.error" class="text-red-600 mb-4">{{ linksStore.error }}</div>
     <div v-if="copyError" class="text-red-600 mb-4">{{ copyError }}</div>
 
-    <table class="min-w-full bg-white rounded shadow">
-      <thead>
-        <tr>
-          <th class="px-4 py-2 text-left">Link</th>
-          <th class="px-4 py-2 text-left">Access</th>
-          <th class="px-4 py-2 text-left">Email</th>
-          <th class="px-4 py-2 text-left">Expires</th>
-          <th class="px-4 py-2 text-left">Status</th>
-          <th class="px-4 py-2 text-left">Last Accessed</th>
-          <th class="px-4 py-2 text-left">Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-if="!linksStore.loading && linksStore.links.length === 0">
-          <td colspan="7" class="px-4 py-6 text-center text-gray-500">No links yet.</td>
-        </tr>
-        <tr v-for="link in linksStore.links" :key="link.id">
-          <td class="px-4 py-2">
-            <div class="flex flex-col gap-1">
-              <a
-                :href="linkUrl(link) || undefined"
-                rel="noopener noreferrer"
-                class="text-blue-600 hover:underline break-all"
-                @click="(e) => copyLink(e, link)"
+    <div class="overflow-x-auto">
+      <table class="min-w-full bg-white rounded shadow">
+        <thead>
+          <tr>
+            <th class="px-4 py-2 text-left">Link</th>
+            <th class="px-4 py-2 text-left">Access</th>
+            <th class="px-4 py-2 text-left">Email</th>
+            <th class="px-4 py-2 text-left">Expires</th>
+            <th class="px-4 py-2 text-left">Status</th>
+            <th class="px-4 py-2 text-left">Last Accessed</th>
+            <th class="px-4 py-2 text-left">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-if="!linksStore.loading && linksStore.links.length === 0">
+            <td colspan="7" class="px-4 py-6 text-center text-gray-500">No links yet.</td>
+          </tr>
+          <tr v-for="link in linksStore.links" :key="link.id">
+            <td class="px-4 py-2">
+              <div class="flex flex-col gap-1">
+                <a
+                  :href="linkUrl(link) || undefined"
+                  rel="noopener noreferrer"
+                  class="text-blue-600 hover:underline break-all"
+                  @click="(e) => copyLink(e, link)"
+                >
+                  Generated {{ formatDate(link.created_at) }}
+                </a>
+              </div>
+            </td>
+            <td class="px-4 py-2">{{ formatAccess(link.access_type) }}</td>
+            <td class="px-4 py-2">{{ link.email || '-' }}</td>
+            <td class="px-4 py-2">{{ formatDate(link.expires_at) }}</td>
+            <td class="px-4 py-2">
+              <span
+                :class="[
+                  'px-2 py-1 rounded text-xs font-semibold',
+                  isExpired(link) ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700',
+                ]"
               >
-                Generated {{ formatDate(link.created_at) }}
-              </a>
-            </div>
-          </td>
-          <td class="px-4 py-2">{{ formatAccess(link.access_type) }}</td>
-          <td class="px-4 py-2">{{ link.email || '-' }}</td>
-          <td class="px-4 py-2">{{ formatDate(link.expires_at) }}</td>
-          <td class="px-4 py-2">
-            <span
-              :class="[
-                'px-2 py-1 rounded text-xs font-semibold',
-                isExpired(link) ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700',
-              ]"
-            >
-              {{ isExpired(link) ? 'Expired' : 'Active' }}
-            </span>
-          </td>
-          <td class="px-4 py-2">{{ formatDate(link.last_accessed) }}</td>
-          <td class="px-4 py-2 flex gap-2">
-            <Button @click="(e) => copyLink(e, link)">
-              {{ copiedLinkId === link.id ? 'Copied' : 'Copy' }}
-            </Button>
-            <Button label="Revoke" @click="revokeLink(link)" severity="danger" size="small" />
-          </td>
-        </tr>
-      </tbody>
-    </table>
+                {{ isExpired(link) ? 'Expired' : 'Active' }}
+              </span>
+            </td>
+            <td class="px-4 py-2">{{ formatDate(link.last_accessed) }}</td>
+            <td class="px-4 py-2 flex gap-2">
+              <Button :id="`collect-copy-${link.id}`" @click="(e) => copyLink(e, link)">
+                {{ copiedLinkId === link.id ? 'Copied' : 'Copy' }}
+              </Button>
+              <Button label="Revoke" @click="revokeLink(link)" severity="danger" size="small" />
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
 
     <SecureLinkModal
       :show="showCreate"
+      :collection="collection.progress?.clientId === clientId"
       :loading="linksStore.loading"
       :error="linksStore.error"
       :defaultExpiryDays="tenantSettings.secure_link_default_expiry_days"

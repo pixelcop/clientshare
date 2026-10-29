@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@embedpdf/vue-pdf-viewer": "^2.15.1",
+    "@openvue/openicons": "^1.0.0",
     "@openvue/themes": "^1.0.0",
     "@sentry/vue": "^10.45.0",
     "@vue-email/components": "^0.0.21",

@@ -2,6 +2,7 @@
 import { Button } from 'openvue';
 import { storeToRefs } from 'pinia';
 
+import CollectionInvitation from '@/components/CollectionInvitation.vue';
 import FileList from '@/components/FileList.vue';
 import PendingEmail from '@/components/PendingEmail.vue';
 import { useClientsStore } from '@/stores/clients';
@@ -76,7 +77,11 @@ watch(
           severity="secondary"
           class="border-slate-300"
         >
-          <router-link :class="slotProps.class" :to="`/clients/${clientId}/links`">
+          <router-link
+            :id="`collect-links-${clientId}`"
+            :class="slotProps.class"
+            :to="`/clients/${clientId}/links`"
+          >
             Secure Links
           </router-link>
         </Button>
@@ -84,6 +89,10 @@ watch(
     </div>
 
     <Dropzone @uploaded="handleUploaded" :notifyClient :canNotify />
+    <CollectionInvitation
+      v-if="!fileManager.loading && !fileManager.files.length && clientId"
+      :clientId="clientId"
+    />
 
     <div v-if="canNotify" class="flex flex-row justify-between mt-4">
       <div class="flex items-center gap-2 text-sm">

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia';
 
+import CollectDocument from '@/components/CollectDocument.vue';
 import PasskeyEnrollmentDialog from '@/components/PasskeyEnrollmentDialog.vue';
 import { useLayout } from '@/composables/useLayout';
 import { useAuthStore } from '@/stores/auth';
@@ -19,6 +20,7 @@ const { isPublicLayout } = useLayout();
       <router-view />
     </div>
     <div v-else class="layout-main">
+      <CollectDocument v-if="user?.role === 'admin'" />
       <router-view />
     </div>
   </div>

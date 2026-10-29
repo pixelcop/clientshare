@@ -6,6 +6,7 @@
       "name": "@clientshare/web",
       "dependencies": {
         "@embedpdf/vue-pdf-viewer": "^2.15.1",
+        "@openvue/openicons": "^1.0.0",
         "@openvue/themes": "^1.0.0",
         "@sentry/vue": "^10.45.0",
         "@vue-email/components": "^0.0.21",
@@ -313,6 +314,8 @@
     "@openvue/icons": ["@openvue/icons@1.0.0", "", { "dependencies": { "@openuxkit/utils": "^1.0.0", "@openvue/core": "1.0.0" } }, "sha512-xCBcHvs0SjEqrDkL54cwcSKUYkjbAPPbfISfygoxjkE/yibUGk3STyutVsGTAEeV5BIYmK/Hd4eUMN/FOTcsfw=="],
 
     "@openvue/metadata": ["@openvue/metadata@1.0.0", "", {}, "sha512-7rCphsRyjyNZDERpIZ85KGPI4+J6AKpsyES141o7SAEt8BZ9zLUILtrOaUiYxpSL96LGrgLOQsL4wEpjIaABqA=="],
+
+    "@openvue/openicons": ["@openvue/openicons@1.0.0", "", {}, "sha512-ZRV8Xt8y7oIYPQjtFiBf2UfxSzsjXcbPEZvvI9364T+F5BGxcP8EboO9ZLMxMRl2RCfFyBYs3XYiYGMLUMlNvA=="],
 
     "@openvue/themes": ["@openvue/themes@1.0.0", "", { "dependencies": { "@openuxkit/styled": "^1.0.0", "@openuxkit/themes": "^1.1.0" } }, "sha512-YiLHzoa+0ic5yz/+vljDaH3UWNofgu5JLENq2FPMY+rPJD9L2F+/QumvUj7vUHvPIFexnb35FwM6fpetw6BfiA=="],
 

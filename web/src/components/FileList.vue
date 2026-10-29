@@ -81,7 +81,7 @@ function closePreview() {
   <Card class="mt-4 shadow border border-slate-200">
     <template v-if="showHeader" #header>
       <div class="px-4 pt-3 border-b border-slate-200 flex items-center justify-between">
-        <h2 class="font-semibold text-slate-900">Files</h2>
+        <h2 id="collect-files" tabindex="-1" class="font-semibold text-slate-900">Files</h2>
       </div>
     </template>
     <template #content>

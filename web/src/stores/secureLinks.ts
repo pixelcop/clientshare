@@ -31,7 +31,7 @@ export const useSecureLinksStore = defineStore('secureLinks', () => {
         email,
       });
       links.value.unshift(res.data);
-      return res.data as SecureLink;
+      return res.data as SecureLink & { email_queued: boolean };
     } catch (e: any) {
       error.value = e.response?.data?.error || 'Failed to create link';
       throw e;
