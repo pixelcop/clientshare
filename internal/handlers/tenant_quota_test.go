@@ -6,6 +6,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/pixelcop/clientshare/internal/auth"
 	"github.com/pixelcop/clientshare/internal/models"
@@ -40,7 +41,9 @@ func TestQuotaUploadsIncludingPublicLinksHTTP(t *testing.T) {
 	env := setupFileTestEnv(t)
 	tenantID := env.adminUser.TenantID
 	require.NoError(t, env.db.Model(&models.TenantEntitlement{}).Where("tenant_id = ?", tenantID).Update("max_storage_bytes", 4).Error)
-	linkToken, err := auth.GenerateLinkJWT(env.client.ID, "999", "upload", tenantID)
+	link := models.SecureLink{TenantID: tenantID, ClientID: env.client.ID, Token: "quota-link", AccessType: "write", ExpiresAt: time.Now().Add(time.Hour)}
+	require.NoError(t, env.db.Create(&link).Error)
+	linkToken, err := auth.GenerateLinkJWT(env.client.ID, link.ID, "write", tenantID)
 	require.NoError(t, err)
 	for _, token := range []string{env.adminToken, env.clientToken, linkToken} {
 		body := &bytes.Buffer{}

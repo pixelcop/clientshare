@@ -3,6 +3,7 @@ import { breakpointsTailwind, useBreakpoints } from '@vueuse/core';
 import { SplitButton } from 'openvue';
 import type { MenuItem } from 'openvue/menuitem';
 
+import { useCollectionStore } from '@/stores/collection';
 import type { Client } from '@/types/models';
 
 const { client, showLinks, showUsers } = defineProps<{
@@ -13,11 +14,15 @@ const { client, showLinks, showUsers } = defineProps<{
 const emit = defineEmits(['edit', 'delete', 'add-user']);
 
 const router = useRouter();
+const collection = useCollectionStore();
 const breakpoints = useBreakpoints(breakpointsTailwind);
 const xs = breakpoints.smaller('sm');
 
 function onClickFiles() {
   if (client.root_folder_id) {
+    if (collection.guidance && collection.progress && !collection.progress.clientId) {
+      collection.selectClient(client.id);
+    }
     void router.push(`/folder/${client.root_folder_id}`);
   }
 }
@@ -74,9 +79,12 @@ const clientActions = computed<MenuItem[]>(() => [
 <template>
   <tr>
     <td class="client-name px-0 pr-4 sm:px-4 py-2" @click="onClickFiles">
-      <router-link v-if="client.root_folder_id" :to="`/folder/${client.root_folder_id}`">{{
-        client.name
-      }}</router-link>
+      <router-link
+        v-if="client.root_folder_id"
+        :id="`collect-client-${client.id}`"
+        :to="`/folder/${client.root_folder_id}`"
+        >{{ client.name }}</router-link
+      >
       <span v-else>{{ client.name }}</span>
     </td>
     <!--

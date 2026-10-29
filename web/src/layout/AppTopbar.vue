@@ -7,10 +7,17 @@ import Logo from '@/components/Logo.vue';
 import UserMenu from '@/components/UserMenu.vue';
 import { useAuthStore } from '@/stores/auth';
 import { defaultBrandingTitle, useBrandingStore } from '@/stores/branding';
+import { useCollectionStore } from '@/stores/collection';
 
 const { branding } = storeToRefs(useBrandingStore());
 const { user } = storeToRefs(useAuthStore());
 const route = useRoute();
+const collection = useCollectionStore();
+function guideNavigation() {
+  if (collection.guidance) {
+    void nextTick(() => collection.guide('start'));
+  }
+}
 
 const menuItems = computed<MenuItem[]>(() => {
   if (!user.value) {
@@ -64,7 +71,11 @@ const menuItems = computed<MenuItem[]>(() => {
 </script>
 
 <template>
-  <Menubar :model="menuItems" class="layout-topbar border-0">
+  <Menubar
+    :model="menuItems"
+    :pt="{ button: { id: 'collect-nav-menu', onClick: guideNavigation } }"
+    class="layout-topbar border-0"
+  >
     <template #start>
       <div class="layout-topbar-logo-container">
         <router-link to="/" class="layout-topbar-logo">
@@ -93,6 +104,7 @@ const menuItems = computed<MenuItem[]>(() => {
       </a>
       <router-link
         v-else
+        :id="item.to === '/clients' ? 'collect-nav-clients' : undefined"
         :to="item.to"
         v-bind="props.action"
         class="p-menuitem-link"

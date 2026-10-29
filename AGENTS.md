@@ -47,6 +47,8 @@ For frontend commands and conventions under `web/`, follow `web/AGENTS.md`.
 
 ## Notes
 
+- Production deployment instructions live in the sibling `../clientshare-prod/agents.md`. Read them and inspect the live Compose configuration before deploying. Core runs as service `core` in `/home/chetan/apps/clientshare` on Alderaan. Always build directly from the merged commit with `make build-docker` against the verified Alderaan Docker daemon (`DOCKER_HOST=ssh://alderaan`); do not wait for CI/CD or pull an image as the deployment step. Preserve the running image ID for rollback, recreate only `core` with `--pull never`, and verify health and the deployed commit. Do not redeploy SaaS or docs for a Core-only change.
+
 - Run `make migrate` before starting services. The Devcraft API launcher also runs migrations before starting the backend.
 - Devcraft runs `api`, `web`, and `docs` with independently allocated ports. Only `api` needs a public URL: it proxies the web frontend and serves the bundled guide at `/docs/`. Keep `web` and `docs` private. Use the API public URL for portal links, authentication and `SERVER_BASE_URL`.
 - Devcraft previews disable outbound email by default. Set the API service's `EMAIL_ENABLED=true` environment override when real delivery is explicitly requested; this enables both tenant notifications and support notifications.

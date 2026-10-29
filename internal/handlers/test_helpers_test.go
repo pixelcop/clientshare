@@ -272,7 +272,11 @@ func setupSharedHandlersEnvWithOptions(t *testing.T, options handlersTestOptions
 	clientToken, _ := auth.GenerateJWT(clientUser.ID, "client", tenantID)
 	mismatchToken, _ := auth.GenerateJWT(mismatchUser.ID, "client", tenantID)
 	otherToken, _ := auth.GenerateJWT(otherClientUser.ID, "client", tenantID)
-	linkToken, _ := auth.GenerateLinkJWT(client.ID, "999", "view", tenantID)
+	fixtureLink := models.SecureLink{TenantID: tenantID, ClientID: client.ID, Token: "fixture-link", AccessType: "view", ExpiresAt: time.Now().Add(time.Hour)}
+	if err := database.Create(&fixtureLink).Error; err != nil {
+		t.Fatal(err)
+	}
+	linkToken, _ := auth.GenerateLinkJWT(client.ID, fixtureLink.ID, "view", tenantID)
 
 	queue := &memoryEmailQueue{}
 	signingKey := "test-signing-key"

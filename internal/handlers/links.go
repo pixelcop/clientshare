@@ -49,6 +49,7 @@ func RegisterLinkRoutes(router fiber.Router, db *gorm.DB, signingKey string, sto
 
 	router.Post("/api/clients/:id/links", middleware.RoleRequired("admin"), handler.CreateSecureLink)
 	router.Get("/api/clients/:id/links", middleware.RoleRequired("admin"), handler.ListSecureLinks)
+	router.Get("/api/clients/:id/collection", middleware.RoleRequired("admin"), handler.CollectionStatus)
 	router.Delete("/api/links/:id", middleware.RoleRequired("admin"), handler.DeleteSecureLink)
 	router.Get("/api/link/:token", handler.ViewLink)
 }
@@ -184,31 +185,53 @@ func (h *LinkHandler) CreateSecureLink(c fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
 	link.LinkURL = buildSecureLinkURL(tenantBaseURLFromCtx(c, h.baseURL), link.Token)
+	queued := false
 	if emailAddress != "" {
-		h.sendSecureLinkEmail(c, link, siteTitle)
+		queued = h.sendSecureLinkEmail(c, link, siteTitle)
 	}
-	return c.Status(201).JSON(link)
+	return c.Status(201).JSON(struct {
+		models.SecureLink
+		EmailQueued bool `json:"email_queued"`
+	}{link, queued})
 }
 
-func (h *LinkHandler) sendSecureLinkEmail(c fiber.Ctx, link models.SecureLink, siteTitle string) {
+func (h *LinkHandler) sendSecureLinkEmail(c fiber.Ctx, link models.SecureLink, siteTitle string) bool {
 	if h.emailQueue == nil {
 		utils.Logger(c).Warn("email queue unavailable for secure link")
-		return
+		return false
 	}
 	client, err := h.clientService.GetClient(c.Context(), link.TenantID, link.ClientID)
 	if err != nil {
 		utils.Logger(c).Error("error fetching client for secure link email", zap.Error(err))
-		return
+		return false
 	}
 	linkURL := buildSecureLinkURL(tenantBaseURLFromCtx(c, h.baseURL), link.Token)
 	if linkURL == "" {
 		utils.Logger(c).Warn("secure link base url missing")
-		return
+		return false
 	}
 	subject, body, htmlBody := emailpkg.RenderSecureLinkEmail(client.Name, link.AccessType, linkURL, siteTitle, link.ExpiresAt)
 	if _, err := h.emailQueue.Queue(emailpkg.Email{TenantID: link.TenantID, To: link.Email, Subject: subject, Body: body, HTMLBody: htmlBody}, models.Now()); err != nil {
 		utils.Logger(c).Error("failed to queue secure link email", zap.Error(err))
+		return false
 	}
+	return true
+}
+
+func (h *LinkHandler) CollectionStatus(c fiber.Ctx) error {
+	tenantID := tenantIDFromCtx(c)
+	if _, err := h.clientService.GetClient(c.Context(), tenantID, c.Params("id")); err != nil {
+		return c.Status(404).JSON(fiber.Map{"error": "client not found"})
+	}
+	since, err := time.Parse(time.RFC3339Nano, c.Query("since"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "invalid start time"})
+	}
+	status, err := services.CollectionStatus(c.Context(), h.db, tenantID, c.Params("id"), since)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "could not check upload requests"})
+	}
+	return c.JSON(status)
 }
 
 func buildSecureLinkURL(baseURL, token string) string {
