@@ -838,7 +838,7 @@ onBeforeUnmount(() => {
               />
             </div>
             <div v-else class="dropzone__content">
-              <i class="pi pi-file-plus dropzone__icon dropzone__icon--active" />
+              <i class="oi oi-file-plus dropzone__icon dropzone__icon--active" />
               <span class="dropzone__text">Drop files or folders anywhere to upload</span>
             </div>
           </div>
@@ -880,7 +880,7 @@ onBeforeUnmount(() => {
         <div>Uploading...</div>
       </div>
       <div v-else class="dropzone__content">
-        <i class="pi pi-upload dropzone__icon" />
+        <i class="oi oi-upload dropzone__icon" />
         <span class="dropzone__text">Click or drag files here, or drop a folder to upload</span>
         <div class="dropzone__directory-picker" @click.stop>
           <button type="button" class="dropzone__directory-button">Choose Folder</button>

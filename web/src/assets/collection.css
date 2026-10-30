@@ -83,7 +83,7 @@
   color: var(--p-primary-color);
   flex-shrink: 0;
 }
-.collection-document-mark .pi {
+.collection-document-mark .oi {
   font-size: 18px;
 }
 .collection-dock .p-panel-header-actions {
@@ -188,7 +188,7 @@
   background: var(--p-highlight-background);
   border-color: transparent;
 }
-.collection-step.is-done .collection-step-number .pi {
+.collection-step.is-done .collection-step-number .oi {
   font-size: 11px;
 }
 .collection-waiting {
@@ -226,7 +226,7 @@
   background: var(--collection-desk);
   border-radius: 8px;
 }
-.collection-permission > .pi {
+.collection-permission > .oi {
   color: var(--collection-secondary);
   font-size: 12px;
   margin-top: 3px;
@@ -269,7 +269,7 @@
   color: var(--collection-ink);
   text-decoration: underline;
 }
-.collection-footer a .pi {
+.collection-footer a .oi {
   font-size: 11px;
 }
 @media (max-width: 600px) {

@@ -41,36 +41,36 @@ function onClickAddUser() {
 const clientActions = computed<MenuItem[]>(() => [
   {
     label: 'View Files',
-    icon: 'pi pi-folder',
+    icon: 'oi oi-folder',
     command: () => onClickFiles(),
   },
   {
     label: 'View Users',
-    icon: 'pi pi-users',
+    icon: 'oi oi-users',
     command: () => onClickUsers(),
     visible: showUsers,
   },
   {
     label: 'Add User',
-    icon: 'pi pi-user-plus',
+    icon: 'oi oi-user-plus',
     command: () => onClickAddUser(),
     visible: showUsers,
   },
   {
     label: 'Links',
-    icon: 'pi pi-link',
+    icon: 'oi oi-link',
     url: `/clients/${client.id}/links`,
     visible: showLinks,
   },
   {
     label: 'Edit',
-    icon: 'pi pi-pencil',
+    icon: 'oi oi-pencil',
     command: () => emit('edit', client),
     visible: showLinks,
   },
   {
     label: 'Delete',
-    icon: 'pi pi-trash',
+    icon: 'oi oi-trash',
     command: () => emit('delete', client),
     visible: showLinks,
   },
@@ -95,7 +95,7 @@ const clientActions = computed<MenuItem[]>(() => [
       <div class="flex justify-end">
         <SplitButton
           :model="clientActions"
-          icon="pi pi-folder"
+          icon="oi oi-folder"
           :label="xs ? undefined : 'View Files'"
           severity="info"
           class="view-files"

@@ -101,7 +101,7 @@ async function onClickCopyLink(e: PointerEvent) {
           <!-- class="ml-auto [&_.p-button-label]:hidden @sm:[&_.p-button-label]:inline" -->
           <Button
             label="Download"
-            icon="pi pi-download"
+            icon="oi oi-download"
             size="small"
             severity="info"
             @click="$emit('download')"

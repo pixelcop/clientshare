@@ -86,7 +86,7 @@ watch(
                   : 'bg-emerald-50 text-emerald-700'
             "
           >
-            <i class="pi pi-shield" />
+            <i class="oi oi-shield" />
             {{ accessLabel }}
           </span>
           <span v-if="expiresAt" class="text-xs text-slate-500">Expires {{ expiresAt }}</span>

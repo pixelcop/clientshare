@@ -318,7 +318,7 @@ onBeforeUnmount(() => {
       >
       <template #icons
         ><Button
-          icon="pi pi-times"
+          icon="oi oi-times"
           text
           rounded
           severity="secondary"

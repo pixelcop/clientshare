@@ -317,7 +317,7 @@ onMounted(() => {
                     alt="Logo preview"
                     class="h-10 w-10 object-contain rounded mb-4"
                   />
-                  <i v-else class="pi pi-minus h-10 w-10 mb-4 text-center pt-4"></i>
+                  <i v-else class="oi oi-minus h-10 w-10 mb-4 text-center pt-4"></i>
 
                   <label class="inline-flex items-center gap-2 text-sm">
                     <input v-model="removeLogo" type="checkbox" @change="onRemoveLogoChange" />
