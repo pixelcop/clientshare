@@ -2,6 +2,10 @@
 
 A file for [guiding coding agents](https://agents.md/).
 
+## Shipping convention
+
+- When the user says **“ship it”** with no further qualifications, commit the intended changes, merge into the target branch, build, and deploy the full ClientShare production app (Core, SaaS, and docs). Skip steps already completed. Follow the production workspace runbook, build from merged commits, and verify deployment health. This overrides the default changed-service-only deployment scope, but excludes standalone deployments such as SarvaCPA unless explicitly requested.
+
 ## Commands
 
 - **Run backend:** `make run`
