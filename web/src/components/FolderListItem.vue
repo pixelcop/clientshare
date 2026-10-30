@@ -43,18 +43,18 @@ const folderActions = computed<MenuItem[]>(() => {
   const actions: MenuItem[] = [
     {
       label: 'Open',
-      icon: 'pi pi-folder-open',
+      icon: 'oi oi-folder-open',
       command: () => emit('open', item),
     },
   ];
   actions.push({
     label: 'Download Zip',
-    icon: 'pi pi-download',
+    icon: 'oi oi-download',
     command: () => downloadZip(item),
   });
   actions.push({
     label: 'Delete',
-    icon: 'pi pi-trash',
+    icon: 'oi oi-trash',
     command: () => confirmDelete(item),
   });
   return actions;
@@ -87,7 +87,7 @@ const actionButtonSize = computed(() => {
         <div class="flex justify-end">
           <SplitButton
             :model="folderActions"
-            icon="pi pi-folder-open"
+            icon="oi oi-folder-open"
             :size="actionButtonSize"
             @click.stop="emit('open', item)"
             severity="info"
@@ -105,14 +105,14 @@ const actionButtonSize = computed(() => {
         <div v-if="canRead" class="flex gap-2">
           <Button
             label="Open"
-            icon="pi pi-folder-open"
+            icon="oi oi-folder-open"
             size="small"
             severity="info"
             @click.stop="emit('open', item)"
           />
           <Button
             v-tooltip.left="{ value: 'Download Zip', showDelay: 500, hideDelay: 300 }"
-            icon="pi pi-download"
+            icon="oi oi-download"
             size="small"
             severity="secondary"
             @click.stop="downloadZip(item)"

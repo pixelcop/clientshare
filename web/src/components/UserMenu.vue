@@ -42,13 +42,13 @@ const menuItems = computed(() => {
   if (isDarkTheme.value) {
     items.push({
       label: 'Switch to Light Mode',
-      icon: 'pi pi-sun',
+      icon: 'oi oi-sun',
       command: toggleDarkMode,
     });
   } else {
     items.push({
       label: 'Switch to Dark Mode',
-      icon: 'pi pi-moon',
+      icon: 'oi oi-moon',
       command: toggleDarkMode,
     });
   }
@@ -56,7 +56,7 @@ const menuItems = computed(() => {
   if (user.value?.role !== 'link') {
     items.push({
       label: 'Security',
-      icon: 'pi pi-shield',
+      icon: 'oi oi-shield',
       command: () => router.push({ name: 'Security' }),
     });
   }
@@ -67,12 +67,12 @@ const menuItems = computed(() => {
     accountURL.hash = `email=${encodeURIComponent(user.value.email)}`;
     items.push({
       label: 'Account & billing',
-      icon: 'pi pi-external-link',
+      icon: 'oi oi-external-link',
       url: accountURL.toString(),
     });
   }
 
-  items.push({ label: 'Logout', icon: 'pi pi-sign-out', command: logout });
+  items.push({ label: 'Logout', icon: 'oi oi-sign-out', command: logout });
 
   return items;
 });
@@ -92,7 +92,7 @@ const menuItems = computed(() => {
       v-else
       shape="circle"
       size="large"
-      icon="pi pi-user"
+      icon="oi oi-user"
       class="cursor-pointer"
       @click="toggleMenu"
     />

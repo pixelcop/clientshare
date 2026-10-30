@@ -17,7 +17,7 @@ const branding = useBrandingStore();
     <template #content>
       <div class="collection-invite-layout">
         <span class="collection-invite-icon" aria-hidden="true"
-          ><i class="pi pi-file-import"
+          ><i class="oi oi-file-import"
         /></span>
         <div class="collection-invite-copy">
           <h2>Collect your first client document</h2>
@@ -70,7 +70,7 @@ const branding = useBrandingStore();
   color: var(--p-primary-color);
   border-radius: 8px;
 }
-.collection-invite-icon .pi {
+.collection-invite-icon .oi {
   font-size: 24px;
 }
 .collection-invite-copy h2 {

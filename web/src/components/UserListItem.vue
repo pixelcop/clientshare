@@ -68,9 +68,9 @@ const primaryLabel = computed(() => {
 
 const primaryIcon = computed(() => {
   if (user.invite_accepted) {
-    return 'pi pi-pencil';
+    return 'oi oi-pencil';
   }
-  return 'pi pi-send';
+  return 'oi oi-send';
 });
 
 const primaryAction = () => {
@@ -87,24 +87,24 @@ const userActions = computed<MenuItem[]>(() => {
   if (!user.invite_accepted) {
     actions.push({
       label: 'Resend Invite',
-      icon: 'pi pi-send',
+      icon: 'oi oi-send',
       command: () => emit('resend-invite', user),
     });
   }
   actions.push(
     {
       label: copyLinkLabel(user),
-      icon: 'pi pi-copy',
+      icon: 'oi oi-copy',
       command: () => emit('copy-link', user),
     },
     {
       label: 'Edit',
-      icon: 'pi pi-pencil',
+      icon: 'oi oi-pencil',
       command: () => emit('edit', user),
     },
     {
       label: 'Delete',
-      icon: 'pi pi-trash',
+      icon: 'oi oi-trash',
       command: () => emit('delete', user),
     },
   );

@@ -59,7 +59,7 @@ async function skipAndDismiss() {
   <Dialog v-model:visible="visible" modal :closable="!saving" :style="{ width: '30rem' }">
     <template #header>
       <div class="flex items-center gap-3">
-        <i class="pi pi-key text-primary text-xl" />
+        <i class="oi oi-key text-primary text-xl" />
         <span class="font-semibold">Add a passkey</span>
       </div>
     </template>
@@ -94,7 +94,7 @@ async function skipAndDismiss() {
         />
         <Button
           label="Add passkey"
-          icon="pi pi-key"
+          icon="oi oi-key"
           :disabled="saving || !supported"
           :loading="saving"
           @click="addPasskey"
