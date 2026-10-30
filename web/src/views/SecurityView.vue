@@ -84,7 +84,7 @@ function removePasskey(passkey: Passkey) {
   confirm.require({
     message: `Remove ${passkey.name}? You will no longer be able to use it to sign in.`,
     header: 'Remove passkey',
-    icon: 'pi pi-exclamation-triangle',
+    icon: 'oi oi-exclamation-triangle',
     acceptClass: 'p-button-danger',
     accept: async () => {
       try {
@@ -112,7 +112,7 @@ onMounted(() => {
       </div>
       <Button
         label="Add passkey"
-        icon="pi pi-key"
+        icon="oi oi-key"
         :disabled="saving || !supported"
         :loading="saving"
         @click="addPasskey"
@@ -142,7 +142,7 @@ onMounted(() => {
             :key="passkey.id"
             class="flex flex-wrap items-center gap-4 p-4"
           >
-            <i class="pi pi-key text-primary" />
+            <i class="oi oi-key text-primary" />
             <div class="min-w-40 flex-1">
               <p class="font-medium">{{ passkey.name }}</p>
               <p class="text-sm text-muted-color">

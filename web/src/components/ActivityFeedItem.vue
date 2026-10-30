@@ -29,7 +29,7 @@ function handleMarkRead(item: FeedEvent) {
 }
 
 function iconClass(item: FeedEvent) {
-  return item.event_type === 'invite_accepted' ? 'pi pi-user-plus' : 'pi pi-upload';
+  return item.event_type === 'invite_accepted' ? 'oi oi-user-plus' : 'oi oi-upload';
 }
 
 function actorLabel(item: FeedEvent) {
@@ -160,7 +160,7 @@ const actionLabel = computed(() => {
           size="small"
           class="col-start-1 row-start-1 opacity-0 pointer-events-none transition-opacity group-hover:opacity-100 group-hover:pointer-events-auto"
           outlined
-          icon="pi pi-check"
+          icon="oi oi-check"
           label="Mark read"
           @click="handleMarkRead(item)"
         />

@@ -35,9 +35,9 @@ const defaultDirectionByField: Record<FileSortField, 'asc' | 'desc'> = {
 
 function sortIconClass(field: FileSortField) {
   if (sortField.value !== field) {
-    return 'pi pi-sort-alt text-xs text-slate-400';
+    return 'oi oi-sort-alt text-xs text-slate-400';
   }
-  return sortDirection.value === 'desc' ? 'pi pi-arrow-down' : 'pi pi-arrow-up';
+  return sortDirection.value === 'desc' ? 'oi oi-arrow-down' : 'oi oi-arrow-up';
 }
 
 function sortBy(field: FileSortField) {
@@ -92,7 +92,7 @@ function closePreview() {
           <div class="flex items-center gap-2">
             <Button
               @click="showNewFolder = true"
-              icon="pi pi-plus"
+              icon="oi oi-plus"
               label="New Folder"
               severity="info"
               size="small"

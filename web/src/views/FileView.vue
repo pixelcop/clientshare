@@ -48,7 +48,7 @@ onMounted(async () => {
           <Button
             as="router-link"
             :to="homeRoute"
-            icon="pi pi-arrow-left"
+            icon="oi oi-arrow-left"
             label="Back"
             severity="secondary"
             outlined
@@ -58,7 +58,7 @@ onMounted(async () => {
             as="a"
             :href="downloadUrl"
             :download="file?.filename"
-            icon="pi pi-download"
+            icon="oi oi-download"
             label="Download"
             severity="info"
             size="small"
