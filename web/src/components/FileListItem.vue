@@ -34,18 +34,18 @@ const fileActions = computed<MenuItem[]>(() => {
   const actions: MenuItem[] = [
     {
       label: 'Download',
-      icon: 'pi pi-download',
+      icon: 'oi oi-download',
       command: () => fileManager.downloadFile(item),
     },
     {
       label: 'Preview',
-      icon: 'pi pi-eye',
+      icon: 'oi oi-eye',
       command: () => emit('open', item),
     },
   ];
   actions.push({
     label: 'Delete',
-    icon: 'pi pi-trash',
+    icon: 'oi oi-trash',
     command: () => confirmDelete(item),
   });
   return actions;
@@ -89,7 +89,7 @@ const actionButtonSize = computed(() => {
         <div class="flex justify-end">
           <SplitButton
             :model="fileActions"
-            icon="pi pi-download"
+            icon="oi oi-download"
             :size="actionButtonSize"
             @click.stop="fileManager.downloadFile(item)"
             severity="info"
@@ -107,14 +107,14 @@ const actionButtonSize = computed(() => {
         <div v-if="canRead" class="flex gap-2">
           <Button
             label="Preview"
-            icon="pi pi-eye"
+            icon="oi oi-eye"
             size="small"
             severity="info"
             @click.stop="emit('open', item)"
           />
           <Button
             v-tooltip.left="{ value: 'Download', showDelay: 500, hideDelay: 300 }"
-            icon="pi pi-download"
+            icon="oi oi-download"
             size="small"
             severity="secondary"
             @click.stop="fileManager.downloadFile(item)"

@@ -126,7 +126,7 @@ defineExpose({ fetchPendingEmails });
 <template>
   <i
     v-if="pendingCount === 0"
-    class="pi pi-envelope text-2xl no-emails"
+    class="oi oi-envelope text-2xl no-emails"
     v-tooltip.left="'No pending email'"
   />
   <div v-else class="email-badge-container" @click="showPending = true">
@@ -138,7 +138,7 @@ defineExpose({ fetchPendingEmails });
         class="badge-icon"
         @mouseenter="onHoverBadge"
       >
-        <i class="pi pi-envelope" style="font-size: 2rem" />
+        <i class="oi oi-envelope" style="font-size: 2rem" />
       </OverlayBadge>
     </Transition>
     <Transition name="button-fade">
@@ -146,7 +146,7 @@ defineExpose({ fetchPendingEmails });
         v-if="showButton"
         type="button"
         label="View pending email"
-        icon="pi pi-envelope"
+        icon="oi oi-envelope"
         :badge="pendingCount.toString()"
         size="large"
         class="inbox-button"
@@ -175,7 +175,7 @@ defineExpose({ fetchPendingEmails });
           :disabled="pendingLoading"
           @click="fetchPendingEmails"
           severity="secondary"
-          icon="pi pi-refresh"
+          icon="oi oi-refresh"
           label="Refresh"
         />
       </div>

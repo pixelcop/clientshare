@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import '@/assets/collection.css';
-import '@openvue/openicons/openicons.css';
 
 import { useMediaQuery } from '@vueuse/core';
 import axios from 'axios';
@@ -309,7 +308,7 @@ onBeforeUnmount(() => {
         <template #header>
           <div class="collection-heading">
             <span class="collection-document-mark" aria-hidden="true"
-              ><i class="pi pi-file"
+              ><i class="oi oi-file"
             /></span>
             <div>
               <span class="collection-eyebrow"
@@ -321,7 +320,7 @@ onBeforeUnmount(() => {
         </template>
         <template #icons
           ><Button
-            icon="pi pi-times"
+            icon="oi oi-times"
             severity="secondary"
             text
             rounded
@@ -331,7 +330,7 @@ onBeforeUnmount(() => {
         /></template>
         <div class="collection-body">
           <div v-if="workflow.client" class="collection-client-context">
-            <i class="pi pi-folder" aria-hidden="true" /><span>{{ workflow.client.name }}</span>
+            <i class="oi oi-folder" aria-hidden="true" /><span>{{ workflow.client.name }}</span>
           </div>
           <Message v-if="workflow.error" severity="error" :closable="false">{{
             workflow.error
@@ -374,7 +373,7 @@ onBeforeUnmount(() => {
                     <span class="collection-step-number"
                       ><i
                         v-if="workflow.step > index"
-                        class="pi pi-check"
+                        class="oi oi-check"
                         aria-label="Completed"
                       /><span v-else>{{ index + 1 }}</span></span
                     >
@@ -404,7 +403,7 @@ onBeforeUnmount(() => {
                     >
                     <p>In the client workspace, open Secure Links and select New Link.</p>
                     <div class="collection-permission">
-                      <i class="pi pi-lock" aria-hidden="true" />
+                      <i class="oi oi-lock" aria-hidden="true" />
                       <div>
                         <strong>Write access · recommended</strong
                         ><span
@@ -461,8 +460,8 @@ onBeforeUnmount(() => {
         <template #footer
           ><div class="collection-footer">
             <a :href="guide" target="_blank" rel="noopener noreferrer"
-              ><i class="pi pi-book" aria-hidden="true" />Read the guide<i
-                class="pi pi-arrow-up-right"
+              ><i class="oi oi-book" aria-hidden="true" />Read the guide<i
+                class="oi oi-arrow-up-right"
                 aria-hidden="true" /></a
             ><Button
               v-if="mobile"
@@ -473,7 +472,7 @@ onBeforeUnmount(() => {
               class="collection-overview-toggle"
               @click="showAllSteps = !showAllSteps"
             /><Button
-              icon="pi pi-replay"
+              icon="oi oi-replay"
               severity="secondary"
               text
               rounded

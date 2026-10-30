@@ -20,7 +20,7 @@ const crumbs = computed<MenuItem[]>(() => {
       to: `/folders/${item.id}`,
     };
     if (i === 0) {
-      t.icon = 'pi pi-home';
+      t.icon = 'oi oi-home';
       delete t.label;
     }
     if (!file && i === breadcrumbs.value.length - 1) {
