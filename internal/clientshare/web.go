@@ -25,6 +25,12 @@ func NewWebApp(cfg *Config, db *gorm.DB, logger *zap.Logger, emailQueue emailpkg
 	maxBodyMB := cfg.Server.MaxBodyMB
 	app := web.CreateApp(maxBodyMB, logger, cfg.DevMode)
 
+	// Register before tenant resolution and authentication so failures cannot be
+	// cached either. Static assets and public documentation keep their own policy.
+	app.Use("/api", middleware.PrivateNoStore)
+	app.Use("/internal", middleware.PrivateNoStore)
+	app.Use("/links", middleware.PrivateNoStore)
+
 	tenantResolver := middleware.NewTenantResolver(db, middleware.TenantResolverConfig{
 		Mode:                 cfg.Tenancy.Mode,
 		FallbackBaseURL:      cfg.Server.BaseURL,

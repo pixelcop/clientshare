@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v3"
+	"github.com/pixelcop/clientshare/internal/auth"
 	"github.com/pixelcop/clientshare/internal/models"
 	"github.com/pixelcop/clientshare/internal/services/storage"
 	tenantctx "github.com/pixelcop/clientshare/internal/tenant"
@@ -21,6 +22,78 @@ import (
 )
 
 const cacheControlFallbackDocuments = "no-cache, must-revalidate"
+
+func TestNewWebApp_SensitiveResponsesAreNotStored(t *testing.T) {
+	for _, mode := range []string{"single", "hosted"} {
+		t.Run(mode, func(t *testing.T) {
+			testSensitiveResponseCacheHeaders(t, mode)
+		})
+	}
+}
+
+func testSensitiveResponseCacheHeaders(t *testing.T, mode string) {
+	t.Helper()
+	root := t.TempDir()
+	cfg := newTestConfig(root)
+	cfg.Tenancy.Mode = mode
+	cfg.InternalAPI.Enabled = true
+	cfg.InternalAPI.Secret = "12345678901234567890123456789012"
+	db := newTestDB(t)
+	if err := db.AutoMigrate(&models.User{}, &models.UserClient{}, &models.SecureLink{}); err != nil {
+		t.Fatal(err)
+	}
+	user := models.User{TenantID: tenantctx.DefaultTenantID, Email: "cache-test@example.com", Role: "admin"}
+	if err := db.Create(&user).Error; err != nil {
+		t.Fatal(err)
+	}
+	app, err := NewWebApp(cfg, db, zap.NewNop(), nil, storage.NewLocalStorage(root))
+	if err != nil {
+		t.Fatal(err)
+	}
+	token, err := auth.GenerateJWT(user.ID, user.Role, user.TenantID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unknownHostStatus := http.StatusUnauthorized
+	if mode == "hosted" {
+		unknownHostStatus = http.StatusNotFound
+	}
+	for _, tc := range []struct {
+		name   string
+		path   string
+		host   string
+		cookie bool
+		status int
+	}{
+		{"authenticated profile", "/api/auth/me", "frontend.local", true, http.StatusOK},
+		{"anonymous profile", "/api/auth/me", "frontend.local", false, http.StatusUnauthorized},
+		{"anonymous clients", "/api/clients", "frontend.local", false, http.StatusUnauthorized},
+		{"anonymous files", "/api/files", "frontend.local", false, http.StatusUnauthorized},
+		{"health", "/api/healthz", "frontend.local", false, http.StatusOK},
+		{"unknown host", "/api/auth/me", "unknown.local", false, unknownHostStatus},
+		{"internal authentication failure", "/internal/auth/unknown", "frontend.local", false, http.StatusUnauthorized},
+		{"secure link failure", "/links/invalid", "unknown.local", false, http.StatusNotFound},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+			req.Host = tc.host
+			if tc.cookie {
+				req.AddCookie(&http.Cookie{Name: "jwt", Value: token})
+			}
+			resp, err := app.Test(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != tc.status {
+				t.Fatalf("status = %d, want %d", resp.StatusCode, tc.status)
+			}
+			if got := resp.Header.Get("Cache-Control"); got != "private, no-store" {
+				t.Fatalf("Cache-Control = %q, want private, no-store", got)
+			}
+		})
+	}
+}
 
 func newTestConfig(tempRoot string) *Config {
 	cfg := &Config{}
@@ -222,10 +295,10 @@ func TestNewWebApp_ProductionStaticCacheHeaders(t *testing.T) {
 			wantETag:     true,
 		},
 		{
-			name:         "api routes keep their own headers",
+			name:         "api routes cannot be stored",
 			path:         "/api/healthz",
 			wantStatus:   http.StatusOK,
-			wantCacheCtl: "",
+			wantCacheCtl: "private, no-store",
 			wantETag:     false,
 		},
 	}
