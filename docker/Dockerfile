@@ -84,6 +84,9 @@ RUN --mount=type=cache,target=/go/pkg/mod,uid=65534 \
 
 # Runtime image
 FROM alpine:3.20 AS runtime
+# Defense in depth for all Go binaries, including migration tools.
+# This mitigation does not replace patching the host Linux kernel.
+ENV GODEBUG=multipathtcp=0
 RUN apk add --no-cache ca-certificates sqlite-libs mailcap
 USER nobody
 WORKDIR /app

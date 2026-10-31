@@ -4,6 +4,9 @@ module github.com/pixelcop/clientshare
 
 go 1.26.0
 
+// Disable MPTCP by default until Linux hosts have patched kernels.
+godebug multipathtcp=0
+
 require (
 	github.com/aws/aws-sdk-go-v2 v1.47.5
 	github.com/aws/aws-sdk-go-v2/config v1.33.13
