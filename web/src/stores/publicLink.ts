@@ -15,8 +15,20 @@ export const usePublicLinkStore = defineStore('publicLink', () => {
   const registerSuccess = ref(false);
 
   const accessType = computed(() => link.value?.access_type ?? 'read');
-  const canRead = computed(() => accessType.value !== 'write'); // TODO: is this right
-  const canWrite = computed(() => accessType.value !== 'read');
+  const available = computed(
+    () =>
+      !!link.value &&
+      !validating.value &&
+      !error.value &&
+      Date.parse(link.value.expires_at) > Date.now(),
+  );
+  const canRead = computed(
+    () => available.value && ['read', 'view', 'readwrite'].includes(accessType.value),
+  );
+  const canWrite = computed(
+    () => available.value && ['write', 'readwrite'].includes(accessType.value),
+  );
+  const canRegister = computed(() => available.value && accessType.value === 'readwrite');
 
   function getErrorMessage(err: unknown, fallback: string) {
     if (axios.isAxiosError(err)) {
@@ -77,6 +89,7 @@ export const usePublicLinkStore = defineStore('publicLink', () => {
     accessType,
     canRead,
     canWrite,
+    canRegister,
 
     validateLink,
     registerUser,

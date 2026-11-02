@@ -16,7 +16,7 @@ const clientName = computed(() => publicLink.client?.name || 'Client Files');
 const { accessType, canWrite } = storeToRefs(publicLink);
 
 const accessLabel = computed(() => {
-  if (accessType.value === 'read') {
+  if (['read', 'view'].includes(accessType.value)) {
     return 'Read-only';
   }
   if (accessType.value === 'write') {
@@ -26,7 +26,7 @@ const accessLabel = computed(() => {
 });
 
 const accessDescription = computed(() => {
-  if (accessType.value === 'read') {
+  if (['read', 'view'].includes(accessType.value)) {
     return 'You can view and download files.';
   }
   if (accessType.value === 'write') {
@@ -79,7 +79,7 @@ watch(
           <span
             class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium"
             :class="
-              accessType === 'read'
+              ['read', 'view'].includes(accessType)
                 ? 'bg-blue-50 text-blue-700'
                 : accessType === 'write'
                   ? 'bg-amber-50 text-amber-700'

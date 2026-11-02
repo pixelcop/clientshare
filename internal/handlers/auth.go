@@ -509,6 +509,11 @@ func (h *AuthHandler) RegisterHandler(c fiber.Ctx) error {
 	if !valid || links.IsExpired(link.ExpiresAt) {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Invalid or expired link"})
 	}
+	// Client accounts have read/write access. Restricted links must not be
+	// exchangeable for an account with broader permissions or no expiry.
+	if link.AccessType != "readwrite" {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "This restricted link does not allow account registration. Ask your administrator for an invitation."})
+	}
 	// Check if user already exists
 	var existing models.User
 	if err := h.db.WithContext(c.Context()).Where("tenant_id = ? AND email = ?", tenantID, req.Email).First(&existing).Error; err == nil {

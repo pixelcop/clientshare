@@ -34,7 +34,7 @@ async function submitRegistration(e: Event) {
 
 <template>
   <section
-    v-if="user?.role === 'link'"
+    v-if="user?.role === 'link' && publicLink.canRegister"
     class="bg-white rounded-xl border border-slate-200 shadow-sm p-6"
   >
     <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">

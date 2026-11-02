@@ -12,6 +12,10 @@
 
 These options do not give recipients staff administration or deletion controls. An upload-only link should not be used as a promise that filenames or the workspace structure are invisible.
 
+Read-only recipients can browse folders, preview files, download files, and download folders as ZIP archives. They cannot upload or replace files, create folders, or delete anything.
+
+Only **Read & Write** links offer optional account registration. Read-only and upload-only recipients need an administrator's invitation to create an account; registering must not bypass the link's restrictions.
+
 ## Understand the scope
 
 A link belongs to a **client workspace**, not a single document or subfolder. If two recipients should have different sets of documents, organize their material into appropriate client workspaces before sharing.

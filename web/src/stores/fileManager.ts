@@ -4,7 +4,9 @@ import { defineStore, storeToRefs } from 'pinia';
 import type { FileItem, PaginatedResult, PaginationResponse } from '@/types/models';
 import { defaultPagination } from '@/types/util';
 
+import { useAuthStore } from './auth';
 import { useClientsStore } from './clients';
+import { usePublicLinkStore } from './publicLink';
 
 export type FileSortField = 'filename' | 'size' | 'uploaded_at';
 
@@ -42,9 +44,10 @@ export const useFileManagerStore = defineStore('fileManager', () => {
   const sortField = ref<FileSortField>('uploaded_at');
   const sortDirection = ref<'asc' | 'desc'>('desc');
 
-  // TODO: add permissions to API and use them here instead of assuming full access
-  const canRead = ref(true);
-  const canWrite = ref(true);
+  const auth = useAuthStore();
+  const publicLink = usePublicLinkStore();
+  const canRead = computed(() => (auth.user?.role === 'link' ? publicLink.canRead : !!auth.user));
+  const canWrite = computed(() => (auth.user?.role === 'link' ? publicLink.canWrite : !!auth.user));
 
   async function changeFolder(folderId?: string) {
     currentFolder.value = folderId || null;
@@ -174,6 +177,10 @@ export const useFileManagerStore = defineStore('fileManager', () => {
   }
 
   async function createFolder(name: string, options: CreateFolderOptions = {}) {
+    if (!canWrite.value) {
+      error.value = 'This link does not allow uploads or changes';
+      return null;
+    }
     const targetFolderId = options.targetFolderId ?? currentFolder.value;
     if (!targetFolderId) {
       return null;
@@ -202,6 +209,10 @@ export const useFileManagerStore = defineStore('fileManager', () => {
   }
 
   async function deleteItem(item: FileItem) {
+    if (!canWrite.value) {
+      error.value = 'This link does not allow uploads or changes';
+      return;
+    }
     if (!item.id) {
       return;
     }
@@ -223,6 +234,10 @@ export const useFileManagerStore = defineStore('fileManager', () => {
     onProgress?: (percent: number) => void,
     options: UploadFilesOptions = {},
   ) {
+    if (!canWrite.value) {
+      error.value = 'This link does not allow uploads or changes';
+      return { ok: false as const, error: error.value };
+    }
     const targetFolderId = options.targetFolderId ?? currentFolder.value;
     if (!targetFolderId) {
       error.value = 'No folder selected';

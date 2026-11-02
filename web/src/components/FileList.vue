@@ -16,7 +16,7 @@ import NewFolderModal from './NewFolderModal.vue';
 
 const router = useRouter();
 const fileManager = useFileManagerStore();
-const { files, folders, breadcrumbs, pagination, sortField, sortDirection } =
+const { files, folders, breadcrumbs, pagination, sortField, sortDirection, canWrite } =
   storeToRefs(fileManager);
 const { user } = storeToRefs(useAuthStore());
 
@@ -91,6 +91,7 @@ function closePreview() {
           <div v-else>&nbsp;</div>
           <div class="flex items-center gap-2">
             <Button
+              v-if="canWrite"
               @click="showNewFolder = true"
               icon="oi oi-plus"
               label="New Folder"
@@ -211,5 +212,9 @@ function closePreview() {
     @download="handleDownload"
   />
 
-  <NewFolderModal v-if="showNewFolder" :show="showNewFolder" @close="showNewFolder = false" />
+  <NewFolderModal
+    v-if="showNewFolder && canWrite"
+    :show="showNewFolder"
+    @close="showNewFolder = false"
+  />
 </template>

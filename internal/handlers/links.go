@@ -147,6 +147,11 @@ func (h *LinkHandler) CreateSecureLink(c fiber.Ctx) error {
 		utils.Logger(c).Warn("invalid request body", zap.Error(err))
 		return c.Status(400).JSON(fiber.Map{"error": "invalid request"})
 	}
+	switch body.AccessType {
+	case "read", "view", "write", "readwrite":
+	default:
+		return c.Status(400).JSON(fiber.Map{"error": "access_type must be read, write, or readwrite"})
+	}
 	siteTitle, defaultExpiryDays := h.tenantEmailSettings(c, tenantID)
 	if body.ExpiryDays < 1 {
 		body.ExpiryDays = defaultExpiryDays

@@ -205,7 +205,7 @@ func TestAuthHandlers_RegisterForgotAndReset(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed generating secure token: %v", err)
 	}
-	if err := env.db.Create(&models.SecureLink{ClientID: env.client.ID, Token: secureToken, ExpiresAt: time.Now().Add(time.Hour), AccessType: "view", CreatedAt: time.Now()}).Error; err != nil {
+	if err := env.db.Create(&models.SecureLink{ClientID: env.client.ID, Token: secureToken, ExpiresAt: time.Now().Add(time.Hour), AccessType: "readwrite", CreatedAt: time.Now()}).Error; err != nil {
 		t.Fatalf("failed creating secure link: %v", err)
 	}
 
