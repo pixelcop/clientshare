@@ -69,9 +69,15 @@ type Config struct {
 	} `mapstructure:"tenancy"`
 	Database db.DatabaseConfig `mapstructure:"database" jsonschema:"required" jsonschema_extras:"x-since=2026-01-17"`
 	Storage  struct {
-		Type  string `mapstructure:"type" jsonschema:"required,enum=local,enum=s3" jsonschema_extras:"x-since=2026-01-17"`
-		Local struct {
-			Root string `mapstructure:"root"`
+		Layout string `mapstructure:"layout"`
+		Type   string `mapstructure:"type" jsonschema:"required,enum=local,enum=s3" jsonschema_extras:"x-since=2026-01-17"`
+		Local  struct {
+			Root         string `mapstructure:"root"`
+			ReadableView struct {
+				Mode  string `mapstructure:"mode"`
+				Root  string `mapstructure:"root"`
+				Owner bool   `mapstructure:"owner"`
+			} `mapstructure:"readable_view"`
 		} `mapstructure:"local"`
 		S3 struct {
 			Bucket    string `mapstructure:"bucket" jsonschema_extras:"x-since=2026-03-18"`

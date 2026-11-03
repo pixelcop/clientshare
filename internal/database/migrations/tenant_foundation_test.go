@@ -137,7 +137,7 @@ func newMigrationProviderForTest(t *testing.T, db *sql.DB, dialect goose.Dialect
 			migration.NewGoMigration(43, upAddEmailHeaders, downAddEmailHeaders),
 			migration.NewGoMigration(44, upAddDomainRedirects, downAddDomainRedirects),
 			migration.NewGoMigration(45, upAddBrowserSessions, downAddBrowserSessions),
-			migration.NewGoMigration(46, upImmutableObjects, downImmutableObjects),
+			migration.NewGoMigration(46, upImmutableObjectsCompatible, downImmutableObjects),
 			migration.NewGoMigration(47, upAcknowledgedMissingObjects, downAcknowledgedMissingObjects),
 		},
 	)

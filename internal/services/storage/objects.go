@@ -61,7 +61,9 @@ func SafePath(root, relative string) (string, error) {
 		return "", err
 	}
 	rootAbs, err := filepath.Abs(root)
-	if err != nil { return "", err }
+	if err != nil {
+		return "", err
+	}
 	for current := p; ; current = filepath.Dir(current) {
 		info, err := os.Lstat(current)
 		if err != nil && !errors.Is(err, os.ErrNotExist) {

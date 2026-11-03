@@ -19,6 +19,13 @@ import (
 const defaultConfigPath = "config/config.yaml"
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "storage" {
+		if err := clientshare.StorageCommand(context.Background(), os.Args[2:], os.Stdout); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 	if len(os.Args) > 1 && os.Args[1] == "config" {
 		if err := runConfigCommand(os.Args[2:], os.Stdout, os.Stderr); err != nil {
 			if errors.Is(err, flag.ErrHelp) {

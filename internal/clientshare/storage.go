@@ -20,6 +20,9 @@ func BuildStorage(ctx context.Context, cfg *Config) (storage.Storage, error) {
 			return nil, fmt.Errorf("resolve storage root path: %w", err)
 		}
 		cfg.Storage.Local.Root = root
+		if _, err := storage.SafePath(root, ""); err != nil {
+			return nil, fmt.Errorf("invalid local storage root: %w", err)
+		}
 		return storage.NewLocalStorage(root), nil
 	case StorageS3:
 		store, err := storage.NewS3Storage(ctx, storage.S3Config{
