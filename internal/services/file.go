@@ -115,7 +115,12 @@ func (s *FileService) CreateFileRecord(ctx context.Context, file *models.File) (
 	if file == nil || strings.TrimSpace(file.TenantID) == "" {
 		return nil, errors.New("tenant id is required")
 	}
-	err := s.DB.WithContext(ctx).Create(file).Error
+	err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(file).Error; err != nil {
+			return err
+		}
+		return models.DirtyView(tx, file.TenantID, file.ClientID)
+	})
 	if err != nil {
 		return nil, err
 	}

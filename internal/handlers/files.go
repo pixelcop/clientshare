@@ -597,6 +597,9 @@ func (h *FileHandler) CreateFolder(c fiber.Ctx) error {
 		utils.Logger(c).Debug("invalid folder name", zap.Error(err))
 		return c.Status(400).JSON(fiber.Map{"error": "invalid folder name"})
 	}
+	if err := services.LogicalName(body.Name); err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "invalid folder name"})
+	}
 	subPath, err := resolveClientPath(parentFolder.Path, body.Name)
 	if err != nil {
 		utils.Logger(c).Debug("invalid folder path", zap.Error(err))

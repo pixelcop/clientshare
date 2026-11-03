@@ -179,6 +179,11 @@ func (s *LocalStorage) DeleteObject(ctx context.Context, key string) error {
 	if err != nil {
 		return err
 	}
+	if info, err := os.Lstat(p); err == nil && !info.Mode().IsRegular() {
+		return fmt.Errorf("object is not a regular file: %s", key)
+	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
 	err = os.Remove(p)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil

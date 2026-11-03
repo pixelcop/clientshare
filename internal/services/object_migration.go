@@ -47,6 +47,28 @@ func InventoryObjects(ctx context.Context, db *gorm.DB, root string, overrides m
 		return p, err
 	}
 	used := map[string]string{}
+	groups := map[string][]models.File{}
+	for _, f := range files {
+		key := f.TenantID + "/" + f.ClientID
+		groups[key] = append(groups[key], f)
+	}
+	for group, records := range groups {
+		paths, err := LogicalPaths(records)
+		if err != nil {
+			p.Problems = append(p.Problems, group+": invalid logical hierarchy: "+err.Error())
+			continue
+		}
+		active := map[string]string{}
+		for _, f := range records {
+			if f.DeletedAt != nil {
+				continue
+			}
+			if prior, ok := active[paths[f.ID]]; ok {
+				p.Problems = append(p.Problems, group+": duplicate active logical path for "+prior+" and "+f.ID)
+			}
+			active[paths[f.ID]] = f.ID
+		}
+	}
 	missing := map[string]bool{}
 	for _, id := range acknowledgedMissing {
 		missing[id] = true

@@ -443,6 +443,21 @@ func (v *ReadableViews) Reconcile(ctx context.Context, state models.ReadableView
 			return err
 		}
 		if !known {
+			plannedReplacement := false
+			if dryRun {
+				for old := range replace {
+					if strings.EqualFold(old, e.Path) {
+						plannedReplacement = true
+					}
+				}
+			}
+			// Ask the filesystem too: Unicode-normalized aliases need not compare
+			// equal as Go strings, but must never become newly claimed ownership.
+			if _, statErr := os.Lstat(p); statErr == nil && !plannedReplacement {
+				return fmt.Errorf("unmanaged view collision: %s", e.Path)
+			} else if statErr != nil && !errors.Is(statErr, os.ErrNotExist) {
+				return statErr
+			}
 			// Refuse even a matching unmanaged entry, and case aliases on Unix.
 			if entries, err := os.ReadDir(filepath.Dir(p)); err == nil {
 				for _, entry := range entries {

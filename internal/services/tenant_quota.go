@@ -208,7 +208,7 @@ func UploadFile(ctx context.Context, db *gorm.DB, store storage.Storage, file *m
 	defer ReleaseStorage(db, r)
 	reader := &io.LimitedReader{R: src, N: size}
 	if file.ID == "" {
-		file.BeforeCreate(db)
+		file.ID = ids.NewULID()
 	}
 	key := ids.NewULID()
 	file.StorageKey = &key

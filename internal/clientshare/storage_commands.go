@@ -230,7 +230,10 @@ func StorageCommand(ctx context.Context, args []string, out io.Writer) error {
 			if err := json.Unmarshal([]byte(state.Manifest), &previous); err != nil {
 				return err
 			}
-			views.Mode, views.Root, views.Clear = previous.Mode, previous.Root, true
+			if views.Mode != previous.Mode || views.Root != previous.Root {
+				return errors.New("restore the manifest's old mode/root configuration before view-clear")
+			}
+			views.Clear = true
 		}
 		if err := views.Reconcile(ctx, state, !*apply, out); err != nil {
 			return err
