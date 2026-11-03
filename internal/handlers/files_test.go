@@ -18,10 +18,12 @@ import (
 	"github.com/gofiber/fiber/v3"
 	apphandlers "github.com/pixelcop/clientshare/internal/handlers"
 	"github.com/pixelcop/clientshare/internal/models"
+	"github.com/pixelcop/clientshare/internal/services"
 	"github.com/pixelcop/clientshare/internal/services/email"
 	"github.com/pixelcop/clientshare/internal/services/storage"
 	tenantctx "github.com/pixelcop/clientshare/internal/tenant"
 	"github.com/pixelcop/clientshare/pkg/utils/ids"
+	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
 
@@ -63,6 +65,46 @@ func createFileRecord(t *testing.T, env *fileTestEnv, folder *models.File, filen
 func tenantDiskPath(root, tenantID string, pathParts ...string) string {
 	parts := append([]string{root, "tenants", tenantID}, pathParts...)
 	return filepath.Join(parts...)
+}
+
+func TestImmutableDownloadsSurviveRenameButRespectDeletion(t *testing.T) {
+	env := setupFileTestEnv(t)
+	file := createFileRecord(t, env, env.rootFolder, "retained.txt", "immutable content")
+	key := *file.StorageKey
+	clients := &services.ClientService{DB: env.db}
+	for _, name := range []string{"Renamed Once", "Renamed Twice"} {
+		_, err := clients.UpdateClient(context.Background(), file.TenantID, env.client.ID, name)
+		require.NoError(t, err)
+		for _, token := range []string{env.adminToken, env.linkToken} {
+			resp, err := env.app.Test(newAuthRequest(http.MethodGet, "/api/files/"+file.ID+"/download", token, nil))
+			require.NoError(t, err)
+			require.Equal(t, 200, resp.StatusCode)
+			body, err := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			require.NoError(t, err)
+			require.Equal(t, "immutable content", string(body))
+		}
+	}
+	require.NoError(t, env.db.First(file, "id = ?", file.ID).Error)
+	require.Equal(t, key, *file.StorageKey)
+	// A legacy active child below a deleted ancestor is inaccessible too.
+	require.NoError(t, env.db.Model(&models.File{}).Where("id = ?", env.rootFolder.ID).Update("deleted_at", time.Now()).Error)
+	resp, err := env.app.Test(newAuthRequest(http.MethodGet, "/api/files/"+file.ID+"/download", env.adminToken, nil))
+	require.NoError(t, err)
+	require.Equal(t, 404, resp.StatusCode)
+	resp.Body.Close()
+	require.NoError(t, env.db.Model(&models.File{}).Where("id = ?", env.rootFolder.ID).Update("deleted_at", nil).Error)
+	resp, err = env.app.Test(newAuthRequest(http.MethodDelete, "/api/files/"+file.ID, env.adminToken, nil))
+	require.NoError(t, err)
+	require.Equal(t, 204, resp.StatusCode)
+	resp.Body.Close()
+	for _, token := range []string{env.adminToken, env.linkToken} {
+		resp, err := env.app.Test(newAuthRequest(http.MethodGet, "/api/files/"+file.ID+"/download", token, nil))
+		require.NoError(t, err)
+		require.Equal(t, 404, resp.StatusCode)
+		resp.Body.Close()
+	}
+	require.FileExists(t, filepath.Join(env.storageRoot, "objects", file.TenantID, key))
 }
 
 func TestFilesAuthRequired(t *testing.T) {

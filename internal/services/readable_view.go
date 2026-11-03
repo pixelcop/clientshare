@@ -186,6 +186,37 @@ func (v *ReadableViews) expected(ctx context.Context, state models.ReadableView)
 	if err := v.DB.WithContext(ctx).Where("tenant_id = ? AND client_id = ? AND deleted_at IS NULL", state.TenantID, state.ClientID).Find(&files).Error; err != nil {
 		return nil, err
 	}
+	// Only export records reachable from the active client root. Legacy data
+	// can retain active children beneath an already-deleted parent.
+	if client.RootFolderID == nil {
+		return nil, errors.New("client has no logical root")
+	}
+	reachable := map[string]bool{*client.RootFolderID: true}
+	for changed := true; changed; {
+		changed = false
+		for _, f := range files {
+			if !reachable[f.ID] && f.FolderID != nil && reachable[*f.FolderID] {
+				reachable[f.ID] = true
+				changed = true
+			}
+		}
+	}
+	rootActive := false
+	for _, f := range files {
+		if f.ID == *client.RootFolderID {
+			rootActive = true
+		}
+	}
+	if !rootActive {
+		return nil, nil
+	}
+	active := make([]models.File, 0, len(files))
+	for _, f := range files {
+		if reachable[f.ID] {
+			active = append(active, f)
+		}
+	}
+	files = active
 	paths, err := LogicalPaths(files)
 	if err != nil {
 		return nil, err

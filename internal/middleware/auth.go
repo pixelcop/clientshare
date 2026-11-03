@@ -104,10 +104,28 @@ func UserCanAccessFile(c fiber.Ctx) error {
 	clientID, _ := c.Locals("client_id").(string)
 	tenantID := strings.TrimSpace(tenantctx.IDFromFiber(c))
 
-	file, err := db.G[*models.File]().Where("tenant_id = ? AND id = ?", tenantID, fileID).First(c.Context())
+	file, err := db.G[*models.File]().Where("tenant_id = ? AND id = ? AND deleted_at IS NULL AND disk_deleted_at IS NULL", tenantID, fileID).First(c.Context())
 	if err != nil {
 		utils.Logger(c).Debug("file not found", zap.Error(err))
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": fiber.ErrNotFound.Error()})
+	}
+	// Retained objects must not revive a deleted client or an inactive branch of
+	// the logical tree, even when an old public file ID is still known.
+	if _, err := db.G[*models.Client]().Where("tenant_id = ? AND id = ?", tenantID, file.ClientID).First(c.Context()); err != nil {
+		return c.Status(404).JSON(fiber.Map{"error": "Not Found"})
+	}
+	seen := map[string]bool{file.ID: true}
+	parentID := file.FolderID
+	for parentID != nil && *parentID != "" {
+		if seen[*parentID] || len(seen) > 256 {
+			return c.Status(404).JSON(fiber.Map{"error": "Not Found"})
+		}
+		seen[*parentID] = true
+		parent, err := db.G[*models.File]().Where("tenant_id = ? AND client_id = ? AND id = ? AND type = 'folder' AND deleted_at IS NULL AND disk_deleted_at IS NULL", tenantID, file.ClientID, *parentID).First(c.Context())
+		if err != nil {
+			return c.Status(404).JSON(fiber.Map{"error": "Not Found"})
+		}
+		parentID = parent.FolderID
 	}
 	c.Locals("file", file)
 
