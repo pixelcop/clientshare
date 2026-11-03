@@ -111,7 +111,7 @@ func TestMigrationStaleMissingAndRetainedFiles(t *testing.T) {
 }
 
 func TestReadableViewsModesRecoveryAndConflicts(t *testing.T) {
-	for _, mode := range []string{"none", "hardlink", "symlink", "export"} {
+	for _, mode := range []string{ViewModeNone, ViewModeHardlink, ViewModeSymlink, ViewModeExport} {
 		t.Run(mode, func(t *testing.T) {
 			db, root, client, file := migrationFixture(t)
 			ctx := context.Background()
@@ -136,7 +136,7 @@ func TestReadableViewsModesRecoveryAndConflicts(t *testing.T) {
 			require.NoError(t, view.Reconcile(ctx, state, false, io.Discard))
 			reload()
 			require.Equal(t, state.DesiredRevision, state.AppliedRevision)
-			if mode == "none" {
+			if mode == ViewModeNone {
 				require.NoDirExists(t, view.Root)
 				return
 			}
@@ -147,7 +147,7 @@ func TestReadableViewsModesRecoveryAndConflicts(t *testing.T) {
 			// Simulate a crash with persisted intent but missing generated entry.
 			require.NoError(t, os.Remove(path))
 			require.NoError(t, view.Reconcile(ctx, state, false, io.Discard))
-			if mode == "export" {
+			if mode == ViewModeExport {
 				require.NoError(t, os.WriteFile(path, []byte("edited"), 0600))
 				require.ErrorContains(t, view.Reconcile(ctx, state, false, io.Discard), "modified export")
 				require.NoError(t, os.WriteFile(path, []byte("hello"), 0600))
@@ -227,7 +227,7 @@ func TestViewRevisionAndRetentionWaitForManagedCleanup(t *testing.T) {
 	plan, err := InventoryObjects(ctx, db, root, nil)
 	require.NoError(t, err)
 	require.NoError(t, ApplyObjects(ctx, db, root, plan))
-	view, err := NewReadableViews(db, root, "", "export")
+	view, err := NewReadableViews(db, root, "", ViewModeExport)
 	require.NoError(t, err)
 	require.NoError(t, view.Probe())
 	var state models.ReadableView
@@ -265,7 +265,7 @@ func TestReadableViewUnmanagedCollision(t *testing.T) {
 	plan, err := InventoryObjects(ctx, db, root, nil)
 	require.NoError(t, err)
 	require.NoError(t, ApplyObjects(ctx, db, root, plan))
-	view, err := NewReadableViews(db, root, "", "export")
+	view, err := NewReadableViews(db, root, "", ViewModeExport)
 	require.NoError(t, err)
 	require.NoError(t, os.MkdirAll(filepath.Join(view.Root, "tenant", "acme"), 0700))
 	var state models.ReadableView

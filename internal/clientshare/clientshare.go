@@ -35,11 +35,11 @@ func Start(ctx context.Context, cfg *Config, logger *zap.Logger) error {
 	if err != nil {
 		return err
 	}
-	if cfg.Storage.Type != StorageLocal && views.Mode != "none" {
+	if cfg.Storage.Type != StorageLocal && views.Mode != services.ViewModeNone {
 		return fmt.Errorf("readable views require local storage")
 	}
-	if views.Mode == "none" || cfg.Storage.Local.ReadableView.Owner {
-		if views.Mode != "none" {
+	if views.Mode == services.ViewModeNone || cfg.Storage.Local.ReadableView.Owner {
+		if views.Mode != services.ViewModeNone {
 			lock, err := views.Lock()
 			if err != nil {
 				return err

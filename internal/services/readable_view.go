@@ -18,6 +18,13 @@ import (
 	"gorm.io/gorm"
 )
 
+const (
+	ViewModeNone     = "none"
+	ViewModeHardlink = "hardlink"
+	ViewModeSymlink  = "symlink"
+	ViewModeExport   = "export"
+)
+
 type ViewEntry struct {
 	Path      string
 	Key       string
@@ -40,9 +47,9 @@ type ReadableViews struct {
 
 func NewReadableViews(db *gorm.DB, objectRoot, root, mode string) (*ReadableViews, error) {
 	if mode == "" {
-		mode = "none"
+		mode = ViewModeNone
 	}
-	if mode != "none" && mode != "hardlink" && mode != "symlink" && mode != "export" {
+	if mode != ViewModeNone && mode != ViewModeHardlink && mode != ViewModeSymlink && mode != ViewModeExport {
 		return nil, fmt.Errorf("unknown readable view mode %q", mode)
 	}
 	objectRoot, err := filepath.Abs(objectRoot)
@@ -74,7 +81,7 @@ func (v *ReadableViews) Lock() (*os.File, error) {
 		return nil, err
 	}
 	name := "reconciler.lock"
-	if v.Mode != "none" {
+	if v.Mode != ViewModeNone {
 		dir = filepath.Dir(v.Root)
 		name = "." + filepath.Base(v.Root) + ".clientshare.lock"
 	}
@@ -99,7 +106,7 @@ func (v *ReadableViews) Lock() (*os.File, error) {
 // Probe never substitutes a different mode. Both publication and view linking
 // must be tested on the actual mounted filesystem before production cutover.
 func (v *ReadableViews) Probe() error {
-	if v.Mode == "none" {
+	if v.Mode == ViewModeNone {
 		return nil
 	}
 	if err := os.MkdirAll(v.Root, 0700); err != nil {
@@ -126,9 +133,9 @@ func (v *ReadableViews) Probe() error {
 	os.Remove(target.Name())
 	defer os.Remove(target.Name())
 	switch v.Mode {
-	case "hardlink":
+	case ViewModeHardlink:
 		return os.Link(source.Name(), target.Name())
-	case "symlink":
+	case ViewModeSymlink:
 		rel, err := filepath.Rel(v.Root, source.Name())
 		if err != nil {
 			return err
@@ -138,7 +145,7 @@ func (v *ReadableViews) Probe() error {
 		}
 		_, err = os.Stat(target.Name())
 		return err
-	case "export":
+	case ViewModeExport:
 		// Export publication uses an atomic no-replace hardlink within its own filesystem.
 		f, err := os.CreateTemp(v.Root, ".probe-copy-*")
 		if err != nil {
@@ -171,7 +178,7 @@ func viewName(name string) error {
 }
 
 func (v *ReadableViews) expected(ctx context.Context, state models.ReadableView) ([]ViewEntry, error) {
-	if v.Mode == "none" || v.Clear {
+	if v.Mode == ViewModeNone || v.Clear {
 		return nil, nil
 	}
 	var client models.Client
@@ -294,7 +301,7 @@ func (v *ReadableViews) matches(ctx context.Context, tenant string, e ViewEntry)
 		return false, err
 	}
 	switch v.Mode {
-	case "symlink":
+	case ViewModeSymlink:
 		target, err := os.Readlink(p)
 		if err != nil {
 			return false, err
@@ -306,7 +313,7 @@ func (v *ReadableViews) matches(ctx context.Context, tenant string, e ViewEntry)
 		if target != expected {
 			return false, fmt.Errorf("modified symlink: %s", p)
 		}
-	case "hardlink":
+	case ViewModeHardlink:
 		sourceInfo, err := os.Stat(source)
 		if err != nil {
 			return false, err
@@ -314,7 +321,7 @@ func (v *ReadableViews) matches(ctx context.Context, tenant string, e ViewEntry)
 		if !info.Mode().IsRegular() || !os.SameFile(info, sourceInfo) {
 			return false, fmt.Errorf("modified hardlink: %s", p)
 		}
-	case "export":
+	case ViewModeExport:
 		actual, err := hashRegularFile(ctx, p)
 		if err != nil {
 			return false, err
@@ -339,15 +346,15 @@ func (v *ReadableViews) create(ctx context.Context, tenant string, e ViewEntry) 
 		return err
 	}
 	switch v.Mode {
-	case "hardlink":
+	case ViewModeHardlink:
 		return os.Link(source, p)
-	case "symlink":
+	case ViewModeSymlink:
 		rel, err := filepath.Rel(filepath.Dir(p), source)
 		if err != nil {
 			return err
 		}
 		return os.Symlink(rel, p)
-	case "export":
+	case ViewModeExport:
 		in, err := os.Open(source)
 		if err != nil {
 			return err
@@ -390,7 +397,7 @@ func (v *ReadableViews) Reconcile(ctx context.Context, state models.ReadableView
 		}
 	}()
 	manifestRoot := v.Root
-	if v.Mode == "none" {
+	if v.Mode == ViewModeNone {
 		manifestRoot = ""
 	}
 	manifest := ViewManifest{Mode: v.Mode, Root: manifestRoot}
@@ -399,7 +406,7 @@ func (v *ReadableViews) Reconcile(ctx context.Context, state models.ReadableView
 			return err
 		}
 	}
-	if v.Mode == "none" && manifest.Mode == "none" && len(manifest.Entries) == 0 {
+	if v.Mode == ViewModeNone && manifest.Mode == ViewModeNone && len(manifest.Entries) == 0 {
 		manifest.Root = ""
 	}
 	if manifest.Mode != v.Mode || manifest.Root != manifestRoot {
@@ -461,7 +468,7 @@ func (v *ReadableViews) Reconcile(ctx context.Context, state models.ReadableView
 			}
 		}
 	}
-	if v.Mode != "none" && !dryRun {
+	if v.Mode != ViewModeNone && !dryRun {
 		tenantDir, err := storage.SafePath(v.Root, state.TenantID)
 		if err != nil {
 			return err
