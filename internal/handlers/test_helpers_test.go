@@ -194,6 +194,7 @@ func setupSharedHandlersEnvWithOptions(t *testing.T, options handlersTestOptions
 		t.Fatalf("failed to open db: %v", err)
 	}
 	if err := database.AutoMigrate(
+		&models.BrowserSession{},
 		&models.Tenant{},
 		&models.TenantSettings{},
 		&models.TenantDomain{},
@@ -265,18 +266,17 @@ func setupSharedHandlersEnvWithOptions(t *testing.T, options handlersTestOptions
 	}
 
 	jwtSecret := "reset-secret"
-	auth.SetJWTSecret(jwtSecret)
-
-	adminToken, _ := auth.GenerateJWT(adminUser.ID, "admin", tenantID)
-	managerToken, _ := auth.GenerateJWT(managerUser.ID, "manager", tenantID)
-	clientToken, _ := auth.GenerateJWT(clientUser.ID, "client", tenantID)
-	mismatchToken, _ := auth.GenerateJWT(mismatchUser.ID, "client", tenantID)
-	otherToken, _ := auth.GenerateJWT(otherClientUser.ID, "client", tenantID)
+	store := &auth.SessionStore{DB: database}
+	adminToken, _ := store.Create(context.Background(), tenantID, adminUser.ID, "", auth.PortalAudience, "", "")
+	managerToken, _ := store.Create(context.Background(), tenantID, managerUser.ID, "", auth.PortalAudience, "", "")
+	clientToken, _ := store.Create(context.Background(), tenantID, clientUser.ID, "", auth.PortalAudience, "", "")
+	mismatchToken, _ := store.Create(context.Background(), tenantID, mismatchUser.ID, "", auth.PortalAudience, "", "")
+	otherToken, _ := store.Create(context.Background(), tenantID, otherClientUser.ID, "", auth.PortalAudience, "", "")
 	fixtureLink := models.SecureLink{TenantID: tenantID, ClientID: client.ID, Token: "fixture-link", AccessType: "view", ExpiresAt: time.Now().Add(time.Hour)}
 	if err := database.Create(&fixtureLink).Error; err != nil {
 		t.Fatal(err)
 	}
-	linkToken, _ := auth.GenerateLinkJWT(client.ID, fixtureLink.ID, "view", tenantID)
+	linkToken, _ := store.Create(context.Background(), tenantID, "", fixtureLink.ID, auth.PortalAudience, "", "")
 
 	queue := &memoryEmailQueue{}
 	signingKey := "test-signing-key"
@@ -406,7 +406,7 @@ func jsonRequest(method, path string, body any) *http.Request {
 
 func jsonAuthRequest(method, path, token string, body any) *http.Request {
 	req := jsonRequest(method, path, body)
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: auth.SessionCookie, Value: token})
 	return req
 }
 

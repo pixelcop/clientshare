@@ -20,6 +20,7 @@ func main() {
 		migration.NewGoMigration(42, upAddSupportMessages, downAddSupportMessages),
 		migration.NewGoMigration(43, upAddEmailHeaders, downAddEmailHeaders),
 		migration.NewGoMigration(44, upAddDomainRedirects, downAddDomainRedirects),
+		migration.NewGoMigration(45, upAddBrowserSessions, downAddBrowserSessions),
 	}
 
 	migration.Run(goMigrations, func(path string) (db.DatabaseConfig, error) {

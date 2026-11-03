@@ -1,6 +1,7 @@
 package clientshare
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -50,7 +51,7 @@ func testSensitiveResponseCacheHeaders(t *testing.T, mode string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	token, err := auth.GenerateJWT(user.ID, user.Role, user.TenantID)
+	token, err := (&auth.SessionStore{DB: db}).Create(context.Background(), user.TenantID, user.ID, "", auth.PortalAudience, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +79,7 @@ func testSensitiveResponseCacheHeaders(t *testing.T, mode string) {
 			req := httptest.NewRequest(http.MethodGet, tc.path, nil)
 			req.Host = tc.host
 			if tc.cookie {
-				req.AddCookie(&http.Cookie{Name: "jwt", Value: token})
+				req.AddCookie(&http.Cookie{Name: auth.SessionCookie, Value: token})
 			}
 			resp, err := app.Test(req)
 			if err != nil {
@@ -115,7 +116,7 @@ func newTestDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
 	}
-	if err := database.AutoMigrate(&models.Tenant{}, &models.TenantSettings{}, &models.TenantDomain{}); err != nil {
+	if err := database.AutoMigrate(&models.BrowserSession{}, &models.TenantEntitlement{}, &models.Tenant{}, &models.TenantSettings{}, &models.TenantDomain{}); err != nil {
 		t.Fatalf("failed to migrate tenant tables: %v", err)
 	}
 	if err := database.Create(&models.Tenant{ID: tenantctx.DefaultTenantID, Slug: tenantctx.DefaultTenantSlug, Name: tenantctx.DefaultTenantName}).Error; err != nil {
@@ -237,7 +238,7 @@ func TestNewWebAppServesWebAuthnRelatedOrigins(t *testing.T) {
 		t.Fatalf("decode response: %v", err)
 	}
 	if len(body.Origins) != 1 || body.Origins[0] != "https://clientshare.app" {
-		t.Fatalf("origins = %#v, want ClientShare SaaS origin", body.Origins)
+		t.Fatalf("origins = %#v, want configured hosted origin", body.Origins)
 	}
 }
 

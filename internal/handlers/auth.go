@@ -109,7 +109,7 @@ func (h *AuthHandler) ExchangeHostedLoginHandler(c fiber.Ctx) error {
 		utils.Logger(c).Error("failed consuming hosted login handoff", zap.Error(err))
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not complete sign in"})
 	}
-	token, err := auth.GenerateJWT(identity.UserID, identity.Role, identity.TenantID)
+	token, err := h.createUserSession(c, identity.TenantID, identity.UserID, identity.SessionGroupID)
 	if err != nil {
 		utils.Logger(c).Error("failed generating hosted login session", zap.Error(err))
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not complete sign in"})
@@ -272,6 +272,9 @@ func (h *AuthHandler) ResetPasswordHandler(c fiber.Ctx) error {
 			Update("used_at", now).Error; err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update token"})
 		}
+		if err := revokeUserSessions(tx, c, tenantID, user.ID); err != nil {
+			return err
+		}
 		return c.JSON(fiber.Map{"message": "Password reset successfully"})
 	})
 }
@@ -340,7 +343,7 @@ func (h *AuthHandler) AcceptInviteHandler(c fiber.Ctx) error {
 		utils.Logger(c).Warn("failed to record invite accepted feed event", zap.Error(err))
 	}
 
-	token, err := auth.GenerateJWT(authenticatedUser.ID, authenticatedUser.Role, authenticatedUser.TenantID)
+	token, err := h.createUserSession(c, authenticatedUser.TenantID, authenticatedUser.ID, "")
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to generate token"})
 	}
@@ -377,20 +380,12 @@ func buildResetLink(baseURL, token string) string {
 }
 
 func setAuthSessionCookie(c fiber.Ctx, token string) {
-	c.Cookie(&fiber.Cookie{
-		Name:     "jwt",
-		Value:    token,
-		HTTPOnly: true,
-		Secure:   true,
-		SameSite: "Lax",
-		Path:     "/",
-		Expires:  time.Now().Add(auth.AuthExpiry),
-	})
+	auth.SetSessionCookie(c, token)
 }
 
 func clearAuthSessionCookie(c fiber.Ctx) {
 	c.Cookie(&fiber.Cookie{
-		Name:     "jwt",
+		Name:     auth.SessionCookie,
 		Value:    "",
 		HTTPOnly: true,
 		Secure:   true,
@@ -418,7 +413,7 @@ func (h *AuthHandler) LoginHandler(c fiber.Ctx) error {
 	if !auth.CheckPasswordHash(req.Password, user.PasswordHash) {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid credentials"})
 	}
-	token, err := auth.GenerateJWT(user.ID, user.Role, user.TenantID)
+	token, err := h.createUserSession(c, user.TenantID, user.ID, "")
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to generate token"})
 	}
@@ -431,18 +426,26 @@ func (h *AuthHandler) LoginHandler(c fiber.Ctx) error {
 
 // LogoutHandler handles /api/auth/logout
 func (h *AuthHandler) LogoutHandler(c fiber.Ctx) error {
+	store := &auth.SessionStore{DB: h.db}
+	if c.Query("scope") == "all" {
+		identity, err := store.Validate(c.Context(), c.Cookies(auth.SessionCookie), auth.PortalAudience, tenantIDFromCtx(c))
+		if err == nil && identity.UserID != "" {
+			if err := store.RevokeUser(c.Context(), identity.TenantID, identity.UserID); err != nil {
+				return err
+			}
+		} else if err != nil && !errors.Is(err, auth.ErrSessionInvalid) {
+			return err
+		}
+	}
+	if err := store.Revoke(c.Context(), c.Cookies(auth.SessionCookie), auth.PortalAudience, c.Query("scope") == "group"); err != nil {
+		return err
+	}
 	clearAuthSessionCookie(c)
 	return c.SendStatus(fiber.StatusOK)
 }
 
 // MeHandler handles /api/auth/me
 func (h *AuthHandler) MeHandler(c fiber.Ctx) error {
-	if c.Cookies("jwt") == "" {
-		authorization := strings.TrimSpace(c.Get("Authorization"))
-		if authorization != "" {
-			setAuthSessionCookie(c, strings.TrimSpace(strings.TrimPrefix(authorization, "Bearer ")))
-		}
-	}
 
 	role, _ := c.Locals("role").(string)
 	tenantID := tenantIDFromCtx(c)
@@ -450,12 +453,13 @@ func (h *AuthHandler) MeHandler(c fiber.Ctx) error {
 		clientID, _ := c.Locals("client_id").(string)
 		linkID, _ := c.Locals("link_id").(string)
 		return c.JSON(fiber.Map{
-			"id":        "",
-			"email":     "",
-			"role":      "link",
-			"name":      "Secure Link",
-			"client_id": clientID,
-			"link_id":   linkID,
+			"session_id": c.Locals("session_id"),
+			"id":         "",
+			"email":      "",
+			"role":       "link",
+			"name":       "Secure Link",
+			"client_id":  clientID,
+			"link_id":    linkID,
 		})
 	}
 	userID, ok := c.Locals("user_id").(string)
@@ -480,6 +484,7 @@ func (h *AuthHandler) MeHandler(c fiber.Ctx) error {
 	}
 	return c.JSON(fiber.Map{
 		"id":               user.ID,
+		"session_id":       c.Locals("session_id"),
 		"email":            user.Email,
 		"role":             user.Role,
 		"name":             user.Name,
@@ -547,7 +552,7 @@ func (h *AuthHandler) RegisterHandler(c fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create user"})
 	}
 	user.ClientIDs = []string{link.ClientID}
-	token, err := auth.GenerateJWT(user.ID, user.Role, user.TenantID)
+	token, err := h.createUserSession(c, user.TenantID, user.ID, "")
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to generate token"})
 	}

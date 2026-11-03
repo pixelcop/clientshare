@@ -20,6 +20,7 @@ func TestHelpAuthorizationAndReceipt(t *testing.T) {
 	newApp := func(hosted bool, provider string) *fiber.App {
 		app := fiber.New()
 		app.Use(func(c fiber.Ctx) error {
+			c.Locals("session_store", &auth.SessionStore{DB: env.db})
 			tenantctx.SetLocal(c, tenantctx.RequestContext{ID: tenantctx.DefaultTenantID})
 			return c.Next()
 		})
@@ -109,7 +110,7 @@ func TestHelpAuthorizationAndReceipt(t *testing.T) {
 	input["tenant_id"] = "spoofed"
 	check(env.adminToken, 400)
 	delete(input, "tenant_id")
-	cross, _ := auth.GenerateJWT(env.adminUser.ID, "admin", "other-tenant")
+	cross, _ := (&auth.SessionStore{DB: env.db}).Create(t.Context(), "other-tenant", env.adminUser.ID, "", auth.PortalAudience, "", "")
 	check(cross, 401)
 	env.db.Model(env.managerUser).Update("role", "client")
 	check(env.managerToken, 403)

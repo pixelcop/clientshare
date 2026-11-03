@@ -14,7 +14,6 @@ import (
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/gofiber/fiber/v3"
-	"github.com/pixelcop/clientshare/internal/auth"
 	"github.com/pixelcop/clientshare/internal/models"
 	"github.com/pixelcop/clientshare/internal/services"
 	"github.com/pixelcop/clientshare/pkg/utils"
@@ -213,7 +212,7 @@ func (h *AuthHandler) BeginPasskeyLoginHandler(c fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to begin sign in"})
 	}
 	if len(records) == 0 {
-		// Signup credentials belong to the SaaS RP, so authenticate on that
+		// Signup credentials belong to the hosted RP, so authenticate on that
 		// origin and use the existing single-use handoff back to this portal.
 		if h.hostedPasskeyOrigin != "" {
 			hostedRPID, err := webAuthnRPID(h.hostedPasskeyOrigin)
@@ -300,7 +299,7 @@ func (h *AuthHandler) FinishPasskeyLoginHandler(c fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Passkey sign in failed"})
 	}
 
-	token, err := auth.GenerateJWT(user.ID, user.Role, user.TenantID)
+	token, err := h.createUserSession(c, user.TenantID, user.ID, "")
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to generate token"})
 	}
@@ -308,7 +307,7 @@ func (h *AuthHandler) FinishPasskeyLoginHandler(c fiber.Ctx) error {
 	return c.JSON(fiber.Map{"authenticated": true})
 }
 
-// BeginHostedPasskeyLogin starts a ceremony from the configured SaaS origin while
+// BeginHostedPasskeyLogin starts a ceremony from the configured hosted origin while
 // retaining the tenant hostname as the credential's RP ID.
 func (h *AuthHandler) BeginHostedPasskeyLogin(c fiber.Ctx, hostedLogin *services.HostedLoginService, email string) (fiber.Map, error) {
 	if h.hostedPasskeyOrigin == "" {
@@ -689,13 +688,14 @@ func (h *AuthHandler) storePasskeyChallenge(c fiber.Ctx, tenantID, userID, purpo
 		expiresAt = now.Add(passkeyChallengeTTL)
 	}
 	challenge := models.WebAuthnChallenge{
-		TenantID:    tenantID,
-		UserID:      userID,
-		Purpose:     purpose,
-		RPID:        session.RelyingPartyID,
-		SessionData: payload,
-		ExpiresAt:   expiresAt,
-		CreatedAt:   now,
+		BrowserSessionID: toSessionID(c),
+		TenantID:         tenantID,
+		UserID:           userID,
+		Purpose:          purpose,
+		RPID:             session.RelyingPartyID,
+		SessionData:      payload,
+		ExpiresAt:        expiresAt,
+		CreatedAt:        now,
 	}
 	if err := h.db.WithContext(c.Context()).Where("expires_at < ? OR used_at IS NOT NULL", now).Delete(&models.WebAuthnChallenge{}).Error; err != nil {
 		utils.Logger(c).Warn("failed cleaning up passkey challenges", zap.Error(err))
@@ -712,6 +712,9 @@ func (h *AuthHandler) consumePasskeyChallenge(c fiber.Ctx, tenantID, userID, pur
 	if err := h.db.WithContext(c.Context()).
 		Where("id = ? AND tenant_id = ? AND user_id = ? AND purpose = ? AND used_at IS NULL AND expires_at > ?", challengeID, tenantID, userID, purpose, now).
 		First(&challenge).Error; err != nil {
+		return webauthn.SessionData{}, errPasskeyChallengeInvalid
+	}
+	if purpose == passkeyChallengeRegistration && (challenge.BrowserSessionID == "" || challenge.BrowserSessionID != toSessionID(c)) {
 		return webauthn.SessionData{}, errPasskeyChallengeInvalid
 	}
 	result := h.db.WithContext(c.Context()).Model(&models.WebAuthnChallenge{}).

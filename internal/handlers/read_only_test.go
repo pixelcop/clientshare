@@ -20,7 +20,7 @@ func TestReadOnlyLinkFileAccess(t *testing.T) {
 				t.Fatal(err)
 			}
 			// A stale JWT with broader permissions must not override the database.
-			token, err := auth.GenerateLinkJWT(env.client.ID, link.ID, "readwrite", env.client.TenantID)
+			token, err := (&auth.SessionStore{DB: env.db}).Create(t.Context(), env.client.TenantID, "", link.ID, auth.PortalAudience, "", "")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -56,7 +56,7 @@ func TestReadOnlyLinkFileAccess(t *testing.T) {
 				t.Fatal(err)
 			}
 			resp.Body.Close()
-			if resp.StatusCode != 403 {
+			if resp.StatusCode != 401 {
 				t.Fatalf("expired session: got %d", resp.StatusCode)
 			}
 		})

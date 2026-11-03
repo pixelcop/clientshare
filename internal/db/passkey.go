@@ -31,43 +31,47 @@ var PasskeyCredential = struct {
 }
 
 var WebAuthnChallenge = struct {
-	ID          field.String
-	TenantID    field.String
-	UserID      field.String
-	Purpose     field.String
-	RPID        field.String
-	SessionData field.Bytes
-	ExpiresAt   field.Time
-	UsedAt      field.Time
-	CreatedAt   field.Time
+	BrowserSessionID field.String
+	ID               field.String
+	TenantID         field.String
+	UserID           field.String
+	Purpose          field.String
+	RPID             field.String
+	SessionData      field.Bytes
+	ExpiresAt        field.Time
+	UsedAt           field.Time
+	CreatedAt        field.Time
 }{
-	ID:          field.String{}.WithColumn("id"),
-	TenantID:    field.String{}.WithColumn("tenant_id"),
-	UserID:      field.String{}.WithColumn("user_id"),
-	Purpose:     field.String{}.WithColumn("purpose"),
-	RPID:        field.String{}.WithColumn("rp_id"),
-	SessionData: field.Bytes{}.WithColumn("session_data"),
-	ExpiresAt:   field.Time{}.WithColumn("expires_at"),
-	UsedAt:      field.Time{}.WithColumn("used_at"),
-	CreatedAt:   field.Time{}.WithColumn("created_at"),
+	BrowserSessionID: field.String{}.WithColumn("browser_session_id"),
+	ID:               field.String{}.WithColumn("id"),
+	TenantID:         field.String{}.WithColumn("tenant_id"),
+	UserID:           field.String{}.WithColumn("user_id"),
+	Purpose:          field.String{}.WithColumn("purpose"),
+	RPID:             field.String{}.WithColumn("rp_id"),
+	SessionData:      field.Bytes{}.WithColumn("session_data"),
+	ExpiresAt:        field.Time{}.WithColumn("expires_at"),
+	UsedAt:           field.Time{}.WithColumn("used_at"),
+	CreatedAt:        field.Time{}.WithColumn("created_at"),
 }
 
 var HostedLoginHandoff = struct {
-	ID        field.String
-	TenantID  field.String
-	UserID    field.String
-	Role      field.String
-	CodeHash  field.String
-	ExpiresAt field.Time
-	UsedAt    field.Time
-	CreatedAt field.Time
+	SessionGroupID field.String
+	ID             field.String
+	TenantID       field.String
+	UserID         field.String
+	Role           field.String
+	CodeHash       field.String
+	ExpiresAt      field.Time
+	UsedAt         field.Time
+	CreatedAt      field.Time
 }{
-	ID:        field.String{}.WithColumn("id"),
-	TenantID:  field.String{}.WithColumn("tenant_id"),
-	UserID:    field.String{}.WithColumn("user_id"),
-	Role:      field.String{}.WithColumn("role"),
-	CodeHash:  field.String{}.WithColumn("code_hash"),
-	ExpiresAt: field.Time{}.WithColumn("expires_at"),
-	UsedAt:    field.Time{}.WithColumn("used_at"),
-	CreatedAt: field.Time{}.WithColumn("created_at"),
+	SessionGroupID: field.String{}.WithColumn("session_group_id"),
+	ID:             field.String{}.WithColumn("id"),
+	TenantID:       field.String{}.WithColumn("tenant_id"),
+	UserID:         field.String{}.WithColumn("user_id"),
+	Role:           field.String{}.WithColumn("role"),
+	CodeHash:       field.String{}.WithColumn("code_hash"),
+	ExpiresAt:      field.Time{}.WithColumn("expires_at"),
+	UsedAt:         field.Time{}.WithColumn("used_at"),
+	CreatedAt:      field.Time{}.WithColumn("created_at"),
 }

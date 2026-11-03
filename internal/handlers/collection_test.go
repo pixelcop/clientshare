@@ -27,12 +27,16 @@ func TestCollectionStatusEvidenceAndPermissions(t *testing.T) {
 	}
 	path := "/api/clients/" + env.client.ID + "/collection?since=" + url.QueryEscape(since.Format(time.RFC3339Nano))
 	for _, token := range []string{env.managerToken, env.clientToken, env.linkToken} {
+		want := http.StatusForbidden
+		if token == env.linkToken {
+			want = http.StatusUnauthorized
+		} // underlying link was deleted
 		resp, err := env.app.Test(jsonAuthRequest(http.MethodGet, path, token, nil))
 		if err != nil {
 			t.Fatal(err)
 		}
 		resp.Body.Close()
-		if resp.StatusCode != http.StatusForbidden {
+		if resp.StatusCode != want {
 			t.Fatalf("expected forbidden, got %d", resp.StatusCode)
 		}
 	}
@@ -100,7 +104,7 @@ func TestCollectionUploadAttributionAndAccess(t *testing.T) {
 	if err := env.db.Create(&link).Error; err != nil {
 		t.Fatal(err)
 	}
-	token, err := auth.GenerateLinkJWT(env.client.ID, link.ID, "write", env.client.TenantID)
+	token, err := (&auth.SessionStore{DB: env.db}).Create(t.Context(), env.client.TenantID, "", link.ID, auth.PortalAudience, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,9 +161,9 @@ func TestCollectionUploadAttributionAndAccess(t *testing.T) {
 	if err := env.db.Model(&link).Update("expires_at", time.Now().Add(-time.Hour)).Error; err != nil {
 		t.Fatal(err)
 	}
-	check("GET", "/api/files/"+*activity.FileID, 403)
+	check("GET", "/api/files/"+*activity.FileID, 401)
 	if err := env.db.Delete(&link).Error; err != nil {
 		t.Fatal(err)
 	}
-	check("GET", "/api/folders/"+env.rootFolder.ID, 403)
+	check("GET", "/api/folders/"+env.rootFolder.ID, 401)
 }

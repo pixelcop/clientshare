@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
+	"html"
 	"net/mail"
 	"strings"
 	"time"
@@ -46,6 +48,7 @@ func RegisterLinkRoutes(router fiber.Router, db *gorm.DB, signingKey string, sto
 
 	// Secure link bootstrap route (sets JWT cookie on first hit)
 	router.Get("/links/:token", handler.BootstrapLinkSession)
+	router.Post("/links/:token", handler.BootstrapLinkSession)
 
 	router.Post("/api/clients/:id/links", middleware.RoleRequired("admin"), handler.CreateSecureLink)
 	router.Get("/api/clients/:id/links", middleware.RoleRequired("admin"), handler.ListSecureLinks)
@@ -67,19 +70,26 @@ func (h *LinkHandler) tenantEmailSettings(c fiber.Ctx, tenantID string) (string,
 }
 
 func (h *LinkHandler) setLinkSessionCookie(c fiber.Ctx, link models.SecureLink) (string, error) {
-	sessionToken, err := auth.GenerateLinkJWT(link.ClientID, link.ID, link.AccessType, link.TenantID)
+	store := &auth.SessionStore{DB: h.db}
+	previous := c.Cookies(auth.SessionCookie)
+	identity, err := store.Validate(c.Context(), previous, auth.PortalAudience, link.TenantID)
+	if err == nil && identity.LinkID == link.ID {
+		return previous, nil
+	}
+	if err != nil && !errors.Is(err, auth.ErrSessionInvalid) {
+		return "", err
+	}
+	if err == nil && c.Method() != "POST" {
+		return "", fiber.NewError(409, "Opening this link requires signing out of the current portal session")
+	}
+	if err == nil && c.FormValue("session_id") != identity.SessionID {
+		return "", fiber.NewError(409, "Your session changed. Confirm again to open this link.")
+	}
+	sessionToken, err := store.Create(c.Context(), link.TenantID, "", link.ID, auth.PortalAudience, "", previous)
 	if err != nil {
 		return "", err
 	}
-	c.Cookie(&fiber.Cookie{
-		Name:     "jwt",
-		Value:    sessionToken,
-		HTTPOnly: true,
-		Secure:   c.Secure(),
-		SameSite: "Lax",
-		Path:     "/",
-		Expires:  time.Now().Add(auth.AuthExpiry),
-	})
+	auth.SetSessionCookie(c, sessionToken)
 	return sessionToken, nil
 }
 
@@ -100,21 +110,31 @@ func (h *LinkHandler) BootstrapLinkSession(c fiber.Ctx) error {
 		utils.Logger(c).Warn("link expired or invalid")
 		return c.Status(403).JSON(fiber.Map{"error": "link expired or invalid"})
 	}
-	if _, err := h.setLinkSessionCookie(c, link); err != nil {
-		utils.Logger(c).Error("error creating link session", zap.Error(err))
-		return c.Status(500).JSON(fiber.Map{"error": "failed to create link session"})
-	}
 	client, err := h.clientService.GetClient(c.Context(), tenantID, link.ClientID)
 	if err != nil {
 		utils.Logger(c).Warn("client not found", zap.Error(err))
 		return c.Status(404).JSON(fiber.Map{"error": "client not found"})
 	}
+	if _, err := h.setLinkSessionCookie(c, link); err != nil {
+		var conflict *fiber.Error
+		if errors.As(err, &conflict) && conflict.Code == 409 {
+			identity, lookupErr := (&auth.SessionStore{DB: h.db}).Validate(c.Context(), c.Cookies(auth.SessionCookie), auth.PortalAudience, tenantID)
+			if lookupErr != nil {
+				return lookupErr
+			}
+			c.Set("Cache-Control", "no-store")
+			c.Set("Referrer-Policy", "no-referrer")
+			c.Type("html", "utf-8")
+			return c.SendString(`<!doctype html><html><head><meta charset="utf-8"><title>Open shared link</title></head><body><main><h1>Open this link as a recipient?</h1><p>This will sign you out of this portal in all tabs and end any billing session associated with this sign-in.</p><form method="post" action="` + html.EscapeString(c.Path()) + `"><input type="hidden" name="session_id" value="` + html.EscapeString(identity.SessionID) + `"><button type="submit">Sign out and open link</button></form><p><a href="/">Keep my current session</a></p></main></body></html>`)
+		}
+		return err
+	}
 
 	redirectPath := fmt.Sprintf("/folder/%s", derefString(client.RootFolderID))
-	html := fmt.Sprintf(
+	page := fmt.Sprintf(
 		"<!doctype html><html><head><meta charset=\"utf-8\"><meta http-equiv=\"cache-control\" content=\"no-store\"></head><body>"+
 			"<script>"+
-			"try{localStorage.setItem('link', %q)}catch(e){}"+
+			"try{localStorage.setItem('link', %q);localStorage.setItem('clientshare-session-change',String(Date.now()))}catch(e){}"+
 			"window.location.replace(%q);"+
 			"</script></body></html>",
 		link.Token,
@@ -122,7 +142,7 @@ func (h *LinkHandler) BootstrapLinkSession(c fiber.Ctx) error {
 	)
 	c.Set("Cache-Control", "no-store")
 	c.Type("html", "utf-8")
-	return c.SendString(html)
+	return c.SendString(page)
 }
 
 // CreateSecureLink handles POST /api/clients/:id/links
@@ -302,8 +322,7 @@ func (h *LinkHandler) ViewLink(c fiber.Ctx) error {
 		return c.Status(404).JSON(fiber.Map{"error": "client not found"})
 	}
 	if _, err := h.setLinkSessionCookie(c, link); err != nil {
-		utils.Logger(c).Error("error creating link session", zap.Error(err))
-		return c.Status(500).JSON(fiber.Map{"error": "failed to create link session"})
+		return err
 	}
 	logFileActivity(c.Context(), h.db, tenantID, link.ClientID, nil, nil, &link.ID, "view_link", "")
 	return c.JSON(fiber.Map{"client": client, "link": link})

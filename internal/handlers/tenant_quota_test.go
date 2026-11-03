@@ -43,7 +43,7 @@ func TestQuotaUploadsIncludingPublicLinksHTTP(t *testing.T) {
 	require.NoError(t, env.db.Model(&models.TenantEntitlement{}).Where("tenant_id = ?", tenantID).Update("max_storage_bytes", 4).Error)
 	link := models.SecureLink{TenantID: tenantID, ClientID: env.client.ID, Token: "quota-link", AccessType: "write", ExpiresAt: time.Now().Add(time.Hour)}
 	require.NoError(t, env.db.Create(&link).Error)
-	linkToken, err := auth.GenerateLinkJWT(env.client.ID, link.ID, "write", tenantID)
+	linkToken, err := (&auth.SessionStore{DB: env.db}).Create(t.Context(), tenantID, "", link.ID, auth.PortalAudience, "", "")
 	require.NoError(t, err)
 	for _, token := range []string{env.adminToken, env.clientToken, linkToken} {
 		body := &bytes.Buffer{}

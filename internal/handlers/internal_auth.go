@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/gofiber/fiber/v3"
+	"github.com/pixelcop/clientshare/internal/auth"
 	"github.com/pixelcop/clientshare/internal/services"
 	"github.com/pixelcop/clientshare/pkg/utils"
 	"go.uber.org/zap"
@@ -32,6 +33,52 @@ func RegisterInternalAuthRoutes(router fiber.Router, svc *services.HostedLoginSe
 	router.Post("/auth/hosted-login/passkey/options", h.HostedPasskeyOptions)
 	router.Post("/auth/hosted-login/passkey/verify", h.HostedPasskeyVerify)
 	router.Post("/auth/hosted-login", h.HostedLogin)
+	router.Post("/auth/sessions/validate", h.ValidateAccountSession)
+	router.Post("/auth/sessions/revoke", h.RevokeAccountSession)
+}
+
+func (h *InternalAuthHandler) ValidateAccountSession(c fiber.Ctx) error {
+	var req struct {
+		Token string `json:"token"`
+	}
+	if err := c.Bind().Body(&req); err != nil {
+		return c.SendStatus(400)
+	}
+	identity, err := auth.Store(c).Validate(c.Context(), req.Token, auth.AccountAudience, "")
+	if err != nil {
+		if errors.Is(err, auth.ErrSessionInvalid) {
+			return c.SendStatus(401)
+		}
+		return c.SendStatus(503)
+	}
+	c.Set("Cache-Control", "no-store")
+	return c.JSON(identity)
+}
+
+func (h *InternalAuthHandler) RevokeAccountSession(c fiber.Ctx) error {
+	var req struct {
+		Token string `json:"token"`
+		Scope string `json:"scope"`
+	}
+	if err := c.Bind().Body(&req); err != nil {
+		return c.SendStatus(400)
+	}
+	store := auth.Store(c)
+	if req.Scope == "all" {
+		identity, err := store.Validate(c.Context(), req.Token, auth.AccountAudience, "")
+		if err != nil && !errors.Is(err, auth.ErrSessionInvalid) {
+			return c.SendStatus(503)
+		}
+		if err == nil {
+			if err := store.RevokeUser(c.Context(), identity.TenantID, identity.UserID); err != nil {
+				return c.SendStatus(503)
+			}
+		}
+	}
+	if err := store.Revoke(c.Context(), req.Token, auth.AccountAudience, req.Scope == "group"); err != nil {
+		return c.SendStatus(503)
+	}
+	return c.SendStatus(204)
 }
 
 func (h *InternalAuthHandler) HostedLogin(c fiber.Ctx) error {

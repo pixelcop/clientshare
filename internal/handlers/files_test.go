@@ -25,7 +25,7 @@ import (
 
 func newAuthRequest(method, path, token string, body io.Reader) *http.Request {
 	req := httptest.NewRequest(method, path, body)
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: "clientshare_session", Value: token})
 	req.Header.Set("Accept", "application/json")
 	return req
 }

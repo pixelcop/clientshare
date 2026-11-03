@@ -85,7 +85,17 @@ func TestLinkHandlers_RouteCoverage(t *testing.T) {
 		t.Fatalf("expected listed secure links to include link_url %q", createdLink.LinkURL)
 	}
 
-	viewReq := jsonAuthRequest(http.MethodGet, "/api/link/"+createdLink.Token, env.adminToken, nil)
+	initial, err := env.app.Test(jsonRequest(http.MethodGet, "/links/"+createdLink.Token, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	initial.Body.Close()
+	viewReq := jsonRequest(http.MethodGet, "/api/link/"+createdLink.Token, nil)
+	for _, cookie := range initial.Cookies() {
+		if cookie.Name == "clientshare_session" {
+			viewReq.AddCookie(cookie)
+		}
+	}
 	viewResp, err := env.app.Test(viewReq)
 	if err != nil {
 		t.Fatalf("view link request failed: %v", err)
@@ -93,8 +103,8 @@ func TestLinkHandlers_RouteCoverage(t *testing.T) {
 	if viewResp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", viewResp.StatusCode)
 	}
-	viewCookie := viewResp.Header.Get("Set-Cookie")
-	if !strings.Contains(viewCookie, "jwt=") {
+	viewCookie := initial.Header.Get("Set-Cookie")
+	if !strings.Contains(viewCookie, "clientshare_session=") {
 		t.Fatalf("expected view link to set jwt cookie, got %q", viewCookie)
 	}
 	var viewBody map[string]any

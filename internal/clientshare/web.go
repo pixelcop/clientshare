@@ -24,6 +24,13 @@ func NewWebApp(cfg *Config, db *gorm.DB, logger *zap.Logger, emailQueue emailpkg
 	}
 	maxBodyMB := cfg.Server.MaxBodyMB
 	app := web.CreateApp(maxBodyMB, logger, cfg.DevMode)
+	sessionStore := &auth.SessionStore{DB: db}
+	app.Use(func(c fiber.Ctx) error {
+		c.Locals("session_store", sessionStore)
+		return c.Next()
+	})
+	app.Use("/api", middleware.BrowserOriginRequired)
+	app.Use("/links", middleware.BrowserOriginRequired)
 
 	// Register before tenant resolution and authentication so failures cannot be
 	// cached either. Static assets and public documentation keep their own policy.
@@ -83,7 +90,6 @@ func NewWebApp(cfg *Config, db *gorm.DB, logger *zap.Logger, emailQueue emailpkg
 	if jwtSecret == "" {
 		return nil, fmt.Errorf("auth.jwt_secret is required")
 	}
-	auth.SetJWTSecret(jwtSecret)
 	hostedLoginSvc := services.NewHostedLoginService(db, cfg.Server.BaseURL, jwtSecret)
 	authHandler := handlers.RegisterAuthRoutes(insecure, db, cfg.SecureLinks.SigningKey, emailQueue, cfg.Server.BaseURL, jwtSecret, inviteTokenSecret, resetTTL, inviteTTL, cfg.Auth.HostedPasskeyOrigin, hostedLoginSvc, tenantSettingsService, authRateLimitEnabled)
 	app.Use("/.well-known", tenantResolver)

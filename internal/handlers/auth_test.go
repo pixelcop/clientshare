@@ -35,7 +35,7 @@ func TestAuthHandlers_LoginMeAndLogout(t *testing.T) {
 		t.Fatalf("expected authenticated response, got %#v", loginBody)
 	}
 	loginCookie := loginResp.Header.Get("Set-Cookie")
-	if !strings.Contains(loginCookie, "jwt=") {
+	if !strings.Contains(loginCookie, "clientshare_session=") {
 		t.Fatalf("expected login to set jwt cookie, got %q", loginCookie)
 	}
 
@@ -47,10 +47,7 @@ func TestAuthHandlers_LoginMeAndLogout(t *testing.T) {
 	if meResp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", meResp.StatusCode)
 	}
-	setCookie := meResp.Header.Get("Set-Cookie")
-	if !strings.Contains(setCookie, "jwt=") {
-		t.Fatalf("expected /auth/me to install jwt cookie, got %q", setCookie)
-	}
+	setCookie := loginCookie
 	if !strings.Contains(setCookie, "HttpOnly") {
 		t.Fatalf("expected HttpOnly cookie, got %q", setCookie)
 	}
@@ -79,7 +76,7 @@ func TestAuthHandlers_LoginMeAndLogout(t *testing.T) {
 		t.Fatalf("expected 200, got %d", logoutResp.StatusCode)
 	}
 	clearCookie := logoutResp.Header.Get("Set-Cookie")
-	if !strings.Contains(clearCookie, "jwt=") {
+	if !strings.Contains(clearCookie, "clientshare_session=") {
 		t.Fatalf("expected logout to clear jwt cookie, got %q", clearCookie)
 	}
 }
@@ -98,7 +95,7 @@ func TestAuthHandlers_MeDoesNotIdentifyLaterAdminAsInitial(t *testing.T) {
 	if err := env.db.Create(laterAdmin).Error; err != nil {
 		t.Fatalf("create later admin: %v", err)
 	}
-	token, err := auth.GenerateJWT(laterAdmin.ID, laterAdmin.Role, laterAdmin.TenantID)
+	token, err := (&auth.SessionStore{DB: env.db}).Create(t.Context(), laterAdmin.TenantID, laterAdmin.ID, "", auth.PortalAudience, "", "")
 	if err != nil {
 		t.Fatalf("generate later admin token: %v", err)
 	}
@@ -149,7 +146,7 @@ func TestAuthHandlers_HostedLoginHandoffIsSingleUse(t *testing.T) {
 	if exchangeResp.StatusCode != http.StatusOK {
 		t.Fatalf("exchange status = %d, want %d", exchangeResp.StatusCode, http.StatusOK)
 	}
-	if !strings.Contains(exchangeResp.Header.Get("Set-Cookie"), "jwt=") {
+	if !strings.Contains(exchangeResp.Header.Get("Set-Cookie"), "clientshare_session=") {
 		t.Fatalf("expected exchange to set jwt cookie, got %q", exchangeResp.Header.Get("Set-Cookie"))
 	}
 	var exchangeBody map[string]any
@@ -342,7 +339,7 @@ func TestAuthHandlers_AcceptInvite(t *testing.T) {
 		t.Fatalf("expected 200, got %d", acceptResp.StatusCode)
 	}
 	acceptCookie := acceptResp.Header.Get("Set-Cookie")
-	if !strings.Contains(acceptCookie, "jwt=") {
+	if !strings.Contains(acceptCookie, "clientshare_session=") {
 		t.Fatalf("expected accept invite to set jwt cookie, got %q", acceptCookie)
 	}
 	var acceptBody map[string]any

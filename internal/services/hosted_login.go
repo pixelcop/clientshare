@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
@@ -28,12 +29,13 @@ var (
 )
 
 type HostedLoginResult struct {
-	HandoffCode string `json:"handoff_code"`
-	TenantID    string `json:"tenant_id"`
-	TenantSlug  string `json:"tenant_slug"`
-	UserID      string `json:"user_id"`
-	Role        string `json:"role"`
-	RedirectURL string `json:"redirect_url"`
+	AccountSession string `json:"account_session,omitempty"`
+	HandoffCode    string `json:"handoff_code"`
+	TenantID       string `json:"tenant_id"`
+	TenantSlug     string `json:"tenant_slug"`
+	UserID         string `json:"user_id"`
+	Role           string `json:"role"`
+	RedirectURL    string `json:"redirect_url"`
 }
 
 type HostedLoginService struct {
@@ -59,11 +61,12 @@ type hostedLoginDomainRow struct {
 // HostedLoginIdentity identifies a user and their hosted tenant redirect target.
 // It is only returned to trusted internal callers.
 type HostedLoginIdentity struct {
-	UserID      string
-	Role        string
-	TenantID    string
-	TenantSlug  string
-	RedirectURL string
+	SessionGroupID string
+	UserID         string
+	Role           string
+	TenantID       string
+	TenantSlug     string
+	RedirectURL    string
 }
 
 func NewHostedLoginService(db *gorm.DB, fallbackBaseURL, handoffSecret string) *HostedLoginService {
@@ -136,16 +139,31 @@ func (s *HostedLoginService) IssueHandoff(identity HostedLoginIdentity) (*Hosted
 		ExpiresAt: now.Add(2 * time.Minute),
 		CreatedAt: now,
 	}
-	if err := s.db.Create(&handoff).Error; err != nil {
+	var accountSession string
+	if err := s.db.Transaction(func(tx *gorm.DB) error {
+		store := &auth.SessionStore{DB: tx}
+		var err error
+		accountSession, err = store.Create(context.Background(), identity.TenantID, identity.UserID, "", auth.AccountAudience, "", "")
+		if err != nil {
+			return err
+		}
+		var session models.BrowserSession
+		if err := tx.Where("token_hash = ?", auth.SessionHash(accountSession)).First(&session).Error; err != nil {
+			return err
+		}
+		handoff.SessionGroupID = session.GroupID
+		return tx.Create(&handoff).Error
+	}); err != nil {
 		return nil, fmt.Errorf("store hosted login handoff: %w", err)
 	}
 	return &HostedLoginResult{
-		HandoffCode: code,
-		TenantID:    identity.TenantID,
-		TenantSlug:  identity.TenantSlug,
-		UserID:      identity.UserID,
-		Role:        identity.Role,
-		RedirectURL: identity.RedirectURL,
+		AccountSession: accountSession,
+		HandoffCode:    code,
+		TenantID:       identity.TenantID,
+		TenantSlug:     identity.TenantSlug,
+		UserID:         identity.UserID,
+		Role:           identity.Role,
+		RedirectURL:    identity.RedirectURL,
 	}, nil
 }
 
@@ -165,6 +183,13 @@ func (s *HostedLoginService) ConsumeHandoff(tenantID, code string) (*HostedLogin
 		if err := tx.Where("tenant_id = ? AND code_hash = ? AND used_at IS NULL AND expires_at > ?", tenantID, codeHash, now).First(&handoff).Error; err != nil {
 			return err
 		}
+		var active int64
+		if err := tx.Model(&models.BrowserSession{}).Where("group_id = ? AND revoked_at IS NULL AND expires_at > ? AND idle_expires_at > ?", handoff.SessionGroupID, now, now).Count(&active).Error; err != nil {
+			return err
+		}
+		if handoff.SessionGroupID == "" || active == 0 {
+			return ErrHostedLoginHandoffInvalid
+		}
 		result := tx.Model(&models.HostedLoginHandoff{}).
 			Where("id = ? AND used_at IS NULL AND expires_at > ?", handoff.ID, now).
 			Update("used_at", now)
@@ -183,9 +208,10 @@ func (s *HostedLoginService) ConsumeHandoff(tenantID, code string) (*HostedLogin
 		return nil, fmt.Errorf("consume hosted login handoff: %w", err)
 	}
 	return &HostedLoginIdentity{
-		UserID:   handoff.UserID,
-		Role:     handoff.Role,
-		TenantID: handoff.TenantID,
+		UserID:         handoff.UserID,
+		SessionGroupID: handoff.SessionGroupID,
+		Role:           handoff.Role,
+		TenantID:       handoff.TenantID,
 	}, nil
 }
 
