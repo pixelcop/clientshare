@@ -14,6 +14,16 @@ export interface AuditEvent {
 }
 
 //////////
+// source: browser_session.go
+
+/**
+ * BrowserSession stores only a digest of the browser's random credential.
+ * Audiences separate portal credentials from server-side account credentials.
+ */
+export interface BrowserSession {
+}
+
+//////////
 // source: client.go
 
 export interface Client {
@@ -161,7 +171,7 @@ export interface WebAuthnChallenge {
 }
 /**
  * HostedLoginHandoff is a short-lived, single-use code used to transfer a
- * hosted SaaS sign-in to its tenant portal without exposing a session JWT.
+ * hosted sign-in to its tenant portal without exposing a session credential.
  */
 export interface HostedLoginHandoff {
   id: string;

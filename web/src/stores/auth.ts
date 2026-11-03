@@ -4,17 +4,34 @@ import { defineStore } from 'pinia';
 import type { User } from '@/types/models';
 
 // Global session expiry handler
-let storeRef: { logout: () => Promise<void> | void } | null = null;
+let storeRef: { clear: () => void } | null = null;
 axios.defaults.withCredentials = true;
+const sessionChangeKey = 'clientshare-session-change';
+function announceSessionChange() {
+  try {
+    localStorage.setItem(sessionChangeKey, crypto.randomUUID());
+  } catch {
+    /* Storage can be disabled. */
+  }
+}
 
 axios.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    if (
+      response.config.method === 'post' &&
+      /\/auth\/(login|logout|register|accept-invite|reset-password|hosted-login\/exchange|passkeys\/login\/verify)$/.test(
+        (response.config.url || '').split('?')[0],
+      )
+    ) {
+      announceSessionChange();
+    }
+    return response;
+  },
   (error) => {
     if (error.response && error.response.status === 401) {
-      // If storeRef is set, log out
-      if (storeRef && typeof storeRef.logout === 'function') {
-        storeRef.logout();
-      }
+      // Never send logout in response to an old tab/request's 401: it could
+      // revoke the new session now held in the shared cookie.
+      storeRef?.clear();
     }
     return Promise.reject(error);
   },
@@ -22,7 +39,8 @@ axios.interceptors.response.use(
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | null>(null);
-  const token = ref<string | null>(localStorage.getItem('jwt') || null);
+  const token = ref<string | null>(null);
+  let sessionID: string | null = null;
   const loading = ref(false);
   const error = ref<string | null>(null);
   const passkeyEnrollmentPrompt = ref(false);
@@ -42,7 +60,43 @@ export const useAuthStore = defineStore('auth', () => {
     setAuthHeader(null);
   }
 
-  setAuthHeader(token.value);
+  clearLegacyToken();
+
+  function clear() {
+    user.value = null;
+    sessionID = null;
+    clearLegacyToken();
+    clearPasskeyEnrollmentPrompt();
+  }
+
+  function invalidatePage() {
+    clear();
+    window.location.replace('/');
+  }
+
+  window.addEventListener('storage', (event) => {
+    if (event.key === sessionChangeKey) {invalidatePage();}
+  });
+  async function revalidateOnFocus() {
+    if (document.visibilityState !== 'visible' || !sessionID) {return;}
+    const previous = sessionID;
+    try {
+      const response = await axios.get('/api/auth/me');
+      if (previous !== response.data.session_id || response.data.role !== user.value?.role)
+        {invalidatePage();}
+    } catch (err) {
+      if (axios.isAxiosError(err) && err.response?.status === 401) {invalidatePage();}
+    }
+  }
+  window.addEventListener('focus', () => {
+    void revalidateOnFocus();
+  });
+  window.addEventListener('pageshow', () => {
+    void revalidateOnFocus();
+  });
+  document.addEventListener('visibilitychange', () => {
+    void revalidateOnFocus();
+  });
 
   async function fetchMe(force = false): Promise<User | null> {
     if (user.value && !force) {
@@ -52,6 +106,7 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const res = await axios.get('/api/auth/me');
       user.value = res.data;
+      sessionID = res.data.session_id;
       if (token.value) {
         clearLegacyToken();
       }
@@ -151,18 +206,12 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function logout() {
-    try {
-      await axios.post('/api/auth/logout');
-    } catch {
-      // ignore
-    }
-    clearLegacyToken();
-    user.value = null;
-    clearPasskeyEnrollmentPrompt();
+    await axios.post('/api/auth/logout');
+    clear();
   }
 
   // Set storeRef for global 401 handler
-  storeRef = { logout };
+  storeRef = { clear };
 
   return {
     user,
