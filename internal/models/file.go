@@ -16,6 +16,8 @@ type File struct {
 	FolderID      *string    `gorm:"index" json:"folder_id"`
 	Filename      string     `gorm:"not null" json:"filename"`
 	Path          string     `gorm:"not null" json:"path"`
+	StorageKey    *string    `gorm:"size:26" json:"-"`
+	Checksum      string     `gorm:"size:64" json:"-"`
 	Type          string     `gorm:"not null;default:file;size:16" json:"type"`
 	Size          int64      `gorm:"not null" json:"size"`
 	UploadedAt    time.Time  `gorm:"autoCreateTime" json:"uploaded_at"`

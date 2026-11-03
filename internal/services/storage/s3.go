@@ -31,9 +31,10 @@ type S3Config struct {
 }
 
 type S3Storage struct {
-	client *awss3.Client
-	bucket string
-	prefix string
+	client   *awss3.Client
+	bucket   string
+	prefix   string
+	tenantID string
 }
 
 func NewS3Storage(ctx context.Context, cfg S3Config) (*S3Storage, error) {
@@ -53,6 +54,7 @@ func NewS3Storage(ctx context.Context, cfg S3Config) (*S3Storage, error) {
 
 	loadOptions := []func(*awsconfig.LoadOptions) error{
 		awsconfig.WithRegion(cfg.Region),
+		awsconfig.WithRetryMaxAttempts(4),
 	}
 	if cfg.AccessKey != "" {
 		loadOptions = append(loadOptions,
@@ -87,9 +89,10 @@ func (s *S3Storage) Tenant(tenantID string) Storage {
 		return s
 	}
 	return &S3Storage{
-		client: s.client,
-		bucket: s.bucket,
-		prefix: joinObjectPath(s.prefix, tenantRootPath(tenantID)),
+		client:   s.client,
+		bucket:   s.bucket,
+		prefix:   tenantRootPath(tenantID),
+		tenantID: tenantID,
 	}
 }
 

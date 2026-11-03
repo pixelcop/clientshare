@@ -14,6 +14,8 @@ var File = struct {
 	FolderID      field.String
 	Filename      field.String
 	Path          field.String
+	StorageKey    field.String
+	Checksum      field.String
 	Type          field.String
 	Size          field.Number[int64]
 	UploadedAt    field.Time
@@ -27,6 +29,8 @@ var File = struct {
 	FolderID:      field.String{}.WithColumn("folder_id"),
 	Filename:      field.String{}.WithColumn("filename"),
 	Path:          field.String{}.WithColumn("path"),
+	StorageKey:    field.String{}.WithColumn("storage_key"),
+	Checksum:      field.String{}.WithColumn("checksum"),
 	Type:          field.String{}.WithColumn("type"),
 	Size:          field.Number[int64]{}.WithColumn("size"),
 	UploadedAt:    field.Time{}.WithColumn("uploaded_at"),
@@ -42,6 +46,8 @@ var FileItem = struct {
 	FolderID      field.String
 	Filename      field.String
 	Path          field.String
+	StorageKey    field.String
+	Checksum      field.String
 	Type          field.String
 	Size          field.Number[int64]
 	UploadedAt    field.Time
@@ -55,6 +61,8 @@ var FileItem = struct {
 	FolderID:      field.String{}.WithColumn("folder_id"),
 	Filename:      field.String{}.WithColumn("filename"),
 	Path:          field.String{}.WithColumn("path"),
+	StorageKey:    field.String{}.WithColumn("storage_key"),
+	Checksum:      field.String{}.WithColumn("checksum"),
 	Type:          field.String{}.WithColumn("type"),
 	Size:          field.Number[int64]{}.WithColumn("size"),
 	UploadedAt:    field.Time{}.WithColumn("uploaded_at"),

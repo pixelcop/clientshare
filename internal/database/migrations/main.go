@@ -21,6 +21,7 @@ func main() {
 		migration.NewGoMigration(43, upAddEmailHeaders, downAddEmailHeaders),
 		migration.NewGoMigration(44, upAddDomainRedirects, downAddDomainRedirects),
 		migration.NewGoMigration(45, upAddBrowserSessions, downAddBrowserSessions),
+		migration.NewGoMigration(46, upImmutableObjects, downImmutableObjects),
 	}
 
 	migration.Run(goMigrations, func(path string) (db.DatabaseConfig, error) {

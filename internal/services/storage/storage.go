@@ -19,6 +19,7 @@ type FileInfo struct {
 }
 
 type Storage interface {
+	ObjectStore
 	Tenant(tenantID string) Storage
 	List(path string) ([]FileInfo, error)
 	Upload(dst string, src io.Reader) (int64, error)
@@ -30,8 +31,9 @@ type Storage interface {
 }
 
 type LocalStorage struct {
-	Root   string
-	prefix string
+	Root     string
+	prefix   string
+	tenantID string
 }
 
 func NewLocalStorage(root string) *LocalStorage {
@@ -44,8 +46,9 @@ func (s *LocalStorage) Tenant(tenantID string) Storage {
 		return s
 	}
 	return &LocalStorage{
-		Root:   s.Root,
-		prefix: joinScopedPath(s.prefix, tenantRootPath(tenantID)),
+		Root:     s.Root,
+		prefix:   tenantRootPath(tenantID),
+		tenantID: tenantID,
 	}
 }
 

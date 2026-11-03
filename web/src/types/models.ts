@@ -215,6 +215,21 @@ export interface QueuedEmail {
 }
 
 //////////
+// source: readable_view.go
+
+/**
+ * ReadableView survives client deletion and owns the generated manifest.
+ */
+export interface ReadableView {
+  TenantID: string;
+  ClientID: string;
+  DesiredRevision: number /* int64 */;
+  AppliedRevision: number /* int64 */;
+  LastError: string;
+  Manifest: string;
+}
+
+//////////
 // source: secure_link.go
 
 export interface SecureLink {
