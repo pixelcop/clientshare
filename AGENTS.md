@@ -2,6 +2,12 @@
 
 A file for [guiding coding agents](https://agents.md/).
 
+## Public project documentation
+
+- Core is a public self-hosted project. Committed documentation must serve self-hosting users, not describe our particular deployment.
+- Keep deployment-specific cutover plans, host/service details, backup locations, rehearsal results and other local operational notes untracked or in the private production workspace. Do not commit them to this repository, even while there are no other users.
+- General configuration, upgrade, migration, recovery and troubleshooting documentation belongs in the public repository when it applies to self-hosted installations.
+
 ## Commands
 
 - **Run backend:** `make run`
