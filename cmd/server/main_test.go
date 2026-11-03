@@ -97,6 +97,7 @@ func TestCommandHelpDoesNotLoadConfig(t *testing.T) {
 		{"config"}, {"config", "verify", "--help"}, {"config", "schema", "--help"},
 		{"storage"}, {"storage", "--help"},
 		{"storage", "inventory", "--help"}, {"storage", "migrate", "--help"},
+		{"storage", "shard-objects", "--help"},
 		{"storage", "verify", "--help"}, {"storage", "view-status", "--help"},
 		{"storage", "view-reconcile", "--help"}, {"storage", "view-clear", "--help"},
 		{"storage", "orphan-cleanup", "--help"}, {"storage", "legacy-cleanup", "--help"},
@@ -118,6 +119,7 @@ func TestCommandRejectsInvalidInput(t *testing.T) {
 		{"config", "unknown"}, {"config", "verify", "extra"}, {"config", "schema", "extra"},
 		{"storage", "unknown"}, {"storage", "verify", "extra"},
 		{"storage", "migrate", "--unknown"}, {"storage", "orphan-cleanup", "--grace", "invalid"},
+		{"storage", "shard-objects", "extra"}, {"storage", "shard-objects", "--apply=invalid"},
 	} {
 		t.Run(fmt.Sprint(args), func(t *testing.T) {
 			cmd := newRootCommand(context.Background(), io.Discard, io.Discard)

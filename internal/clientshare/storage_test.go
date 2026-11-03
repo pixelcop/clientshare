@@ -21,6 +21,7 @@ func TestInitStorageViewsValidation(t *testing.T) {
 		{name: "default", provider: StorageLocal},
 		{name: "unmigrated", provider: StorageLocal, legacy: true, wantError: "require offline storage migration"},
 		{name: "unknown layout", provider: StorageLocal, layout: "unknown", wantError: "unsupported storage.layout"},
+		{name: "flat layout", provider: StorageLocal, layout: "immutable-v1", wantError: "storage shard-objects"},
 		{name: "unknown mode", provider: StorageLocal, mode: "unknown", wantError: "unknown readable view mode"},
 		{name: "S3 view", provider: StorageS3, mode: services.ViewModeExport, wantError: "require local storage"},
 	} {

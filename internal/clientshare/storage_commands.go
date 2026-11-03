@@ -11,6 +11,7 @@ import (
 
 	"github.com/pixelcop/clientshare/internal/models"
 	"github.com/pixelcop/clientshare/internal/services"
+	"github.com/pixelcop/clientshare/internal/services/storage"
 	"github.com/spf13/cobra"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -40,6 +41,7 @@ func NewStorageCommand(configPath *string) *cobra.Command {
 	for _, operation := range []struct{ name, description string }{
 		{"inventory", "Inventory legacy objects for migration"},
 		{"migrate", "Migrate objects using a reviewed inventory"},
+		{"shard-objects", "Convert flat immutable objects to hash buckets offline"},
 		{"verify", "Verify retained objects"},
 		{"view-status", "Show readable view status"},
 		{"view-reconcile", "Reconcile readable views"},
@@ -82,6 +84,15 @@ func newStorageOperation(operation, description string, config *string) *cobra.C
 			return err
 		}
 		defer sqlDB.Close()
+		if operation == "shard-objects" {
+			if cfg.Storage.Type != StorageLocal {
+				return errors.New("shard-objects supports local storage only")
+			}
+			if cfg.Storage.Local.ReadableView.Mode != "" && cfg.Storage.Local.ReadableView.Mode != services.ViewModeNone {
+				return errors.New("clear readable views using the old version and configure mode none before sharding")
+			}
+			return services.ShardFlatObjects(ctx, db, cfg.Storage.Local.Root, *apply, out)
+		}
 		if operation == "orphan-cleanup" || operation == "legacy-cleanup" {
 			if cfg.Storage.Type != StorageLocal {
 				return errors.New("cleanup command supports local storage only")
@@ -186,7 +197,7 @@ func newStorageOperation(operation, description string, config *string) *cobra.C
 					missingCount++
 				}
 			}
-			fmt.Fprintf(out, "Verified objects and committed database cutover; %d explicitly acknowledged missing records. Set storage.layout: immutable-v1 and readable_view.mode: %s\n", missingCount, *mode)
+			fmt.Fprintf(out, "Verified objects and committed database cutover; %d explicitly acknowledged missing records. Set storage.layout: %s and readable_view.mode: %s\n", missingCount, storage.ImmutableLayout, *mode)
 			return nil
 		}
 		if operation == "verify" {

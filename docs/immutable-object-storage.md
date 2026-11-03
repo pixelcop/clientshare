@@ -3,8 +3,13 @@
 ## Storage layout
 
 Fresh installations default to **`readable_view.mode: none`**, which does not
-create a readable filesystem view. Authoritative local files live in `objects/<tenant>/<object-id>`;
-S3 uses the same layout. File names and folders live in the database.
+create a readable filesystem view. Authoritative local files live in
+`objects/<tenant>/<hash-byte>/<object-id>`; S3 uses the same layout. `hash-byte`
+is the first byte of SHA-256 of the object ID, encoded as two lowercase hex
+characters (`00`–`ff`). This distributes each tenant's objects across 256
+directories without relying on the time-based prefix of ULIDs. IDs and database
+storage keys do not change; placement needs no lookup or file-content hashing.
+File names and folders live in the database.
 
 Existing local files still need an offline copy and database identity cutover.
 The legacy directories remain intact for rollback. The migration uses verified
@@ -13,7 +18,7 @@ copies, never hardlinks to the rollback source. There is no S3 legacy migration.
 ```yaml
 storage:
   type: local
-  layout: immutable-v1
+  layout: immutable-v2
   local:
     root: /app/storage
     readable_view:
@@ -45,8 +50,11 @@ with the same database, configuration and storage mounts:
 ```
 
 Choose the view mode explicitly and configure it consistently before starting
-the application. Container installations can use a one-off container with the
-server entrypoint overridden. Do not run the application alongside migration.
+the application. Set `storage.layout: immutable-v2` after successful migration.
+The full-path migration writes directly into the sharded layout: no intermediate
+flat-object migration or second cutover is required. Container installations can
+use a one-off container with the server entrypoint overridden. Do not run the
+application alongside migration.
 Keep the manifest with the backup and verify file access before accepting writes.
 
 Inventory does not write files or database rows; shell redirection creates only
@@ -120,6 +128,38 @@ files for review. Orphan cleanup is local-only, checks database references,
 requires at least 24 hours' grace, and excludes upload/migration temporary files.
 Run cleanup during maintenance to avoid racing manual repair tools.
 
+### Converting an existing flat immutable installation
+
+This step is **only** for installations that already migrated to the earlier
+`immutable-v1` layout (`objects/<tenant>/<object-id>`). Original full-path
+installations skip it and use the inventory/migrate workflow above once.
+
+Stop all writers and back up database, configuration and storage first. If
+readable views were enabled, clear them with the old version's
+`storage view-clear --apply` and configure `readable_view.mode: none` before
+converting. With the new version, run:
+
+```sh
+/app/clientshare storage shard-objects
+/app/clientshare storage shard-objects --apply
+/app/clientshare storage verify
+```
+
+The dry run verifies sources and any already-published destinations. Applied
+conversion checks size/SHA-256 against database metadata, publishes each new
+name with a no-replace hardlink, syncs directories, then removes its old flat
+name. It does not copy object contents or change database keys, deletion state,
+or full-path legacy files. Unknown/unreferenced flat files remain untouched.
+Interruption may leave a mixture of flat and sharded objects; rerun the command
+while offline to finish. Conflicting bytes block conversion, never overwrite.
+
+After successful conversion, set `storage.layout: immutable-v2` and restart.
+If needed, re-enable and reconcile readable views with the new version.
+Runtime reads use only the sharded path; there is no fallback to flat paths.
+The new application refuses startup with explicit `storage.layout: immutable-v1`.
+After conversion, rollback to the old version requires restoring the backup,
+not merely changing configuration.
+
 ## Optional readable views
 
 Modes: `none`, `hardlink`, `symlink`, `export`. Set `root` to a distinct managed
@@ -161,9 +201,9 @@ exports and directory symlinks block reconciliation. Empty folders are managed.
 Ordinary renames publish new entries before removing old owned entries. Same-name
 replacement and case-only renames remove verified old entries first.
 
-To switch mode/root or rebuild, stop the owner, run `storage view-clear -apply`
+To switch mode/root or rebuild, stop the owner, run `storage view-clear --apply`
 using the old manifest ownership, change configuration, then run
-`storage view-reconcile -apply` and restart the owner. Clear also supports dry-run
+`storage view-reconcile --apply` and restart the owner. Clear also supports dry-run
 and tenant/client filters. It refuses changed or unmanaged contents. Never delete
 the manifest to bypass a conflict. Keep the authoritative tree outside the shared
 root; grant read-only share/export access rather than relying on documentation.

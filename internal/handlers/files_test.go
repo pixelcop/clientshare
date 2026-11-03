@@ -99,7 +99,9 @@ func TestImmutableDownloadsSurviveRenameButRespectDeletion(t *testing.T) {
 		require.Equal(t, 404, resp.StatusCode)
 		resp.Body.Close()
 	}
-	require.FileExists(t, filepath.Join(env.storageRoot, "objects", file.TenantID, key))
+	objectPath, err := storage.NewLocalStorage(env.storageRoot).Tenant(file.TenantID).(*storage.LocalStorage).ObjectPath(key)
+	require.NoError(t, err)
+	require.FileExists(t, objectPath)
 }
 
 func TestFileAuthorizationUsesOneQueryRegardlessOfDepth(t *testing.T) {
@@ -161,7 +163,9 @@ func TestFolderDeletionDeniesDescendantDownloads(t *testing.T) {
 		require.Equal(t, 404, resp.StatusCode)
 		resp.Body.Close()
 	}
-	require.FileExists(t, filepath.Join(env.storageRoot, "objects", file.TenantID, *file.StorageKey))
+	objectPath, err := storage.NewLocalStorage(env.storageRoot).Tenant(file.TenantID).(*storage.LocalStorage).ObjectPath(*file.StorageKey)
+	require.NoError(t, err)
+	require.FileExists(t, objectPath)
 }
 
 func TestFilesAuthRequired(t *testing.T) {

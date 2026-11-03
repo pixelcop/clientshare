@@ -39,13 +39,17 @@ func CleanupOrphanObjects(ctx context.Context, db *gorm.DB, root string, grace t
 			return err
 		}
 		parts := strings.Split(filepath.ToSlash(rel), "/")
-		if len(parts) != 2 || strings.HasPrefix(parts[1], ".") {
+		if len(parts) != 3 || strings.HasPrefix(parts[2], ".") {
 			return nil
 		}
 		store := storage.NewLocalStorage(root).Tenant(parts[0])
 		local := store.(*storage.LocalStorage)
-		if _, err := local.ObjectPath(parts[1]); err != nil {
+		expected, err := local.ObjectPath(parts[2])
+		if err != nil {
 			return err
+		}
+		if filepath.Clean(expected) != filepath.Clean(p) {
+			return fmt.Errorf("unexpected object bucket: %s", p)
 		}
 		info, err := e.Info()
 		if err != nil {
@@ -58,7 +62,7 @@ func CleanupOrphanObjects(ctx context.Context, db *gorm.DB, root string, grace t
 			return nil
 		}
 		var count int64
-		if err := db.WithContext(ctx).Model(&models.File{}).Where("tenant_id = ? AND storage_key = ?", parts[0], parts[1]).Count(&count).Error; err != nil {
+		if err := db.WithContext(ctx).Model(&models.File{}).Where("tenant_id = ? AND storage_key = ?", parts[0], parts[2]).Count(&count).Error; err != nil {
 			return err
 		}
 		if count != 0 {
@@ -66,7 +70,7 @@ func CleanupOrphanObjects(ctx context.Context, db *gorm.DB, root string, grace t
 		}
 		fmt.Fprintf(out, "orphan %s\n", rel)
 		if apply {
-			return store.DeleteObject(ctx, parts[1])
+			return store.DeleteObject(ctx, parts[2])
 		}
 		return nil
 	})
