@@ -389,13 +389,20 @@ func (v *ReadableViews) Reconcile(ctx context.Context, state models.ReadableView
 			v.DB.Model(&models.ReadableView{}).Where("tenant_id = ? AND client_id = ?", state.TenantID, state.ClientID).Update("last_error", result.Error())
 		}
 	}()
-	manifest := ViewManifest{Mode: v.Mode, Root: v.Root}
+	manifestRoot := v.Root
+	if v.Mode == "none" {
+		manifestRoot = ""
+	}
+	manifest := ViewManifest{Mode: v.Mode, Root: manifestRoot}
 	if state.Manifest != "" {
 		if err := json.Unmarshal([]byte(state.Manifest), &manifest); err != nil {
 			return err
 		}
 	}
-	if manifest.Mode != v.Mode || manifest.Root != v.Root {
+	if v.Mode == "none" && manifest.Mode == "none" && len(manifest.Entries) == 0 {
+		manifest.Root = ""
+	}
+	if manifest.Mode != v.Mode || manifest.Root != manifestRoot {
 		return errors.New("view mode/root changed: reconcile old mode with deleted desired entries before explicit rebuild")
 	}
 	expected, err := v.expected(ctx, state)
