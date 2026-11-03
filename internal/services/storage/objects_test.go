@@ -45,10 +45,21 @@ func TestImmutableLocalObjects(t *testing.T) {
 	require.NoError(t, err)
 	r.Close()
 	require.Equal(t, "hello", string(content))
-	require.FileExists(t, filepath.Join(root, "objects", "tenant-a", "object1"))
+	require.FileExists(t, filepath.Join(root, "objects", "tenant-a", "44", "object1"))
+	require.NoFileExists(t, filepath.Join(root, "objects", "tenant-a", "object1"))
 	require.NoError(t, os.Symlink(t.TempDir(), filepath.Join(root, "objects", "escaped")))
 	_, err = base.Tenant("escaped").PutNew(ctx, "object2", strings.NewReader("bad"))
 	require.ErrorIs(t, err, os.ErrPermission)
 	require.NoError(t, a.DeleteObject(ctx, "object1"))
 	require.NoError(t, a.DeleteObject(ctx, "object1"))
+}
+
+func TestObjectHashBucket(t *testing.T) {
+	path, err := objectPath("tenant", "01KJXEVSJYG2VCQ3S5QMAH63D4")
+	require.NoError(t, err)
+	require.Equal(t, "objects/tenant/05/01KJXEVSJYG2VCQ3S5QMAH63D4", path)
+	// Placement depends on the key, not the tenant or ULID time prefix.
+	path, err = objectPath("another", "object1")
+	require.NoError(t, err)
+	require.Equal(t, "objects/another/44/object1", path)
 }

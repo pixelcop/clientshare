@@ -35,6 +35,13 @@ func migrationFixture(t *testing.T) (*gorm.DB, string, *models.Client, *models.F
 	return db, root, client, f
 }
 
+func immutableObjectPathForTest(t *testing.T, root, tenant, key string) string {
+	t.Helper()
+	path, err := storage.NewLocalStorage(root).Tenant(tenant).(*storage.LocalStorage).ObjectPath(key)
+	require.NoError(t, err)
+	return path
+}
+
 func TestOfflineMigrationResumesVerifiesAndPreservesLegacy(t *testing.T) {
 	db, root, client, file := migrationFixture(t)
 	ctx := context.Background()
@@ -51,6 +58,8 @@ func TestOfflineMigrationResumesVerifiesAndPreservesLegacy(t *testing.T) {
 	require.NoError(t, ApplyObjects(ctx, db, root, plan))
 	require.NoError(t, db.First(file, "id = ?", file.ID).Error)
 	require.Equal(t, file.ID, *file.StorageKey)
+	require.FileExists(t, immutableObjectPathForTest(t, root, "tenant", file.ID))
+	require.NoFileExists(t, filepath.Join(root, "objects", "tenant", file.ID))
 	require.FileExists(t, filepath.Join(root, "tenants", "tenant", "Acme", "report.txt"))
 	_, err = (&ClientService{DB: db}).UpdateClient(ctx, "tenant", client.ID, "Renamed")
 	require.NoError(t, err)
@@ -88,7 +97,7 @@ func TestOfflineMigrationResumesVerifiesAndPreservesLegacy(t *testing.T) {
 	require.Equal(t, "Moved/", z.File[0].Name)
 	require.Equal(t, "Moved/renamed.txt", z.File[1].Name)
 	// A tampered destination must block even a repeated apply.
-	require.NoError(t, os.WriteFile(filepath.Join(root, "objects", "tenant", file.ID), []byte("wrong"), 0600))
+	require.NoError(t, os.WriteFile(immutableObjectPathForTest(t, root, "tenant", file.ID), []byte("wrong"), 0600))
 	require.ErrorContains(t, ApplyObjects(ctx, db, root, plan), "verification failed")
 }
 
@@ -195,7 +204,7 @@ func TestReadableViewsModesRecoveryAndConflicts(t *testing.T) {
 			reload()
 			require.NoError(t, view.Reconcile(ctx, state, false, io.Discard))
 			require.NoFileExists(t, filepath.Join(view.Root, "tenant", "Third", "report.txt"))
-			require.FileExists(t, filepath.Join(root, "objects", "tenant", file.ID))
+			require.FileExists(t, immutableObjectPathForTest(t, root, "tenant", file.ID))
 			var manifest ViewManifest
 			reload()
 			require.NoError(t, json.Unmarshal([]byte(state.Manifest), &manifest))
@@ -222,14 +231,14 @@ func TestMissingAcknowledgmentAndOrphanGrace(t *testing.T) {
 	require.NoError(t, err)
 	_, err = store.PutNew(ctx, "new-orphan", strings.NewReader("in flight"))
 	require.NoError(t, err)
-	old := filepath.Join(root, "objects", "tenant", "old-orphan")
+	old := immutableObjectPathForTest(t, root, "tenant", "old-orphan")
 	past := time.Now().Add(-8 * 24 * time.Hour)
 	require.NoError(t, os.Chtimes(old, past, past))
 	require.NoError(t, CleanupOrphanObjects(ctx, db, root, 7*24*time.Hour, false, io.Discard))
 	require.FileExists(t, old)
 	require.NoError(t, CleanupOrphanObjects(ctx, db, root, 7*24*time.Hour, true, io.Discard))
 	require.NoFileExists(t, old)
-	require.FileExists(t, filepath.Join(root, "objects", "tenant", "new-orphan"))
+	require.FileExists(t, immutableObjectPathForTest(t, root, "tenant", "new-orphan"))
 }
 
 func TestUploadDatabaseFailureCleansOnlyNewObject(t *testing.T) {
@@ -279,13 +288,13 @@ func TestViewRevisionAndRetentionWaitForManagedCleanup(t *testing.T) {
 	require.Error(t, view.Reconcile(ctx, state, false, io.Discard))
 	worker := NewFileCleanupWorker(db, storage.NewLocalStorage(root), zap.NewNop())
 	worker.RunOnce(ctx)
-	require.FileExists(t, filepath.Join(root, "objects", "tenant", file.ID))
+	require.FileExists(t, immutableObjectPathForTest(t, root, "tenant", file.ID))
 	require.NoError(t, os.WriteFile(copyPath, []byte("hello"), 0600))
 	reload()
 	require.NoError(t, view.Reconcile(ctx, state, false, io.Discard))
 	worker.RunOnce(ctx)
 	require.NoFileExists(t, copyPath)
-	require.NoFileExists(t, filepath.Join(root, "objects", "tenant", file.ID))
+	require.NoFileExists(t, immutableObjectPathForTest(t, root, "tenant", file.ID))
 	require.NoError(t, db.First(file, "id = ?", file.ID).Error)
 	require.NotNil(t, file.DiskDeletedAt)
 }

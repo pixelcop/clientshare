@@ -40,6 +40,22 @@ func TestS3ImmutableObjects(t *testing.T) {
 	require.ErrorIs(t, err, os.ErrNotExist)
 }
 
+func TestS3UsesHashShardedKey(t *testing.T) {
+	putPath := make(chan string, 1)
+	base := newFakeS3Storage(t, func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodPut && strings.Contains(r.URL.Path, "/objects/") {
+				putPath <- r.URL.Path
+			}
+			next.ServeHTTP(w, r)
+		})
+	})
+	_, err := base.Tenant("tenant").PutNew(context.Background(), "object1", strings.NewReader("hello"))
+	require.NoError(t, err)
+	path := <-putPath
+	require.True(t, strings.HasSuffix(path, "/objects/tenant/44/object1"), path)
+}
+
 func TestS3RetriesTransientButNotPermanentFailures(t *testing.T) {
 	var puts, gets atomic.Int32
 	base := newFakeS3Storage(t, func(next http.Handler) http.Handler {

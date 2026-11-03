@@ -21,6 +21,10 @@ type ObjectStore interface {
 	DeleteObject(context.Context, string) error
 }
 
+// ImmutableLayout identifies the hash-sharded physical layout. Object IDs in
+// database records remain unchanged; placement is derived only from the ID.
+const ImmutableLayout = "immutable-v2"
+
 type ObjectInfo struct {
 	Size     int64
 	Checksum string // lowercase hexadecimal SHA-256, never an S3 ETag
@@ -42,7 +46,9 @@ func objectPath(tenant, key string) (string, error) {
 	if !validIdentity(tenant) || !validIdentity(key) {
 		return "", fmt.Errorf("%w: invalid object or tenant identity", os.ErrPermission)
 	}
-	return "objects/" + tenant + "/" + key, nil
+	digest := sha256.Sum256([]byte(key))
+	bucket := hex.EncodeToString(digest[:1])
+	return "objects/" + tenant + "/" + bucket + "/" + key, nil
 }
 
 // SafePath refuses symlinks in every existing component, including the root.

@@ -12,6 +12,7 @@ import (
 
 	"github.com/pixelcop/clientshare/internal/models"
 	"github.com/pixelcop/clientshare/internal/services"
+	"github.com/pixelcop/clientshare/internal/services/storage"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -19,7 +20,7 @@ import (
 // StorageCommand is deliberately offline: no HTTP server, emails or workers.
 func StorageCommand(ctx context.Context, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return errors.New("usage: clientshare storage <inventory|migrate|verify|view-status|view-reconcile> [flags]")
+		return errors.New("usage: clientshare storage <inventory|migrate|shard-objects|verify|view-status|view-reconcile> [flags]")
 	}
 	flags := flag.NewFlagSet("storage "+args[0], flag.ContinueOnError)
 	config := flags.String("config", "config/config.yaml", "configuration path")
@@ -54,6 +55,15 @@ func StorageCommand(ctx context.Context, args []string, out io.Writer) error {
 		return err
 	}
 	defer sqlDB.Close()
+	if args[0] == "shard-objects" {
+		if cfg.Storage.Type != StorageLocal {
+			return errors.New("shard-objects supports local storage only")
+		}
+		if cfg.Storage.Local.ReadableView.Mode != "" && cfg.Storage.Local.ReadableView.Mode != services.ViewModeNone {
+			return errors.New("clear readable views using the old version and configure mode none before sharding")
+		}
+		return services.ShardFlatObjects(ctx, db, cfg.Storage.Local.Root, *apply, out)
+	}
 	if args[0] == "orphan-cleanup" || args[0] == "legacy-cleanup" {
 		if cfg.Storage.Type != StorageLocal {
 			return errors.New("cleanup command supports local storage only")
@@ -158,7 +168,7 @@ func StorageCommand(ctx context.Context, args []string, out io.Writer) error {
 				missingCount++
 			}
 		}
-		fmt.Fprintf(out, "Verified objects and committed database cutover; %d explicitly acknowledged missing records. Set storage.layout: immutable-v1 and readable_view.mode: %s\n", missingCount, *mode)
+		fmt.Fprintf(out, "Verified objects and committed database cutover; %d explicitly acknowledged missing records. Set storage.layout: %s and readable_view.mode: %s\n", missingCount, storage.ImmutableLayout, *mode)
 		return nil
 	}
 	if args[0] == "verify" {

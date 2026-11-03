@@ -58,7 +58,10 @@ func InitStorageViews(ctx context.Context, cfg *Config, db *gorm.DB) (func(), er
 	if legacy > 0 {
 		return nil, fmt.Errorf("%d retained files require offline storage migration before startup", legacy)
 	}
-	if cfg.Storage.Layout != "" && cfg.Storage.Layout != "immutable-v1" {
+	if cfg.Storage.Layout == "immutable-v1" {
+		return nil, fmt.Errorf("flat immutable storage requires offline storage shard-objects conversion; then set storage.layout: %s", storage.ImmutableLayout)
+	}
+	if cfg.Storage.Layout != "" && cfg.Storage.Layout != storage.ImmutableLayout {
 		return nil, fmt.Errorf("unsupported storage.layout %q", cfg.Storage.Layout)
 	}
 	views, err := services.NewReadableViews(db, cfg.Storage.Local.Root, cfg.Storage.Local.ReadableView.Root, cfg.Storage.Local.ReadableView.Mode)
