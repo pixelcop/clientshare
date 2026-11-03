@@ -2,6 +2,9 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -15,7 +18,7 @@ func TestRunConfigVerifyReportsMissingOptionalFields(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
-	err := runConfigCommand([]string{"verify", "-config", filename}, &stdout, &stderr)
+	err := runConfigCommand([]string{"verify", "--config", filename}, &stdout, &stderr)
 	require.NoError(t, err)
 	require.Empty(t, stderr.String())
 	require.Contains(t, stdout.String(), "Status: valid")
@@ -29,7 +32,7 @@ func TestRunConfigVerifyReturnsInvalidForUnknownField(t *testing.T) {
 	filename := writeCommandConfig(t, validServerConfig+"unknown: true\n")
 	var stdout bytes.Buffer
 
-	err := runConfigCommand([]string{"verify", "-config", filename}, &stdout, &bytes.Buffer{})
+	err := runConfigCommand([]string{"verify", "--config", filename}, &stdout, &bytes.Buffer{})
 	require.ErrorIs(t, err, configschema.ErrInvalid)
 	require.Contains(t, stdout.String(), "Status: invalid")
 	require.Contains(t, stdout.String(), "unknown")
@@ -39,7 +42,7 @@ func TestRunConfigVerifyRunsServerValidation(t *testing.T) {
 	filename := writeCommandConfig(t, "auth:\n  jwt_secret: jwt-secret\n  invite_token_secret: invite-secret\n  hosted_passkey_origin: ftp://example.com\ndatabase:\n  path: ':memory:'\nsecure_links:\n  signing_key: signing-key\nstorage:\n  type: local\n  local:\n    root: /tmp/storage\n")
 	var stdout bytes.Buffer
 
-	err := runConfigCommand([]string{"verify", "-config", filename}, &stdout, &bytes.Buffer{})
+	err := runConfigCommand([]string{"verify", "--config", filename}, &stdout, &bytes.Buffer{})
 	require.ErrorIs(t, err, configschema.ErrInvalid)
 	require.Contains(t, stdout.String(), "Status: invalid")
 	require.Contains(t, stdout.String(), "auth.hosted_passkey_origin must use http or https")
@@ -50,7 +53,7 @@ func TestRunConfigVerifyChecksDatabaseAndStorage(t *testing.T) {
 		filename := writeCommandConfig(t, validCoreConfig+"database:\n  driver: invalid\nstorage:\n  type: local\n  local:\n    root: /tmp/storage\n")
 		var stdout bytes.Buffer
 
-		err := runConfigCommand([]string{"verify", "-config", filename}, &stdout, &bytes.Buffer{})
+		err := runConfigCommand([]string{"verify", "--config", filename}, &stdout, &bytes.Buffer{})
 		require.ErrorIs(t, err, configschema.ErrInvalid)
 		require.Contains(t, stdout.String(), "unsupported database driver")
 	})
@@ -59,7 +62,7 @@ func TestRunConfigVerifyChecksDatabaseAndStorage(t *testing.T) {
 		filename := writeCommandConfig(t, validCoreConfig+"database:\n  path: ':memory:'\nstorage:\n  type: invalid\n")
 		var stdout bytes.Buffer
 
-		err := runConfigCommand([]string{"verify", "-config", filename}, &stdout, &bytes.Buffer{})
+		err := runConfigCommand([]string{"verify", "--config", filename}, &stdout, &bytes.Buffer{})
 		require.ErrorIs(t, err, configschema.ErrInvalid)
 		require.Contains(t, stdout.String(), "value must be one of 'local', 's3'")
 	})
@@ -79,7 +82,65 @@ func TestRunConfigSchemaWritesCurrentSchema(t *testing.T) {
 
 func TestRunConfigCommandRejectsUnknownCommand(t *testing.T) {
 	err := runConfigCommand([]string{"unknown"}, &bytes.Buffer{}, &bytes.Buffer{})
-	require.ErrorContains(t, err, "expected verify or schema")
+	require.ErrorContains(t, err, "unknown command")
+}
+
+func runConfigCommand(args []string, stdout, stderr io.Writer) error {
+	cmd := newRootCommand(context.Background(), stdout, stderr)
+	cmd.SetArgs(append([]string{"config"}, args...))
+	return cmd.Execute()
+}
+
+func TestCommandHelpDoesNotLoadConfig(t *testing.T) {
+	for _, args := range [][]string{
+		{}, {"--help"}, {"help"}, {"serve", "--help"},
+		{"config"}, {"config", "verify", "--help"}, {"config", "schema", "--help"},
+		{"storage"}, {"storage", "--help"},
+		{"storage", "inventory", "--help"}, {"storage", "migrate", "--help"},
+		{"storage", "verify", "--help"}, {"storage", "view-status", "--help"},
+		{"storage", "view-reconcile", "--help"}, {"storage", "view-clear", "--help"},
+		{"storage", "orphan-cleanup", "--help"}, {"storage", "legacy-cleanup", "--help"},
+	} {
+		t.Run(fmt.Sprint(args), func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			cmd := newRootCommand(context.Background(), &stdout, &stderr)
+			cmd.SetArgs(append([]string{"--config", filepath.Join(t.TempDir(), "missing.yaml")}, args...))
+			require.NoError(t, cmd.Execute())
+			require.Contains(t, stdout.String(), "Usage:")
+			require.Empty(t, stderr.String())
+		})
+	}
+}
+
+func TestCommandRejectsInvalidInput(t *testing.T) {
+	for _, args := range [][]string{
+		{"unknown"}, {"--unknown"}, {"serve", "extra"}, {"serve", "--unknown"},
+		{"config", "unknown"}, {"config", "verify", "extra"}, {"config", "schema", "extra"},
+		{"storage", "unknown"}, {"storage", "verify", "extra"},
+		{"storage", "migrate", "--unknown"}, {"storage", "orphan-cleanup", "--grace", "invalid"},
+	} {
+		t.Run(fmt.Sprint(args), func(t *testing.T) {
+			cmd := newRootCommand(context.Background(), io.Discard, io.Discard)
+			cmd.SetArgs(args)
+			require.Error(t, cmd.Execute())
+		})
+	}
+}
+
+func TestServeUsesConfigFlag(t *testing.T) {
+	filename := filepath.Join(t.TempDir(), "missing.yaml")
+	cmd := newRootCommand(context.Background(), io.Discard, io.Discard)
+	cmd.SetArgs([]string{"serve", "--config", filename})
+	require.ErrorContains(t, cmd.Execute(), filename)
+}
+
+func TestConfigFlagBeforeSubcommands(t *testing.T) {
+	filename := writeCommandConfig(t, validServerConfig)
+	var stdout bytes.Buffer
+	cmd := newRootCommand(context.Background(), &stdout, io.Discard)
+	cmd.SetArgs([]string{"--config", filename, "config", "verify"})
+	require.NoError(t, cmd.Execute())
+	require.Contains(t, stdout.String(), "Status: valid")
 }
 
 func writeCommandConfig(t *testing.T, content string) string {

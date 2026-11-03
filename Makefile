@@ -33,7 +33,7 @@ internal/services/email/generated/password_reset.html:
 
 run: internal/static/dist internal/static/guide/dist/index.html internal/services/email/generated/password_reset.html
 	export DEBUG=1; \
-		$(GO_CMD) run ./cmd/server/main.go
+		$(GO_CMD) run ./cmd/server serve
 
 import-clients: migrate internal/services/email/generated/password_reset.html
 	@test -n "$(CSV)" || (echo "CSV=/path/to/clients.csv is required" && exit 1)

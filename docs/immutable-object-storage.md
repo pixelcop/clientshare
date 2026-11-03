@@ -39,8 +39,8 @@ with the same database, configuration and storage mounts:
 ```sh
 /app/goose -dir /app/migrations up
 /app/clientshare storage inventory > /app/data/immutable-manifest.json
-/app/clientshare storage migrate -manifest /app/data/immutable-manifest.json -view-mode none
-/app/clientshare storage migrate -manifest /app/data/immutable-manifest.json -view-mode none -apply
+/app/clientshare storage migrate --manifest /app/data/immutable-manifest.json --view-mode none
+/app/clientshare storage migrate --manifest /app/data/immutable-manifest.json --view-mode none --apply
 /app/clientshare storage verify
 ```
 
@@ -78,7 +78,7 @@ metadata. Provide a reviewed source map; never use a basename-only search:
 ```
 
 ```sh
-/app/clientshare storage inventory -sources /app/data/reviewed-sources.json > /app/data/immutable-manifest.json
+/app/clientshare storage inventory --sources /app/data/reviewed-sources.json > /app/data/immutable-manifest.json
 ```
 
 Ambiguous duplicate source mappings need operator resolution before migration.
@@ -87,7 +87,7 @@ If bytes were already missing and cannot be recovered, an operator may explicitl
 acknowledge those specific records using a JSON array of `TENANT_ID/FILE_ID`:
 
 ```sh
-/app/clientshare storage inventory -acknowledge-missing /app/data/reviewed-missing.json > /app/data/immutable-manifest.json
+/app/clientshare storage inventory --acknowledge-missing /app/data/reviewed-missing.json > /app/data/immutable-manifest.json
 ```
 
 Those records keep their IDs, metadata and deletion state and are marked
@@ -108,10 +108,10 @@ Agree on an observation period before retiring legacy files. There is no startup
 cleanup. With verified backups retained, inspect then explicitly apply:
 
 ```sh
-/app/clientshare storage legacy-cleanup -manifest /app/data/immutable-manifest.json
-/app/clientshare storage legacy-cleanup -manifest /app/data/immutable-manifest.json -apply
-/app/clientshare storage orphan-cleanup -grace 168h
-/app/clientshare storage orphan-cleanup -grace 168h -apply
+/app/clientshare storage legacy-cleanup --manifest /app/data/immutable-manifest.json
+/app/clientshare storage legacy-cleanup --manifest /app/data/immutable-manifest.json --apply
+/app/clientshare storage orphan-cleanup --grace 168h
+/app/clientshare storage orphan-cleanup --grace 168h --apply
 ```
 
 Legacy cleanup verifies both the original source and its referenced object and
@@ -144,8 +144,8 @@ The application's tests cannot establish SMB/NFS server crash guarantees.
 
 ```sh
 /app/clientshare storage view-status
-/app/clientshare storage view-reconcile -tenant TENANT -client CLIENT
-/app/clientshare storage view-reconcile -tenant TENANT -client CLIENT -apply
+/app/clientshare storage view-reconcile --tenant TENANT --client CLIENT
+/app/clientshare storage view-reconcile --tenant TENANT --client CLIENT --apply
 /app/clientshare storage verify
 ```
 

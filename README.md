@@ -104,6 +104,23 @@ make build-docker
 
 This uses [docker/Dockerfile](./docker/Dockerfile) to build the frontend, generate email templates, compile the Go binaries, and package the runtime image.
 
+## Command-line usage
+
+Running `./clientshare` without a command prints help; it does not start the server.
+Start the server explicitly:
+
+```sh
+./clientshare serve --config config/config.yaml
+```
+
+The config path defaults to `config/config.yaml`. Use `./clientshare --help` or
+`./clientshare <command> --help` to see available commands and flags, including
+the `config` and offline `storage` maintenance commands. Long flags use `--`,
+for example `--config` and `--apply`.
+
+When upgrading, update binary launchers (such as systemd `ExecStart`) to append
+`serve`. The Docker entrypoint and `make run` already do this.
+
 ## Development
 
 ### Backend

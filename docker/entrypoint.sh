@@ -8,4 +8,4 @@ cd /app
 ./goose -dir ./migrations up
 
 # Start the server
-exec ./clientshare
+exec ./clientshare serve "$@"

@@ -3,48 +3,59 @@ package main
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"os"
-	"strings"
 
 	"github.com/getsentry/sentry-go"
 	"github.com/pixelcop/clientshare/internal/clientshare"
 	"github.com/pixelcop/clientshare/pkg/configschema"
 	"github.com/pixelcop/clientshare/pkg/utils"
+	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 )
 
 const defaultConfigPath = "config/config.yaml"
 
 func main() {
-	if len(os.Args) > 1 && os.Args[1] == "storage" {
-		if err := clientshare.StorageCommand(context.Background(), os.Args[2:], os.Stdout); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
-		}
-		return
+	if err := newRootCommand(context.Background(), os.Stdout, os.Stderr).Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
-	if len(os.Args) > 1 && os.Args[1] == "config" {
-		if err := runConfigCommand(os.Args[2:], os.Stdout, os.Stderr); err != nil {
-			if errors.Is(err, flag.ErrHelp) {
-				return
-			}
-			if !errors.Is(err, configschema.ErrInvalid) {
-				fmt.Fprintln(os.Stderr, err)
-			}
-			os.Exit(1)
-		}
-		return
-	}
+}
 
+func newRootCommand(ctx context.Context, stdout, stderr io.Writer) *cobra.Command {
+	configPath := defaultConfigPath
+	root := &cobra.Command{
+		Use:           "clientshare",
+		Short:         "ClientShare self-hosted client portal",
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+	root.SetContext(ctx)
+	root.SetOut(stdout)
+	root.SetErr(stderr)
+	root.PersistentFlags().StringVar(&configPath, "config", defaultConfigPath, "Path to YAML configuration file")
+	root.AddCommand(&cobra.Command{
+		Use:   "serve",
+		Short: "Start the ClientShare server",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return runServer(cmd.Context(), configPath)
+		},
+	})
+	root.AddCommand(newConfigCommand(&configPath))
+	root.AddCommand(clientshare.NewStorageCommand(&configPath))
+	return root
+}
+
+func runServer(ctx context.Context, configPath string) error {
 	utils.InitLogger()
 	defer zap.L().Sync()
 
-	cfg, report, err := clientshare.LoadServerConfigWithReport(defaultConfigPath)
+	cfg, report, err := clientshare.LoadServerConfigWithReport(configPath)
 	if err != nil {
-		zap.S().Fatalf("Error loading config: %v", err)
+		return fmt.Errorf("load config: %w", err)
 	}
 	logConfigReport(report)
 
@@ -60,57 +71,48 @@ func main() {
 	}
 
 	// Start clientshare
-	ctx := context.Background()
 	if err := clientshare.Start(ctx, cfg, zap.L()); err != nil {
-		zap.L().Fatal("Startup failed", zap.Error(err))
+		return fmt.Errorf("startup failed: %w", err)
 	}
+	return nil
 }
 
-func runConfigCommand(args []string, stdout, stderr io.Writer) error {
-	if len(args) == 0 {
-		return errors.New("usage: clientshare config <verify|schema>")
+func newConfigCommand(configPath *string) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "config",
+		Short: "Verify configuration or print its JSON schema",
+		Args:  cobra.NoArgs,
+		RunE:  func(cmd *cobra.Command, _ []string) error { return cmd.Help() },
 	}
-
-	switch args[0] {
-	case "verify":
-		flags := flag.NewFlagSet("clientshare config verify", flag.ContinueOnError)
-		flags.SetOutput(stderr)
-		configPath := flags.String("config", defaultConfigPath, "path to the YAML configuration file")
-		if err := flags.Parse(args[1:]); err != nil {
+	cmd.AddCommand(&cobra.Command{
+		Use:   "verify",
+		Short: "Validate the server configuration",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			_, report, err := clientshare.LoadServerConfigWithReport(*configPath)
+			if err != nil && !errors.Is(err, configschema.ErrInvalid) {
+				return err
+			}
+			if writeErr := configschema.WriteReport(cmd.OutOrStdout(), report); writeErr != nil {
+				return writeErr
+			}
 			return err
-		}
-		if flags.NArg() != 0 {
-			return fmt.Errorf("unexpected arguments for config verify: %s", strings.Join(flags.Args(), " "))
-		}
-		_, report, err := clientshare.LoadServerConfigWithReport(*configPath)
-		if err != nil && !errors.Is(err, configschema.ErrInvalid) {
+		},
+	})
+	cmd.AddCommand(&cobra.Command{
+		Use:   "schema",
+		Short: "Print the configuration JSON schema",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			schema, err := configschema.Generate(clientshare.Config{}, clientshare.ConfigSchemaOptions()...)
+			if err != nil {
+				return err
+			}
+			_, err = cmd.OutOrStdout().Write(schema)
 			return err
-		}
-		if writeErr := configschema.WriteReport(stdout, report); writeErr != nil {
-			return writeErr
-		}
-		if err != nil {
-			return err
-		}
-		return nil
-	case "schema":
-		flags := flag.NewFlagSet("clientshare config schema", flag.ContinueOnError)
-		flags.SetOutput(stderr)
-		if err := flags.Parse(args[1:]); err != nil {
-			return err
-		}
-		if flags.NArg() != 0 {
-			return fmt.Errorf("unexpected arguments for config schema: %s", strings.Join(flags.Args(), " "))
-		}
-		schema, err := configschema.Generate(clientshare.Config{}, clientshare.ConfigSchemaOptions()...)
-		if err != nil {
-			return err
-		}
-		_, err = stdout.Write(schema)
-		return err
-	default:
-		return fmt.Errorf("unknown config command %q; expected verify or schema", args[0])
-	}
+		},
+	})
+	return cmd
 }
 
 func logConfigReport(report configschema.Report) {
