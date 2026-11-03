@@ -64,8 +64,11 @@ are the checkpoints.
 The report includes retained soft-deleted files, counts of folders and already
 physically deleted records, and unreferenced legacy entries. Nothing is removed.
 Missing files, size/checksum mismatches and duplicate source mappings block
-cutover. Check free space for a complete second copy plus the largest temporary
-upload and the backup; do not place the only backup on the same NAS volume.
+cutover. Active records with missing clients, inactive ancestors or inconsistent
+physical-deletion state also block migration for explicit operator review;
+inventory never silently changes deletion state. Check free space for a complete
+second copy plus the largest temporary upload and the backup; do not place the
+only backup on the same NAS volume.
 
 For a stale path, inspect the client's complete logical parent chain and source
 metadata. Provide a reviewed source map; never use a basename-only search:

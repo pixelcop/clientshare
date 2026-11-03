@@ -12,11 +12,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/gofiber/fiber/v3"
 	apphandlers "github.com/pixelcop/clientshare/internal/handlers"
+	"github.com/pixelcop/clientshare/internal/middleware"
 	"github.com/pixelcop/clientshare/internal/models"
 	"github.com/pixelcop/clientshare/internal/services"
 	"github.com/pixelcop/clientshare/internal/services/email"
@@ -87,14 +89,7 @@ func TestImmutableDownloadsSurviveRenameButRespectDeletion(t *testing.T) {
 	}
 	require.NoError(t, env.db.First(file, "id = ?", file.ID).Error)
 	require.Equal(t, key, *file.StorageKey)
-	// A legacy active child below a deleted ancestor is inaccessible too.
-	require.NoError(t, env.db.Model(&models.File{}).Where("id = ?", env.rootFolder.ID).Update("deleted_at", time.Now()).Error)
-	resp, err := env.app.Test(newAuthRequest(http.MethodGet, "/api/files/"+file.ID+"/download", env.adminToken, nil))
-	require.NoError(t, err)
-	require.Equal(t, 404, resp.StatusCode)
-	resp.Body.Close()
-	require.NoError(t, env.db.Model(&models.File{}).Where("id = ?", env.rootFolder.ID).Update("deleted_at", nil).Error)
-	resp, err = env.app.Test(newAuthRequest(http.MethodDelete, "/api/files/"+file.ID, env.adminToken, nil))
+	resp, err := env.app.Test(newAuthRequest(http.MethodDelete, "/api/files/"+file.ID, env.adminToken, nil))
 	require.NoError(t, err)
 	require.Equal(t, 204, resp.StatusCode)
 	resp.Body.Close()
@@ -105,6 +100,68 @@ func TestImmutableDownloadsSurviveRenameButRespectDeletion(t *testing.T) {
 		resp.Body.Close()
 	}
 	require.FileExists(t, filepath.Join(env.storageRoot, "objects", file.TenantID, key))
+}
+
+func TestFileAuthorizationUsesOneQueryRegardlessOfDepth(t *testing.T) {
+	env := setupFileTestEnv(t)
+	shallow := createFileRecord(t, env, env.rootFolder, "shallow.txt", "hello")
+	parent := env.rootFolder
+	for _, name := range []string{"one", "two", "three", "four"} {
+		folder := &models.File{TenantID: parent.TenantID, ClientID: parent.ClientID, FolderID: &parent.ID, Filename: name, Path: filepath.Join(parent.Path, name), Type: "folder"}
+		_, err := services.NewFileService(env.db).CreateFolderRecord(context.Background(), folder)
+		require.NoError(t, err)
+		parent = folder
+	}
+	deep := createFileRecord(t, env, parent, "deep.txt", "hello")
+	app := fiber.New()
+	app.Get("/files/:id", func(c fiber.Ctx) error {
+		tenantctx.SetLocal(c, tenantctx.RequestContext{ID: env.client.TenantID})
+		c.Locals("role", "admin")
+		return c.Next()
+	}, middleware.UserCanAccessFile, func(c fiber.Ctx) error { return c.SendStatus(200) })
+	var queries atomic.Int32
+	const callback = "test:count_file_authorization_queries"
+	require.NoError(t, env.db.Callback().Query().After("gorm:query").Register(callback, func(_ *gorm.DB) { queries.Add(1) }))
+	t.Cleanup(func() { env.db.Callback().Query().Remove(callback) })
+	for _, file := range []*models.File{shallow, deep} {
+		queries.Store(0)
+		resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/files/"+file.ID, nil))
+		require.NoError(t, err)
+		require.Equal(t, 200, resp.StatusCode)
+		resp.Body.Close()
+		require.EqualValues(t, 1, queries.Load())
+	}
+	// A client from another tenant must not satisfy the correlated existence check.
+	require.NoError(t, env.db.Model(&models.Client{}).Where("id = ?", env.client.ID).Update("tenant_id", "another-tenant").Error)
+	queries.Store(0)
+	resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/files/"+deep.ID, nil))
+	require.NoError(t, err)
+	require.Equal(t, 404, resp.StatusCode)
+	resp.Body.Close()
+	require.EqualValues(t, 1, queries.Load())
+}
+
+func TestFolderDeletionDeniesDescendantDownloads(t *testing.T) {
+	env := setupFileTestEnv(t)
+	folder := &models.File{TenantID: env.client.TenantID, ClientID: env.client.ID, FolderID: &env.rootFolder.ID, Filename: "nested", Path: filepath.Join(env.rootFolder.Path, "nested"), Type: "folder"}
+	_, err := services.NewFileService(env.db).CreateFolderRecord(context.Background(), folder)
+	require.NoError(t, err)
+	file := createFileRecord(t, env, folder, "retained.txt", "retained bytes")
+	resp, err := env.app.Test(newAuthRequest(http.MethodDelete, "/api/files/"+env.rootFolder.ID, env.adminToken, nil))
+	require.NoError(t, err)
+	require.Equal(t, 204, resp.StatusCode)
+	resp.Body.Close()
+	for _, record := range []*models.File{folder, file} {
+		require.NoError(t, env.db.First(record, "id = ?", record.ID).Error)
+		require.NotNil(t, record.DeletedAt)
+	}
+	for _, token := range []string{env.adminToken, env.linkToken} {
+		resp, err := env.app.Test(newAuthRequest(http.MethodGet, "/api/files/"+file.ID+"/download", token, nil))
+		require.NoError(t, err)
+		require.Equal(t, 404, resp.StatusCode)
+		resp.Body.Close()
+	}
+	require.FileExists(t, filepath.Join(env.storageRoot, "objects", file.TenantID, *file.StorageKey))
 }
 
 func TestFilesAuthRequired(t *testing.T) {

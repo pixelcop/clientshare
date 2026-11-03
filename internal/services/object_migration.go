@@ -46,6 +46,14 @@ func InventoryObjects(ctx context.Context, db *gorm.DB, root string, overrides m
 	if err := db.WithContext(ctx).Order("tenant_id, id").Find(&files).Error; err != nil {
 		return p, err
 	}
+	var clients []models.Client
+	if err := db.WithContext(ctx).Find(&clients).Error; err != nil {
+		return p, err
+	}
+	clientExists := map[string]bool{}
+	for _, client := range clients {
+		clientExists[client.TenantID+"/"+client.ID] = true
+	}
 	used := map[string]string{}
 	groups := map[string][]models.File{}
 	for _, f := range files {
@@ -59,9 +67,27 @@ func InventoryObjects(ctx context.Context, db *gorm.DB, root string, overrides m
 			continue
 		}
 		active := map[string]string{}
+		byID := map[string]models.File{}
+		for _, f := range records {
+			byID[f.ID] = f
+		}
 		for _, f := range records {
 			if f.DeletedAt != nil {
 				continue
+			}
+			if !clientExists[group] {
+				p.Problems = append(p.Problems, group+": active record "+f.ID+" has no client")
+			}
+			if f.DiskDeletedAt != nil {
+				p.Problems = append(p.Problems, group+": active record "+f.ID+" is marked physically deleted")
+			}
+			for parentID := f.FolderID; parentID != nil && *parentID != ""; {
+				parent := byID[*parentID] // LogicalPaths already validated this parent graph.
+				if parent.DeletedAt != nil || parent.DiskDeletedAt != nil {
+					p.Problems = append(p.Problems, group+": active record "+f.ID+" has inactive ancestor "+parent.ID+"; review deletion state before migration")
+					break
+				}
+				parentID = parent.FolderID
 			}
 			if prior, ok := active[paths[f.ID]]; ok {
 				p.Problems = append(p.Problems, group+": duplicate active logical path for "+prior+" and "+f.ID)

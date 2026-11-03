@@ -110,6 +110,37 @@ func TestMigrationStaleMissingAndRetainedFiles(t *testing.T) {
 	require.NotNil(t, file.DeletedAt)
 }
 
+func TestMigrationReportsInactiveHierarchyWithoutChangingDeletionState(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		problem string
+		change  func(*gorm.DB, *models.Client) error
+	}{
+		{name: "deleted ancestor", problem: "has inactive ancestor", change: func(db *gorm.DB, client *models.Client) error {
+			return db.Model(&models.File{}).Where("id = ?", *client.RootFolderID).Update("deleted_at", time.Now()).Error
+		}},
+		{name: "physically removed ancestor", problem: "has inactive ancestor", change: func(db *gorm.DB, client *models.Client) error {
+			return db.Model(&models.File{}).Where("id = ?", *client.RootFolderID).Update("disk_deleted_at", time.Now()).Error
+		}},
+		{name: "missing client", problem: "has no client", change: func(db *gorm.DB, client *models.Client) error {
+			return db.Delete(client).Error
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db, root, client, file := migrationFixture(t)
+			require.NoError(t, tc.change(db, client))
+			plan, err := InventoryObjects(context.Background(), db, root, nil)
+			require.NoError(t, err)
+			require.Contains(t, strings.Join(plan.Problems, "\n"), tc.problem)
+			require.Error(t, ApplyObjects(context.Background(), db, root, plan))
+			require.NoError(t, db.First(file, "id = ?", file.ID).Error)
+			require.Nil(t, file.DeletedAt)
+			require.Nil(t, file.StorageKey)
+			require.NoDirExists(t, filepath.Join(root, "objects"))
+		})
+	}
+}
+
 func TestReadableViewsModesRecoveryAndConflicts(t *testing.T) {
 	for _, mode := range []string{ViewModeNone, ViewModeHardlink, ViewModeSymlink, ViewModeExport} {
 		t.Run(mode, func(t *testing.T) {
