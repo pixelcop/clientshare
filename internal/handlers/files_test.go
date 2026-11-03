@@ -2,6 +2,7 @@ package handlers_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -20,6 +21,7 @@ import (
 	"github.com/pixelcop/clientshare/internal/services/email"
 	"github.com/pixelcop/clientshare/internal/services/storage"
 	tenantctx "github.com/pixelcop/clientshare/internal/tenant"
+	"github.com/pixelcop/clientshare/pkg/utils/ids"
 	"gorm.io/gorm"
 )
 
@@ -34,10 +36,14 @@ func createFileRecord(t *testing.T, env *fileTestEnv, folder *models.File, filen
 	t.Helper()
 	store := storage.NewLocalStorage(env.storageRoot).Tenant(folder.TenantID)
 	filePath := filepath.Join(folder.Path, filename)
-	if _, err := store.Upload(filePath, strings.NewReader(content)); err != nil {
+	key := ids.NewULID()
+	info, err := store.PutNew(context.Background(), key, strings.NewReader(content))
+	if err != nil {
 		t.Fatalf("failed to upload test file: %v", err)
 	}
 	file := &models.File{
+		StorageKey: &key,
+		Checksum:   info.Checksum,
 		TenantID:   folder.TenantID,
 		ClientID:   folder.ClientID,
 		UserID:     &env.adminUser.ID,
@@ -194,8 +200,8 @@ func TestCreateFolderSuccess(t *testing.T) {
 	if err := env.db.Where("client_id = ? AND filename = ? AND type = ?", env.client.ID, "Reports", "folder").First(&folder).Error; err != nil {
 		t.Fatalf("expected folder record, got error: %v", err)
 	}
-	if _, err := os.Stat(tenantDiskPath(env.storageRoot, folder.TenantID, folder.Path)); err != nil {
-		t.Fatalf("expected folder on disk, got error: %v", err)
+	if _, err := os.Stat(tenantDiskPath(env.storageRoot, folder.TenantID, folder.Path)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("logical folder should not create authoritative directories: %v", err)
 	}
 }
 

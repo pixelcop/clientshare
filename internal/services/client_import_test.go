@@ -32,7 +32,7 @@ func setupImportTestDB(t *testing.T) (*gorm.DB, func()) {
 	if err != nil {
 		t.Fatalf("failed to open test db: %v", err)
 	}
-	if err := db.AutoMigrate(&models.Client{}, &models.File{}, &models.FileActivity{}); err != nil {
+	if err := db.AutoMigrate(&models.ReadableView{}, &models.Client{}, &models.File{}, &models.FileActivity{}); err != nil {
 		t.Fatalf("failed to migrate client tables: %v", err)
 	}
 	return db, func() {}

@@ -18,6 +18,7 @@ import (
 )
 
 type storageStub struct {
+	storage.Storage
 	createFolderErr error
 	moveErr         error
 }
@@ -38,7 +39,7 @@ func setupTestDB(t *testing.T) (*gorm.DB, func()) {
 	if err != nil {
 		t.Fatalf("failed to open test db: %v", err)
 	}
-	db.AutoMigrate(&models.Client{}, &models.File{}, &models.FileActivity{})
+	db.AutoMigrate(&models.ReadableView{}, &models.Client{}, &models.File{}, &models.FileActivity{})
 	return db, func() {}
 }
 
@@ -58,8 +59,8 @@ func TestClientCRUD(t *testing.T) {
 	if client.Name != "Acme" {
 		t.Errorf("expected name Acme, got %s", client.Name)
 	}
-	if _, err := os.Stat(filepath.Join(tenantRoot, "Acme")); err != nil {
-		t.Errorf("folder not created: %v", err)
+	if _, err := os.Stat(filepath.Join(tenantRoot, "Acme")); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("logical client should not create storage directory: %v", err)
 	}
 
 	// List
@@ -82,16 +83,16 @@ func TestClientCRUD(t *testing.T) {
 	if updated.Name != "Beta" {
 		t.Errorf("expected name Beta, got %s", updated.Name)
 	}
-	if _, err := os.Stat(filepath.Join(tenantRoot, "Beta")); err != nil {
-		t.Errorf("folder not renamed: %v", err)
+	if _, err := os.Stat(filepath.Join(tenantRoot, "Beta")); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("logical rename should not create storage directory: %v", err)
 	}
 
 	// Delete
 	if err := service.DeleteClient(context.Background(), tenantID, client.ID); err != nil {
 		t.Fatalf("delete failed: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(tenantRoot, "trash", "Beta")); err != nil {
-		t.Errorf("folder not moved to trash: %v", err)
+	if _, err := os.Stat(filepath.Join(tenantRoot, "trash", "Beta")); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("logical delete should not move storage: %v", err)
 	}
 	if _, err := service.GetClient(context.Background(), tenantID, client.ID); err == nil {
 		t.Errorf("client not deleted from db")
@@ -139,7 +140,7 @@ func TestListClientsPaginated(t *testing.T) {
 	}
 }
 
-func TestCreateClientRollsBackOnStorageError(t *testing.T) {
+func TestCreateClientIndependentOfStorageError(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
@@ -147,18 +148,18 @@ func TestCreateClientRollsBackOnStorageError(t *testing.T) {
 	tenantID := tenantctx.DefaultTenantID
 
 	client, err := service.CreateClient(context.Background(), tenantID, "Acme")
-	if !errors.Is(err, os.ErrPermission) {
-		t.Fatalf("expected permission error, got %v", err)
+	if err != nil {
+		t.Fatalf("expected metadata-only creation, got %v", err)
 	}
-	if client != nil {
-		t.Fatalf("expected no client, got %+v", client)
+	if client == nil {
+		t.Fatal("expected client")
 	}
 
 	var clientCount int64
 	if err := db.Model(&models.Client{}).Where("tenant_id = ?", tenantID).Count(&clientCount).Error; err != nil {
 		t.Fatalf("count clients failed: %v", err)
 	}
-	if clientCount != 0 {
+	if clientCount != 1 {
 		t.Fatalf("expected no clients after rollback, got %d", clientCount)
 	}
 
@@ -166,7 +167,7 @@ func TestCreateClientRollsBackOnStorageError(t *testing.T) {
 	if err := db.Model(&models.File{}).Where("tenant_id = ?", tenantID).Count(&fileCount).Error; err != nil {
 		t.Fatalf("count files failed: %v", err)
 	}
-	if fileCount != 0 {
+	if fileCount != 1 {
 		t.Fatalf("expected no files after rollback, got %d", fileCount)
 	}
 }
@@ -200,8 +201,8 @@ func TestUpdateClientRestoresFolderOnDBError(t *testing.T) {
 		t.Fatalf("expected forced update failure, got %v", err)
 	}
 
-	if _, err := os.Stat(filepath.Join(tenantRoot, "Acme")); err != nil {
-		t.Fatalf("expected original folder to be restored: %v", err)
+	if _, err := os.Stat(filepath.Join(tenantRoot, "Acme")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("unexpected storage directory: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(tenantRoot, "Beta")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("expected renamed folder to be rolled back, got %v", err)
@@ -245,8 +246,8 @@ func TestDeleteClientRestoresFolderOnDBError(t *testing.T) {
 		t.Fatalf("expected forced delete failure, got %v", err)
 	}
 
-	if _, err := os.Stat(filepath.Join(tenantRoot, "Acme")); err != nil {
-		t.Fatalf("expected original folder to be restored: %v", err)
+	if _, err := os.Stat(filepath.Join(tenantRoot, "Acme")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("unexpected storage directory: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(tenantRoot, "trash", "Acme")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("expected trash move to be rolled back, got %v", err)
@@ -262,7 +263,7 @@ func TestFileOperationsLifecycle(t *testing.T) {
 	defer cleanup()
 	tmpDir := t.TempDir()
 	tenantID := tenantctx.DefaultTenantID
-	store := storage.NewLocalStorage(tmpDir).Tenant(tenantID)
+	store := storage.NewLocalStorage(tmpDir).Tenant(tenantID).(storage.LegacyStorage)
 	tenantRoot := filepath.Join(tmpDir, "tenants", tenantID)
 	client := &models.Client{Name: "Acme", FolderPath: "Acme"}
 	db.Create(client)

@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pixelcop/clientshare/internal/models"
 	"github.com/pixelcop/clientshare/internal/services/storage"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -84,18 +85,36 @@ func (w *FileCleanupWorker) RunOnce(ctx context.Context) {
 			return
 		}
 
+		progress := false
 		for _, file := range files {
-			if err := w.store.Tenant(file.TenantID).Delete(file.Path); err != nil {
-				w.logger.Warn("delete file from storage", zap.Error(err), zap.String("tenant_id", file.TenantID), zap.String("file_id", file.ID), zap.String("path", file.Path))
+			var state models.ReadableView
+			err := w.fileService.DB.Where("tenant_id = ? AND client_id = ?", file.TenantID, file.ClientID).First(&state).Error
+			if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+				w.logger.Warn("read view cleanup state", zap.Error(err))
 				continue
+			}
+			if state.DesiredRevision != state.AppliedRevision {
+				continue
+			}
+			if file.Type != "folder" && !file.StorageMissing {
+				if file.StorageKey == nil {
+					w.logger.Warn("retained file requires migration", zap.String("file_id", file.ID))
+					continue
+				}
+				if err := w.store.Tenant(file.TenantID).DeleteObject(ctx, *file.StorageKey); err != nil {
+					w.logger.Warn("delete file from storage", zap.Error(err), zap.String("tenant_id", file.TenantID), zap.String("file_id", file.ID), zap.String("path", file.Path))
+					continue
+				}
 			}
 			deletedAt := w.now()
 			if err := w.fileService.MarkFileDiskDeleted(ctx, file.TenantID, file.ID, deletedAt); err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 				w.logger.Error("mark file disk deleted", zap.Error(err), zap.String("tenant_id", file.TenantID), zap.String("file_id", file.ID), zap.String("path", file.Path))
+			} else {
+				progress = true
 			}
 		}
 
-		if len(files) < w.batchSize {
+		if !progress || len(files) < w.batchSize {
 			return
 		}
 	}

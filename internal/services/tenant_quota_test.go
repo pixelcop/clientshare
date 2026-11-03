@@ -21,7 +21,7 @@ func quotaTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(t.TempDir()+"/quota.db?_busy_timeout=10000&_journal_mode=WAL"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&models.TenantEntitlement{}, &models.User{}, &models.File{}, &models.StorageReservation{}))
+	require.NoError(t, db.AutoMigrate(&models.ReadableView{}, &models.TenantEntitlement{}, &models.User{}, &models.File{}, &models.StorageReservation{}))
 	require.NoError(t, db.Create(&models.TenantEntitlement{TenantID: "a", MaxUsers: 1, MaxStorageBytes: 10}).Error)
 	require.NoError(t, db.Create(&models.TenantEntitlement{TenantID: "b", MaxUsers: 1, MaxStorageBytes: 10}).Error)
 	return db
@@ -111,9 +111,9 @@ func TestStorageQuotaConcurrentReservationsAndExpiry(t *testing.T) {
 
 type failedUploadStore struct{ storage.Storage }
 
-func (s failedUploadStore) Upload(path string, src io.Reader) (int64, error) {
-	n, _ := s.Storage.Upload(path, io.LimitReader(src, 2))
-	_ = s.Storage.Delete(path)
+func (s failedUploadStore) PutNew(ctx context.Context, path string, src io.Reader) (storage.ObjectInfo, error) {
+	n, _ := s.Storage.PutNew(ctx, path, io.LimitReader(src, 2))
+	_ = s.Storage.DeleteObject(ctx, path)
 	return n, errors.New("storage unavailable")
 }
 
@@ -123,7 +123,7 @@ func TestStorageUploadCleanupMeasuredBytesAndDeletion(t *testing.T) {
 	store := storage.NewLocalStorage(t.TempDir()).Tenant("a")
 	file := &models.File{TenantID: "a", ClientID: "client", Path: "report.txt", Filename: "report.txt", Type: "file"}
 	require.Error(t, UploadFile(ctx, db, failedUploadStore{store}, file, strings.NewReader("hello"), 5))
-	_, err := store.Download(file.Path)
+	_, err := store.Open(ctx, *file.StorageKey)
 	require.Error(t, err)
 	u, err := GetTenantUsage(ctx, db, "a")
 	require.NoError(t, err)
@@ -131,9 +131,9 @@ func TestStorageUploadCleanupMeasuredBytesAndDeletion(t *testing.T) {
 	require.Error(t, UploadFile(ctx, db, store, file, strings.NewReader("too long"), 2))
 	require.NoError(t, UploadFile(ctx, db, store, file, strings.NewReader("hello"), 8))
 	require.EqualValues(t, 5, file.Size)
-	duplicate := &models.File{TenantID: "a", ClientID: "client", Path: file.Path, Type: "file"}
+	duplicate := &models.File{TenantID: "a", ClientID: "client", Path: file.Path, Filename: file.Filename, Type: "file"}
 	require.Error(t, UploadFile(ctx, db, store, duplicate, strings.NewReader("x"), 1))
-	reader, err := store.Download(file.Path)
+	reader, err := store.Open(ctx, *file.StorageKey)
 	require.NoError(t, err)
 	content, err := io.ReadAll(reader)
 	require.NoError(t, err)

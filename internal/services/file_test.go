@@ -19,7 +19,7 @@ func setupFileServiceTestDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("failed to open test db: %v", err)
 	}
-	if err := database.AutoMigrate(&models.File{}); err != nil {
+	if err := database.AutoMigrate(&models.ReadableView{}, &models.File{}); err != nil {
 		t.Fatalf("failed to migrate files table: %v", err)
 	}
 	return database
@@ -105,8 +105,8 @@ func TestGetFolderHierarchyByIDCacheInvalidatedOnFolderCreate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected no error on cached hierarchy, got: %v", err)
 	}
-	if len(cachedHierarchy) != 3 {
-		t.Fatalf("expected cached hierarchy of 3 folders, got %d", len(cachedHierarchy))
+	if len(cachedHierarchy) != 2 {
+		t.Fatalf("expected current hierarchy of 2 folders, got %d", len(cachedHierarchy))
 	}
 
 	newFolder := &models.File{

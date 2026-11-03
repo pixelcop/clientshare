@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -24,8 +25,8 @@ import (
 
 func TestS3StorageTenantIsolation(t *testing.T) {
 	store := newFakeS3Storage(t)
-	tenantA := store.Tenant("tenant-a")
-	tenantB := store.Tenant("tenant-b")
+	tenantA := store.Tenant("tenant-a").(storage.LegacyStorage)
+	tenantB := store.Tenant("tenant-b").(storage.LegacyStorage)
 
 	_, err := tenantA.Upload("Acme/shared.txt", strings.NewReader("tenant-a"))
 	require.NoError(t, err)
@@ -48,7 +49,7 @@ func TestS3StorageTenantIsolation(t *testing.T) {
 }
 
 func TestS3StorageFolderLifecycle(t *testing.T) {
-	store := newFakeS3Storage(t).Tenant("tenant-a")
+	store := newFakeS3Storage(t).Tenant("tenant-a").(storage.LegacyStorage)
 
 	require.NoError(t, store.CreateFolder("Acme"))
 	require.NoError(t, store.CreateFolder("Acme/empty"))
@@ -102,10 +103,14 @@ func TestS3StorageFolderLifecycle(t *testing.T) {
 	require.Empty(t, entries)
 }
 
-func newFakeS3Storage(t *testing.T) storage.Storage {
+func newFakeS3Storage(t *testing.T, wrappers ...func(http.Handler) http.Handler) storage.LegacyStorage {
 	t.Helper()
 
-	server := httptest.NewServer(gofakes3.New(s3mem.New()).Server())
+	var handler http.Handler = gofakes3.New(s3mem.New()).Server()
+	for _, wrap := range wrappers {
+		handler = wrap(handler)
+	}
+	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 
 	ctx := context.Background()
@@ -136,7 +141,7 @@ func newFakeS3Storage(t *testing.T) storage.Storage {
 	return store
 }
 
-func readStoredValue(t *testing.T, store storage.Storage, path string) string {
+func readStoredValue(t *testing.T, store storage.LegacyStorage, path string) string {
 	t.Helper()
 
 	reader, err := store.Download(path)

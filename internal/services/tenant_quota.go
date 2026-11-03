@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
 	"time"
 
 	"github.com/pixelcop/clientshare/internal/models"
@@ -156,6 +157,22 @@ func FinalizeStorage(ctx context.Context, db *gorm.DB, reservation *models.Stora
 		if file.TenantID != r.TenantID || file.Size < 0 || file.Size > r.Bytes {
 			return errors.New("uploaded size exceeds reservation")
 		}
+		var existing int64
+		if err := lockLogicalParent(tx, file); err != nil {
+			return err
+		}
+		q := tx.Model(&models.File{}).Where("tenant_id = ? AND client_id = ? AND filename = ? AND deleted_at IS NULL", file.TenantID, file.ClientID, file.Filename)
+		if file.FolderID == nil {
+			q = q.Where("folder_id IS NULL")
+		} else {
+			q = q.Where("folder_id = ?", *file.FolderID)
+		}
+		if err := q.Count(&existing).Error; err != nil {
+			return err
+		}
+		if existing > 0 {
+			return os.ErrExist
+		}
 		u, err := tenantUsage(tx, r.TenantID, e)
 		if err != nil {
 			return err
@@ -164,6 +181,9 @@ func FinalizeStorage(ctx context.Context, db *gorm.DB, reservation *models.Stora
 			return ErrStorageLimit
 		}
 		if err := tx.Create(file).Error; err != nil {
+			return err
+		}
+		if err := models.DirtyView(tx, file.TenantID, file.ClientID); err != nil {
 			return err
 		}
 		return tx.Delete(&r).Error
@@ -178,13 +198,22 @@ func ReleaseStorage(db *gorm.DB, r *models.StorageReservation) error {
 // Multipart sizes are measured by the server; the bounded reader also prevents
 // a mismatched stream from exceeding its reservation.
 func UploadFile(ctx context.Context, db *gorm.DB, store storage.Storage, file *models.File, src io.Reader, size int64) error {
+	if err := LogicalName(file.Filename); err != nil {
+		return err
+	}
 	r, err := ReserveStorage(ctx, db, file.TenantID, size)
 	if err != nil {
 		return err
 	}
 	defer ReleaseStorage(db, r)
 	reader := &io.LimitedReader{R: src, N: size}
-	file.Size, err = store.Upload(file.Path, reader)
+	if file.ID == "" {
+		file.BeforeCreate(db)
+	}
+	key := ids.NewULID()
+	file.StorageKey = &key
+	info, err := store.PutNew(ctx, key, reader)
+	file.Size, file.Checksum = info.Size, info.Checksum
 	if err != nil {
 		// Storage owns cleanup of failed writes. Deleting here could remove an
 		// existing file when the upload failed before creating anything.
@@ -193,11 +222,11 @@ func UploadFile(ctx context.Context, db *gorm.DB, store storage.Storage, file *m
 	var extra [1]byte
 	n, readErr := src.Read(extra[:])
 	if n != 0 || (readErr != nil && !errors.Is(readErr, io.EOF)) {
-		_ = store.Delete(file.Path)
+		_ = store.DeleteObject(context.WithoutCancel(ctx), key)
 		return errors.New("upload exceeds declared size or could not be read")
 	}
 	if err := FinalizeStorage(ctx, db, r, file); err != nil {
-		cleanupErr := store.Delete(file.Path)
+		cleanupErr := store.DeleteObject(context.WithoutCancel(ctx), key)
 		return errors.Join(err, cleanupErr)
 	}
 	return nil

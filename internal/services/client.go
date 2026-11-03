@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math"
 	"strings"
 	"time"
@@ -30,6 +29,9 @@ func (s *ClientService) sanitizeFolderName(ctx context.Context, db *gorm.DB, ten
 		return "", err
 	}
 	name = strings.TrimSpace(name)
+	if err := LogicalName(name); err != nil {
+		return "", err
+	}
 	if name == "" {
 		return "", errors.New("folder name cannot be empty")
 	}
@@ -63,7 +65,6 @@ func (s *ClientService) CreateClient(ctx context.Context, tenantID, name string)
 	if err != nil {
 		return nil, err
 	}
-	tenantStore := s.Storage.Tenant(tenantID)
 	sanitized, err := s.SanitizeFolderName(ctx, tenantID, name)
 	if err != nil {
 		return nil, err
@@ -73,9 +74,6 @@ func (s *ClientService) CreateClient(ctx context.Context, tenantID, name string)
 	client := &models.Client{TenantID: tenantID, Name: sanitized, FolderPath: folderPath}
 	err = s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(client).Error; err != nil {
-			return err
-		}
-		if err := tenantStore.CreateFolder(storage.ClientFolderPath(folderPath)); err != nil {
 			return err
 		}
 
@@ -92,7 +90,10 @@ func (s *ClientService) CreateClient(ctx context.Context, tenantID, name string)
 			return err
 		}
 		client.RootFolderID = &rootFolder.ID
-		return tx.Save(client).Error
+		if err := tx.Save(client).Error; err != nil {
+			return err
+		}
+		return models.DirtyView(tx, tenantID, client.ID)
 	})
 	if err != nil {
 		return nil, err
@@ -223,26 +224,28 @@ func (s *ClientService) UpdateClient(ctx context.Context, tenantID, id string, n
 		if err := tx.Where("tenant_id = ? AND id = ?", tenantID, id).First(&client).Error; err != nil {
 			return err
 		}
-		tenantStore := s.Storage.Tenant(client.TenantID)
+		if strings.TrimSpace(newName) == client.Name {
+			return nil
+		}
 		sanitized, err := s.sanitizeFolderName(ctx, tx, tenantID, newName)
 		if err != nil {
-			return err
-		}
-
-		originalFolderPath := client.FolderPath
-		if err := tenantStore.Move(storage.ClientFolderPath(originalFolderPath), storage.ClientFolderPath(sanitized)); err != nil {
 			return err
 		}
 
 		client.Name = sanitized
 		client.FolderPath = sanitized
 		if err := tx.Save(&client).Error; err != nil {
-			if rollbackErr := tenantStore.Move(storage.ClientFolderPath(sanitized), storage.ClientFolderPath(originalFolderPath)); rollbackErr != nil {
-				return fmt.Errorf("update client after moving folder: %w (rollback move failed: %v)", err, rollbackErr)
-			}
 			return err
 		}
-		return nil
+		if client.RootFolderID != nil {
+			if err := tx.Model(&models.File{}).Where("tenant_id = ? AND id = ?", tenantID, *client.RootFolderID).Update("filename", sanitized).Error; err != nil {
+				return err
+			}
+		}
+		if err := RefreshLogicalPaths(tx, tenantID, client.ID); err != nil {
+			return err
+		}
+		return models.DirtyView(tx, tenantID, client.ID)
 	})
 	if err != nil {
 		return nil, err
@@ -250,7 +253,7 @@ func (s *ClientService) UpdateClient(ctx context.Context, tenantID, id string, n
 	return &client, nil
 }
 
-// DeleteClient moves folder to trash and deletes client
+// DeleteClient retains file records and immutable objects for the retention period.
 func (s *ClientService) DeleteClient(ctx context.Context, tenantID, id string) error {
 	tenantID, err := requireTenantID(tenantID)
 	if err != nil {
@@ -262,19 +265,12 @@ func (s *ClientService) DeleteClient(ctx context.Context, tenantID, id string) e
 			return err
 		}
 
-		tenantStore := s.Storage.Tenant(tenantID)
-		sourcePath := storage.ClientFolderPath(client.FolderPath)
-		trashPath := storage.TrashPath(client.FolderPath)
-		if err := tenantStore.Move(sourcePath, trashPath); err != nil {
+		if err := tx.Model(&models.File{}).Where("tenant_id = ? AND client_id = ? AND deleted_at IS NULL", tenantID, id).Update("deleted_at", time.Now()).Error; err != nil {
 			return err
 		}
-
 		if err := tx.Where("tenant_id = ? AND id = ?", tenantID, id).Delete(&models.Client{}).Error; err != nil {
-			if rollbackErr := tenantStore.Move(trashPath, sourcePath); rollbackErr != nil {
-				return fmt.Errorf("delete client after moving folder to trash: %w (rollback move failed: %v)", err, rollbackErr)
-			}
 			return err
 		}
-		return nil
+		return models.DirtyView(tx, tenantID, id)
 	})
 }

@@ -194,6 +194,7 @@ func setupSharedHandlersEnvWithOptions(t *testing.T, options handlersTestOptions
 		t.Fatalf("failed to open db: %v", err)
 	}
 	if err := database.AutoMigrate(
+		&models.ReadableView{},
 		&models.BrowserSession{},
 		&models.Tenant{},
 		&models.TenantSettings{},

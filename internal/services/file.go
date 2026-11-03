@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -125,7 +126,27 @@ func (s *FileService) CreateFolderRecord(ctx context.Context, folder *models.Fil
 	if folder == nil || strings.TrimSpace(folder.TenantID) == "" {
 		return nil, errors.New("tenant id is required")
 	}
-	err := s.DB.WithContext(ctx).Create(folder).Error
+	if err := LogicalName(folder.Filename); err != nil {
+		return nil, err
+	}
+	err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := lockLogicalParent(tx, folder); err != nil {
+			return err
+		}
+		if folder.FolderID != nil {
+			var count int64
+			if err := tx.Model(&models.File{}).Where("tenant_id = ? AND client_id = ? AND folder_id = ? AND filename = ? AND deleted_at IS NULL", folder.TenantID, folder.ClientID, *folder.FolderID, folder.Filename).Count(&count).Error; err != nil {
+				return err
+			}
+			if count > 0 {
+				return os.ErrExist
+			}
+		}
+		if err := tx.Create(folder).Error; err != nil {
+			return err
+		}
+		return models.DirtyView(tx, folder.TenantID, folder.ClientID)
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -221,7 +242,28 @@ func (s *FileService) SoftDeleteFile(ctx context.Context, tenantID string, file 
 	if file == nil {
 		return gorm.ErrRecordNotFound
 	}
-	if err := s.DB.WithContext(ctx).Model(&models.File{}).Where("tenant_id = ? AND id = ?", tenantID, file.ID).Update("deleted_at", models.Now()).Error; err != nil {
+	if err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var files []models.File
+		if err := tx.Where("tenant_id = ? AND client_id = ? AND deleted_at IS NULL", tenantID, file.ClientID).Find(&files).Error; err != nil {
+			return err
+		}
+		ids := []string{file.ID}
+		selected := map[string]bool{file.ID: true}
+		for changed := true; changed; {
+			changed = false
+			for _, f := range files {
+				if !selected[f.ID] && f.FolderID != nil && selected[*f.FolderID] {
+					selected[f.ID] = true
+					ids = append(ids, f.ID)
+					changed = true
+				}
+			}
+		}
+		if err := tx.Model(&models.File{}).Where("tenant_id = ? AND id IN ?", tenantID, ids).Update("deleted_at", models.Now()).Error; err != nil {
+			return err
+		}
+		return models.DirtyView(tx, tenantID, file.ClientID)
+	}); err != nil {
 		return err
 	}
 	s.invalidateFolderHierarchyCacheByClient(file.ClientID)
@@ -278,9 +320,7 @@ func (s *FileService) GetFolderHierarchyByID(ctx context.Context, tenantID, clie
 	}
 
 	cacheKey := folderHierarchyCacheKey(tenantID, clientID, folderID)
-	if cached, ok := s.folderHierarchyCache.Get(cacheKey); ok {
-		return cloneFolderSlice(cached), nil
-	}
+	// Metadata renames can occur through ClientService; read the current tree.
 
 	var folders []models.File
 	err = s.DB.WithContext(ctx).Raw(`

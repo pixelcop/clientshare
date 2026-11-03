@@ -63,8 +63,8 @@ func TestLocalStorage(t *testing.T) {
 func TestLocalStorageTenantIsolation(t *testing.T) {
 	tmpDir := t.TempDir()
 	rootStore := storage.NewLocalStorage(tmpDir)
-	tenantA := rootStore.Tenant("tenant-a")
-	tenantB := rootStore.Tenant("tenant-b")
+	tenantA := rootStore.Tenant("tenant-a").(storage.LegacyStorage)
+	tenantB := rootStore.Tenant("tenant-b").(storage.LegacyStorage)
 
 	if _, err := tenantA.Upload("Acme/shared.txt", strings.NewReader("tenant-a")); err != nil {
 		t.Fatalf("tenant A upload failed: %v", err)
@@ -73,7 +73,7 @@ func TestLocalStorageTenantIsolation(t *testing.T) {
 		t.Fatalf("tenant B upload failed: %v", err)
 	}
 
-	readFile := func(t *testing.T, store storage.Storage) string {
+	readFile := func(t *testing.T, store storage.LegacyStorage) string {
 		t.Helper()
 		reader, err := store.Download("Acme/shared.txt")
 		if err != nil {
@@ -104,7 +104,7 @@ func TestLocalStorageTenantIsolation(t *testing.T) {
 
 func TestLocalStorageRejectsPathTraversal(t *testing.T) {
 	tmpDir := t.TempDir()
-	ls := storage.NewLocalStorage(tmpDir).Tenant("tenant-a")
+	ls := storage.NewLocalStorage(tmpDir).Tenant("tenant-a").(storage.LegacyStorage)
 
 	if _, err := ls.Upload(filepath.Join("..", "escape.txt"), strings.NewReader("nope")); !errors.Is(err, os.ErrPermission) {
 		t.Fatalf("expected upload traversal to be rejected, got %v", err)

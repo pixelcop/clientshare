@@ -21,6 +21,12 @@ type FileInfo struct {
 type Storage interface {
 	ObjectStore
 	Tenant(tenantID string) Storage
+}
+
+// LegacyStorage is retained for legacy fixtures and offline inspection only.
+// Application services accept Storage, which exposes no folder operations.
+type LegacyStorage interface {
+	Storage
 	List(path string) ([]FileInfo, error)
 	Upload(dst string, src io.Reader) (int64, error)
 	Download(src string) (io.ReadCloser, error)

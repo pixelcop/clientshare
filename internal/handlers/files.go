@@ -602,10 +602,6 @@ func (h *FileHandler) CreateFolder(c fiber.Ctx) error {
 		utils.Logger(c).Debug("invalid folder path", zap.Error(err))
 		return c.Status(400).JSON(fiber.Map{"error": "invalid folder name"})
 	}
-	if err := h.storeForTenant(tenantIDFromCtx(c)).CreateFolder(subPath); err != nil {
-		utils.Logger(c).Error("error creating folder", zap.Error(err))
-		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
-	}
 
 	userID := fiber.Locals[string](c, "user_id")
 	folderRecord := &models.File{
@@ -620,6 +616,9 @@ func (h *FileHandler) CreateFolder(c fiber.Ctx) error {
 		UploadedAt: time.Now(),
 	}
 	if folderRecord, err = h.fileService.CreateFolderRecord(c.Context(), folderRecord); err != nil {
+		if errors.Is(err, os.ErrExist) {
+			return c.Status(409).JSON(fiber.Map{"error": "folder already exists"})
+		}
 		utils.Logger(c).Error("error saving folder metadata", zap.Error(err))
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -643,8 +642,18 @@ func (h *FileHandler) DownloadFolderZip(c fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "invalid file type"})
 	}
 
-	tmpZip := filepath.Join(os.TempDir(), "clientshare_zip_"+file.Filename+".zip")
-	if err := h.storeForTenant(tenantIDFromCtx(c)).ZipFolder(file.Path, tmpZip); err != nil {
+	tmp, err := os.CreateTemp("", "clientshare-zip-*.zip")
+	if err != nil {
+		return c.SendStatus(500)
+	}
+	tmpZip := tmp.Name()
+	defer os.Remove(tmpZip)
+	err = h.fileService.WriteFolderZip(c.Context(), h.storeForTenant(tenantIDFromCtx(c)), file, tmp)
+	closeErr := tmp.Close()
+	if err == nil {
+		err = closeErr
+	}
+	if err != nil {
 		utils.Logger(c).Error("error zipping folder", zap.Error(err))
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -672,12 +681,14 @@ func (h *FileHandler) DownloadFileByPublicID(c fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "invalid file type"})
 	}
 
-	reader, err := h.storeForTenant(tenantIDFromCtx(c)).Download(file.Path)
+	reader, err := services.OpenFile(c.Context(), h.storeForTenant(tenantIDFromCtx(c)), file)
 	if err != nil {
-		utils.Logger(c).Debug("file not found", zap.Error(err))
-		return c.Status(404).JSON(fiber.Map{"error": "file not found"})
+		if errors.Is(err, os.ErrNotExist) {
+			return c.Status(404).JSON(fiber.Map{"error": "file not found"})
+		}
+		utils.Logger(c).Error("object unavailable", zap.Error(err), zap.String("file_id", file.ID))
+		return c.Status(503).JSON(fiber.Map{"error": "File storage is temporarily unavailable. Please try again."})
 	}
-	defer reader.Close()
 	logFileActivity(c.Context(), h.db, tenantIDFromCtx(c), file.ClientID, &file.ID, file.UserID, nil, "download", file.Path)
 	// Set Content-Type based on file extension
 	ext := filepath.Ext(file.Filename)
@@ -688,9 +699,8 @@ func (h *FileHandler) DownloadFileByPublicID(c fiber.Ctx) error {
 		}
 	}
 	c.Set("Content-Type", contentType)
-	c.Set("Content-Disposition", "attachment; filename="+file.Filename)
-	c.RequestCtx().SetBodyStream(reader, -1)
-	return c.SendStatus(200)
+	c.Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": file.Filename}))
+	return c.SendStream(reader)
 }
 
 // DeleteFileByPublicID handles DELETE /api/files/:id

@@ -14,6 +14,7 @@ import (
 )
 
 type recordingCleanupStorage struct {
+	storage.Storage
 	deletedByTenant map[string][]string
 	failures        map[string]error
 	tenantID        string
@@ -50,6 +51,10 @@ func (s *recordingCleanupStorage) Delete(path string) error {
 	return nil
 }
 
+func (s *recordingCleanupStorage) DeleteObject(_ context.Context, key string) error {
+	return s.Delete(key)
+}
+
 func (s *recordingCleanupStorage) CreateFolder(path string) error {
 	return nil
 }
@@ -71,6 +76,7 @@ func TestFileCleanupWorkerRunOnceDeletesEligibleFiles(t *testing.T) {
 	eligible := &models.File{TenantID: tenantctx.DefaultTenantID, ClientID: "client-1", Filename: "old.pdf", Path: "Acme/old.pdf", Type: "file", Size: 1, UploadedAt: now.Add(-60 * 24 * time.Hour), DeletedAt: &oldDeletedAt}
 	recent := &models.File{TenantID: tenantctx.DefaultTenantID, ClientID: "client-1", Filename: "recent.pdf", Path: "Acme/recent.pdf", Type: "file", Size: 1, UploadedAt: now.Add(-20 * 24 * time.Hour), DeletedAt: &recentDeletedAt}
 	for _, file := range []*models.File{eligible, recent} {
+		file.StorageKey = &file.Path
 		if err := db.Create(file).Error; err != nil {
 			t.Fatalf("failed to seed file %s: %v", file.Filename, err)
 		}
@@ -111,6 +117,7 @@ func TestFileCleanupWorkerRunOnceLeavesRecordPendingWhenDeleteFails(t *testing.T
 	now := time.Date(2026, time.May, 19, 12, 0, 0, 0, time.UTC)
 	oldDeletedAt := now.Add(-31 * 24 * time.Hour)
 	file := &models.File{TenantID: tenantctx.DefaultTenantID, ClientID: "client-1", Filename: "old.pdf", Path: "Acme/old.pdf", Type: "file", Size: 1, UploadedAt: now.Add(-60 * 24 * time.Hour), DeletedAt: &oldDeletedAt}
+	file.StorageKey = &file.Path
 	if err := db.Create(file).Error; err != nil {
 		t.Fatalf("failed to seed file: %v", err)
 	}
