@@ -3,8 +3,10 @@ package db
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -23,15 +25,18 @@ type Logger struct {
 	SkipCallerLookup          bool
 	IgnoreRecordNotFoundError bool
 	PrintQuery                bool // When true, print the query to the console (without escapes)
+	SingleLine                bool // Keep SQL in a structured field, escaping newlines instead of printing them.
 }
 
 func NewZapLogger(zapLogger *zap.Logger, logLevel int) Logger {
+	singleLine, _ := strconv.ParseBool(os.Getenv("GORM_LOG_SINGLE_LINE"))
 	return Logger{
 		ZapLogger:                 zapLogger,
 		LogLevel:                  gormlogger.LogLevel(logLevel),
 		SlowThreshold:             100 * time.Millisecond,
 		SkipCallerLookup:          false,
 		IgnoreRecordNotFoundError: false,
+		SingleLine:                singleLine,
 	}
 }
 
@@ -40,13 +45,8 @@ func (l Logger) SetAsDefault() {
 }
 
 func (l Logger) LogMode(level gormlogger.LogLevel) gormlogger.Interface {
-	return Logger{
-		ZapLogger:                 l.ZapLogger,
-		SlowThreshold:             l.SlowThreshold,
-		LogLevel:                  level,
-		SkipCallerLookup:          l.SkipCallerLookup,
-		IgnoreRecordNotFoundError: l.IgnoreRecordNotFoundError,
-	}
+	l.LogLevel = level
+	return l
 }
 
 func (l Logger) Info(ctx context.Context, str string, args ...interface{}) {
@@ -86,6 +86,10 @@ func (l Logger) Trace(ctx context.Context, begin time.Time, fc func() (string, i
 		l.logger(ctx).Warn("trace", zap.Duration("elapsed", elapsed), zap.Int64("rows", rows), zap.String("sql", sql))
 	case l.LogLevel >= gormlogger.Info:
 		sql, rows = fc()
+		if l.SingleLine {
+			l.logger(ctx).Debug("trace", zap.Duration("elapsed", elapsed), zap.Int64("rows", rows), zap.String("sql", sql))
+			break
+		}
 		lsql := strings.ToLower(sql)
 		if strings.HasPrefix(lsql, "select") {
 			l.logger(ctx).Debug(color.YellowString(sql), zap.Duration("elapsed", elapsed), zap.Int64("rows", rows))
@@ -94,7 +98,7 @@ func (l Logger) Trace(ctx context.Context, begin time.Time, fc func() (string, i
 		}
 	}
 
-	if l.PrintQuery {
+	if l.PrintQuery && !l.SingleLine {
 		sql, _ := fc()
 		fmt.Print("\n\n-----\n", sql, "\n-----\n\n\n")
 	}

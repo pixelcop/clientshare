@@ -34,6 +34,9 @@ help:
   booking_url: "" # reusable public URL only; never a customer's single-use invite
 
 database:
+  # Optional environment flag: GORM_LOG_SINGLE_LINE=true keeps SQL in a
+  # structured sql log field with escaped newlines (enabled by Devcraft).
+  # Unset or false preserves the normal multiline console output.
   # Supported values: sqlite, postgres, mysql
   # Keep sqlite as the default self-hosted path.
   driver: "sqlite"

@@ -34,6 +34,7 @@ case "$1" in
     exec bun run --bun dev --host 127.0.0.1 --port "$PORT"
     ;;
   api)
+    export GORM_LOG_SINGLE_LINE="${GORM_LOG_SINGLE_LINE:-true}"
     wait_for_service web
     export VITE_FRONTEND_PORT="$peer_port"
     # The API proxies Vite; all browser/auth URLs must use the API origin.
