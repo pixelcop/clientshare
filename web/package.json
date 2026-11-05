@@ -73,5 +73,8 @@
     "vite-plugin-vue-devtools": "^8.2.1",
     "vitest": "^5.0.5",
     "vue-tsc": "^3.2.6"
+  },
+  "patchedDependencies": {
+    "openvue@1.0.0": "patches/openvue@1.0.0.patch"
   }
 }

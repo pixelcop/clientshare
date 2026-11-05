@@ -1,0 +1,28 @@
+diff --git a/dialog/Dialog.vue b/dialog/Dialog.vue
+index d1a74e3520316b8d56795f3d360b444070319ecd..2acf1d14ea554f7f536b2b85486ca3961aad0992 100644
+--- a/dialog/Dialog.vue
++++ b/dialog/Dialog.vue
+@@ -211,7 +211,7 @@ export default {
+             }
+ 
+             if (focusTarget) {
+-                focus(focusTarget, { focusVisible: true });
++                focus(focusTarget);
+             }
+         },
+         maximize(event) {
+diff --git a/dialog/index.mjs b/dialog/index.mjs
+index 69ef963e996ea48fd8584450fc16654828a0bcc2..94521c273f5e42e67f62bdcfcfd21af10c9461e5 100644
+--- a/dialog/index.mjs
++++ b/dialog/index.mjs
+@@ -274,9 +274,7 @@ var script = {
+         }
+       }
+       if (focusTarget) {
+-        focus(focusTarget, {
+-          focusVisible: true
+-        });
++        focus(focusTarget);
+       }
+     },
+     maximize: function maximize(event) {

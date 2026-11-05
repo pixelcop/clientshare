@@ -12,6 +12,7 @@ ENV VITE_SENTRY_DSN=${VITE_SENTRY_DSN}
 RUN apt update && apt install -y ca-certificates
 
 COPY web/package.json web/bun.lock ./web/
+COPY web/patches ./web/patches
 RUN --mount=type=cache,target=/root/.bun/install/cache \
     cd web && bun install --frozen-lockfile
 COPY web ./web
