@@ -69,77 +69,119 @@ func TestInternalAuthHandlerHostedLogin(t *testing.T) {
 }
 
 func TestInternalAuthHandlerHostedPasskeyOptions(t *testing.T) {
-	env := setupOtherHandlersEnv(t)
-	credential := webauthn.Credential{ID: []byte("hosted-passkey-credential"), PublicKey: []byte("test-public-key")}
-	credentialData, err := json.Marshal(credential)
-	if err != nil {
-		t.Fatalf("marshal passkey credential: %v", err)
-	}
-	if err := env.db.Create(&models.PasskeyCredential{
-		TenantID:         env.adminUser.TenantID,
-		UserID:           env.adminUser.ID,
-		CredentialID:     base64.RawURLEncoding.EncodeToString(credential.ID),
-		CredentialIDHash: "hosted-passkey-credential-hash",
-		CredentialData:   credentialData,
-		RPID:             handlersTestPublicDomain,
-		Name:             "Laptop",
-		CreatedAt:        time.Now(),
-	}).Error; err != nil {
-		t.Fatalf("create passkey credential: %v", err)
-	}
+	for _, passwordAvailable := range []bool{true, false} {
+		t.Run(map[bool]string{true: "password-and-passkey", false: "passkey-only"}[passwordAvailable], func(t *testing.T) {
+			env := setupOtherHandlersEnv(t)
+			if !passwordAvailable {
+				if err := env.db.Model(&env.adminUser).Update("password_hash", "").Error; err != nil {
+					t.Fatal(err)
+				}
+			}
+			credential := webauthn.Credential{ID: []byte("hosted-passkey-credential"), PublicKey: []byte("test-public-key")}
+			credentialData, err := json.Marshal(credential)
+			if err != nil {
+				t.Fatalf("marshal passkey credential: %v", err)
+			}
+			if err := env.db.Create(&models.PasskeyCredential{
+				TenantID:         env.adminUser.TenantID,
+				UserID:           env.adminUser.ID,
+				CredentialID:     base64.RawURLEncoding.EncodeToString(credential.ID),
+				CredentialIDHash: "hosted-passkey-credential-hash",
+				CredentialData:   credentialData,
+				RPID:             handlersTestPublicDomain,
+				Name:             "Laptop",
+				CreatedAt:        time.Now(),
+			}).Error; err != nil {
+				t.Fatalf("create passkey credential: %v", err)
+			}
 
-	app := fiber.New()
-	secret := "12345678901234567890123456789012"
-	hostedLoginSvc := services.NewHostedLoginService(env.db, handlersTestPublicBaseURL, "reset-secret")
-	passkeyAuth := handlers.NewAuthHandler(
-		env.db,
-		env.signingKey,
-		env.queue,
-		handlersTestPublicBaseURL,
-		"reset-secret",
-		"invite-secret",
-		30*time.Minute,
-		72*time.Hour,
-		"https://clientshare.app",
-		hostedLoginSvc,
-		services.NewTenantSettingsService(env.db),
-	)
-	handlers.RegisterInternalAuthRoutes(app.Group("/internal", middleware.InternalAuthRequired(secret)), hostedLoginSvc, passkeyAuth)
+			app := fiber.New()
+			secret := "12345678901234567890123456789012"
+			hostedLoginSvc := services.NewHostedLoginService(env.db, handlersTestPublicBaseURL, "reset-secret")
+			passkeyAuth := handlers.NewAuthHandler(
+				env.db,
+				env.signingKey,
+				env.queue,
+				handlersTestPublicBaseURL,
+				"reset-secret",
+				"invite-secret",
+				30*time.Minute,
+				72*time.Hour,
+				"https://clientshare.app",
+				hostedLoginSvc,
+				services.NewTenantSettingsService(env.db),
+			)
+			handlers.RegisterInternalAuthRoutes(app.Group("/internal", middleware.InternalAuthRequired(secret)), hostedLoginSvc, passkeyAuth)
 
-	req := jsonRequest(http.MethodPost, "/internal/auth/hosted-login/passkey/options", map[string]any{
-		"email": env.adminUser.Email,
-	})
-	req.Header.Set("X-Internal-Token", secret)
+			req := jsonRequest(http.MethodPost, "/internal/auth/hosted-login/passkey/options", map[string]any{
+				"email": env.adminUser.Email,
+			})
+			req.Header.Set("X-Internal-Token", secret)
 
-	resp, err := app.Test(req)
-	if err != nil {
-		t.Fatalf("app.Test() error = %v", err)
-	}
-	defer resp.Body.Close()
+			resp, err := app.Test(req)
+			if err != nil {
+				t.Fatalf("app.Test() error = %v", err)
+			}
+			defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusOK)
-	}
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusOK)
+			}
 
-	var body struct {
-		Passkey bool `json:"passkey"`
-		Options []struct {
-			ChallengeID string `json:"challenge_id"`
-			PublicKey   any    `json:"public_key"`
-		} `json:"options"`
+			var body struct {
+				Passkey           bool `json:"passkey"`
+				PasswordAvailable bool `json:"password_available"`
+				Options           []struct {
+					ChallengeID string `json:"challenge_id"`
+					PublicKey   any    `json:"public_key"`
+				} `json:"options"`
+			}
+			if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+				t.Fatalf("Decode() error = %v", err)
+			}
+			if !body.Passkey || body.PasswordAvailable != passwordAvailable || len(body.Options) != 1 || body.Options[0].ChallengeID == "" || body.Options[0].PublicKey == nil {
+				t.Fatalf("expected hosted passkey options, got %#v", body)
+			}
+			var challenge models.WebAuthnChallenge
+			if err := env.db.Where("id = ?", body.Options[0].ChallengeID).First(&challenge).Error; err != nil {
+				t.Fatalf("load hosted passkey challenge: %v", err)
+			}
+			if challenge.Purpose != "hosted_login" || challenge.RPID != handlersTestPublicDomain {
+				t.Fatalf("unexpected hosted challenge: %#v", challenge)
+			}
+		})
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
-		t.Fatalf("Decode() error = %v", err)
-	}
-	if !body.Passkey || len(body.Options) != 1 || body.Options[0].ChallengeID == "" || body.Options[0].PublicKey == nil {
-		t.Fatalf("expected hosted passkey options, got %#v", body)
-	}
-	var challenge models.WebAuthnChallenge
-	if err := env.db.Where("id = ?", body.Options[0].ChallengeID).First(&challenge).Error; err != nil {
-		t.Fatalf("load hosted passkey challenge: %v", err)
-	}
-	if challenge.Purpose != "hosted_login" || challenge.RPID != handlersTestPublicDomain {
-		t.Fatalf("unexpected hosted challenge: %#v", challenge)
+}
+
+func TestHostedOptionsReflectPasswordAvailability(t *testing.T) {
+	for _, password := range []bool{true, false} {
+		t.Run(map[bool]string{true: "password", false: "passkey-only"}[password], func(t *testing.T) {
+			env := setupOtherHandlersEnv(t)
+			if !password {
+				if err := env.db.Model(&env.adminUser).Update("password_hash", "").Error; err != nil {
+					t.Fatal(err)
+				}
+			}
+			svc := services.NewHostedLoginService(env.db, handlersTestPublicBaseURL, "reset-secret")
+			h := handlers.NewAuthHandler(env.db, env.signingKey, env.queue, handlersTestPublicBaseURL, "reset-secret", "invite-secret", 30*time.Minute, 72*time.Hour, "https://clientshare.app", svc, services.NewTenantSettingsService(env.db))
+			app := fiber.New()
+			handlers.RegisterInternalAuthRoutes(app.Group("/internal"), svc, h)
+			response, err := app.Test(jsonRequest(http.MethodPost, "/internal/auth/hosted-login/passkey/options", map[string]any{"email": env.adminUser.Email}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer response.Body.Close()
+			var body struct {
+				Passkey           bool `json:"passkey"`
+				PasswordAvailable bool `json:"password_available"`
+			}
+			if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
+				t.Fatal(err)
+			}
+			if response.StatusCode != 200 || body.Passkey || body.PasswordAvailable != password {
+				t.Fatalf("incorrect authentication capabilities: %d %+v", response.StatusCode, body)
+			}
+		})
 	}
 }
 

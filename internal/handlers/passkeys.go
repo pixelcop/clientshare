@@ -14,6 +14,7 @@ import (
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/gofiber/fiber/v3"
+	"github.com/pixelcop/clientshare/internal/auth"
 	"github.com/pixelcop/clientshare/internal/models"
 	"github.com/pixelcop/clientshare/internal/services"
 	"github.com/pixelcop/clientshare/pkg/utils"
@@ -310,19 +311,20 @@ func (h *AuthHandler) FinishPasskeyLoginHandler(c fiber.Ctx) error {
 // BeginHostedPasskeyLogin starts a ceremony from the configured hosted origin while
 // retaining the tenant hostname as the credential's RP ID.
 func (h *AuthHandler) BeginHostedPasskeyLogin(c fiber.Ctx, hostedLogin *services.HostedLoginService, email string) (fiber.Map, error) {
-	if h.hostedPasskeyOrigin == "" {
-		return fiber.Map{"passkey": false}, nil
-	}
 	identity, user, err := h.hostedPasskeyIdentity(c, hostedLogin, email)
 	if err != nil {
 		return nil, err
+	}
+	passwordAvailable := auth.PasswordConfigured(user.PasswordHash)
+	if h.hostedPasskeyOrigin == "" {
+		return fiber.Map{"passkey": false, "password_available": passwordAvailable}, nil
 	}
 	_, records, err := h.loadPasskeyUser(c, user)
 	if err != nil {
 		return nil, err
 	}
 	if len(records) == 0 {
-		return fiber.Map{"passkey": false}, nil
+		return fiber.Map{"passkey": false, "password_available": passwordAvailable}, nil
 	}
 	legacyRPID, err := webAuthnRPID(identity.RedirectURL)
 	if err != nil {
@@ -354,7 +356,7 @@ func (h *AuthHandler) BeginHostedPasskeyLogin(c fiber.Ctx, hostedLogin *services
 		}
 		options = append(options, fiber.Map{"challenge_id": challengeID, "public_key": assertion.Response})
 	}
-	return fiber.Map{"passkey": len(options) > 0, "options": options}, nil
+	return fiber.Map{"passkey": len(options) > 0, "options": options, "password_available": passwordAvailable}, nil
 }
 
 func (h *AuthHandler) FinishHostedPasskeyLogin(c fiber.Ctx, hostedLogin *services.HostedLoginService, email, challengeID string, credentialJSON json.RawMessage) (*services.HostedLoginResult, error) {

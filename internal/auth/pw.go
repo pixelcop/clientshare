@@ -12,3 +12,10 @@ func HashPassword(password string) (string, error) {
 func CheckPasswordHash(password, hash string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil
 }
+
+// PasswordConfigured distinguishes password-backed identities from passkey-only
+// accounts and disabled/placeholder credentials without exposing the hash.
+func PasswordConfigured(hash string) bool {
+	_, err := bcrypt.Cost([]byte(hash))
+	return err == nil
+}

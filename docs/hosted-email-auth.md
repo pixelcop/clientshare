@@ -24,6 +24,14 @@ the old link. Unknown, ambiguous and inactive identities do not receive tokens.
 Completion revalidates identity, tenant availability and current credentials.
 Password reset revokes sessions, handoffs and outstanding recovery/sign-in links.
 
+The hosted passkey-options response includes `password_available` independently
+of passkey enrollment, including when hosted passkey ceremonies are disabled.
+It reflects a usable password hash on the Core user, not a provisioning record.
+Control planes can therefore keep passkeys primary and show a password field
+after email fallback only for password-backed identities. This pre-authentication
+method metadata, like passkey availability, can reveal supported authentication
+methods; rate-limit public access and do not describe it as enumeration-proof.
+
 Public integrations must enforce browser-origin protection and IP rate limits,
 return generic request responses, generate URLs from trusted configuration, and
 avoid logging email tokens or credentials. Use URL fragments and an explicit
