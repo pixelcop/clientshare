@@ -35,6 +35,12 @@ Server storage, database, email credentials, and deployment configuration are ma
 
 The **User Guide** menu link is configured by the server operator using `server.docs.url`. With no override, all portals open their built-in `/docs/` guide, regardless of tenancy mode. An external documentation site is used only when the operator explicitly configures one.
 
+### Optional account-management link
+
+Operators can set `server.account_dashboard_url` to the full HTTP(S) URL of an external account-management page. This enables the workspace owner's **Account & billing** menu item and, when staff seats are full, an upgrade link. Leave it blank (the default) to hide both links. The URL is used as configured; no `/account` path is added. Restart the server after changing it.
+
+This setting is independent of `auth.hosted_passkey_origin`, which only authorizes a related origin for passkeys. Configuring passkey trust never enables account-management links.
+
 This setting is deployment-wide and is not edited on the portal Settings screen. Ask the server operator if your organization uses a different documentation address.
 
 ## Returning from the guide to your site

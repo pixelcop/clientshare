@@ -44,7 +44,7 @@ func TestSettingsHandlers_GetAndUpdate(t *testing.T) {
 	}
 	service := services.NewTenantSettingsService(db)
 	fallbackBaseURL := "https://fallback.example.test"
-	handler := handlerspkg.NewSettingsHandler(service, publicDir, fallbackBaseURL, tenantctx.ModeSingle, "https://clientshare.example.test/", "/docs/")
+	handler := handlerspkg.NewSettingsHandler(service, publicDir, fallbackBaseURL, tenantctx.ModeSingle, "https://accounts.example.test/manage/workspace/", "/docs/")
 
 	app := fiber.New()
 	app.Use(func(c fiber.Ctx) error {
@@ -72,8 +72,8 @@ func TestSettingsHandlers_GetAndUpdate(t *testing.T) {
 	if brandingBody["effective_public_base_url"] != "http://tenant.example.test" {
 		t.Fatalf("expected effective branding url to use request host, got %#v", brandingBody["effective_public_base_url"])
 	}
-	if brandingBody["account_dashboard_url"] != "https://clientshare.example.test/account" {
-		t.Fatalf("expected account dashboard url from hosted origin, got %#v", brandingBody["account_dashboard_url"])
+	if brandingBody["account_dashboard_url"] != "https://accounts.example.test/manage/workspace/" {
+		t.Fatalf("expected explicit account dashboard url unchanged, got %#v", brandingBody["account_dashboard_url"])
 	}
 	if brandingBody["docs_url"] != "/docs/" {
 		t.Fatalf("expected local docs URL, got %#v", brandingBody["docs_url"])

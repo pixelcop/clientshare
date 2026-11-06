@@ -242,6 +242,52 @@ func TestNewWebAppServesWebAuthnRelatedOrigins(t *testing.T) {
 	}
 }
 
+func TestNewWebAppAccountDashboardURL(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		passkeyOrigin string
+		accountURL    string
+	}{
+		{"self-hosted default", "", ""},
+		{"passkey trust does not imply an account page", "https://passkeys.example.com", ""},
+		{"explicit account page without passkey trust", "", "https://accounts.example.com/manage/"},
+		{"independent account page and passkey origin", "https://passkeys.example.com", "https://accounts.example.com/manage/"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			cfg := newTestConfig(root)
+			cfg.DevMode = true
+			cfg.Auth.HostedPasskeyOrigin = tc.passkeyOrigin
+			cfg.Server.AccountDashboardURL = tc.accountURL
+			cfg.InternalAPI.Enabled = true
+			cfg.InternalAPI.Secret = "12345678901234567890123456789012"
+			app, err := NewWebApp(cfg, newTestDB(t), zap.NewNop(), nil, storage.NewLocalStorage(root))
+			if err != nil {
+				t.Fatal(err)
+			}
+			req := httptest.NewRequest(http.MethodGet, "/api/settings/branding", nil)
+			req.Host = "frontend.local"
+			resp, err := app.Test(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("status = %d", resp.StatusCode)
+			}
+			var body struct {
+				AccountDashboardURL string `json:"account_dashboard_url"`
+			}
+			if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+				t.Fatal(err)
+			}
+			if body.AccountDashboardURL != tc.accountURL {
+				t.Fatalf("account URL = %q, want %q", body.AccountDashboardURL, tc.accountURL)
+			}
+		})
+	}
+}
+
 func TestNewWebApp_ProductionStaticCacheHeaders(t *testing.T) {
 	tempRoot, err := os.MkdirTemp("", "clientshare-web-cache-test-*")
 	if err != nil {

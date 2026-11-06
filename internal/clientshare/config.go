@@ -56,12 +56,13 @@ type Config struct {
 	DevMode    bool       `mapstructure:"dev_mode"`
 	SentryDSN  string     `mapstructure:"sentry_dsn" jsonschema_extras:"x-since=2026-04-16"`
 	Server     struct {
-		Host      string     `mapstructure:"host"`
-		Port      int        `mapstructure:"port"`
-		VitePort  int        `mapstructure:"vite_port" jsonschema_extras:"x-since=2026-08-01"`
-		BaseURL   string     `mapstructure:"base_url"`
-		Docs      DocsConfig `mapstructure:"docs" jsonschema_extras:"x-since=2026-10-15"`
-		MaxBodyMB int        `mapstructure:"max_body_mb" jsonschema_extras:"x-since=2026-02-06"`
+		Host                string     `mapstructure:"host"`
+		Port                int        `mapstructure:"port"`
+		VitePort            int        `mapstructure:"vite_port" jsonschema_extras:"x-since=2026-08-01"`
+		BaseURL             string     `mapstructure:"base_url"`
+		AccountDashboardURL string     `mapstructure:"account_dashboard_url" jsonschema_extras:"x-since=2026-11-06"`
+		Docs                DocsConfig `mapstructure:"docs" jsonschema_extras:"x-since=2026-10-15"`
+		MaxBodyMB           int        `mapstructure:"max_body_mb" jsonschema_extras:"x-since=2026-02-06"`
 	} `mapstructure:"server"`
 	Tenancy struct {
 		Mode                 string `mapstructure:"mode"`
@@ -321,6 +322,12 @@ func (cfg *Config) Validate() error {
 	}
 	if !validDocsLinkURL(cfg.DocsURL()) {
 		return fmt.Errorf("server.docs.url must be an http(s) URL or a root-relative path")
+	}
+	if value := strings.TrimSpace(cfg.Server.AccountDashboardURL); value != "" {
+		parsed, err := url.Parse(value)
+		if err != nil || !validDocsLinkURL(value) || parsed.Hostname() == "" {
+			return fmt.Errorf("server.account_dashboard_url must be an absolute http(s) URL")
+		}
 	}
 	if value := strings.TrimSpace(cfg.Server.Docs.SiteLink.URL); value != "" && !validDocsLinkURL(value) {
 		return fmt.Errorf("server.docs.site_link.url must be an http(s) URL or a root-relative path")

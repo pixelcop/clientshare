@@ -2,7 +2,7 @@ import { useAuthStore } from '@/stores/auth';
 import { useBrandingStore } from '@/stores/branding';
 
 // Match the account navigation: only the workspace owner can manage billing,
-// and only installations configured with a hosted account origin have a URL.
+// and only installations with an explicitly configured account page have a URL.
 export function useAccountDashboard() {
   const auth = useAuthStore();
   const branding = useBrandingStore();
