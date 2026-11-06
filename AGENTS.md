@@ -24,6 +24,23 @@ A file for [guiding coding agents](https://agents.md/).
 
 For frontend commands and conventions under `web/`, follow `web/AGENTS.md`.
 
+## Worktree previews
+
+- After copying local runtime configuration into a new feature worktree, set
+  `auth.hosted_passkey_origin: ""` in that worktree's ignored
+  `config/config.yaml` (or `config/config.yml`) by default. Branch-specific
+  preview origins do not match existing passkey relying-party/related-origin
+  configuration. This disables hosted passkey login/signup for the preview and
+  allows hosted email/password fallback without deleting enrolled credentials.
+- When pairing a hosted control-plane preview with Core, apply this setting to
+  the matching Core worktree and restart only its API through the development
+  service manager. Verify hosted sign-in options report `passkey: false` while
+  preserving the user's actual password availability.
+- Keep the runtime override uncommitted. Never change the main checkout,
+  production configuration, shared service settings or stored passkeys to make
+  a feature preview work. Enable hosted passkeys only when explicitly testing
+  them with a stable, correctly configured origin and relying party.
+
 ## Architecture
 
 - `cmd/` contains entrypoints such as `server` and `importclients`.
