@@ -19,6 +19,7 @@ server:
   port: 1234
   vite_port: 4321
   base_url: "https://test.example.com"
+  account_dashboard_url: "https://accounts.example.com/manage/"
   docs:
     url: "https://help.example.com/guide/"
 tenancy:
@@ -86,6 +87,7 @@ func TestConfigUnmarshal(t *testing.T) {
 	require.Equal(t, 1234, cfg.Server.Port)
 	require.Equal(t, 4321, cfg.Server.VitePort)
 	require.Equal(t, "https://test.example.com", cfg.Server.BaseURL)
+	require.Equal(t, "https://accounts.example.com/manage/", cfg.Server.AccountDashboardURL)
 	require.Equal(t, "https://help.example.com/guide/", cfg.Server.Docs.URL)
 	require.Equal(t, "hosted", cfg.Tenancy.Mode)
 	require.Equal(t, "X-Test-Tenant", cfg.Tenancy.InternalTargetHeader)
@@ -119,6 +121,23 @@ func TestConfigUnmarshal(t *testing.T) {
 	require.Equal(t, "#123456", cfg.Branding.PrimaryColor)
 	require.Equal(t, "admin@example.com", cfg.Admin.BootstrapEmail)
 	require.Equal(t, "secret", cfg.Admin.BootstrapPassword)
+}
+
+func TestAccountDashboardURLValidation(t *testing.T) {
+	for _, value := range []string{"", "https://accounts.example.com/manage/", "http://localhost:8080/account", " https://example.com/account "} {
+		t.Run("valid_"+value, func(t *testing.T) {
+			cfg := &Config{}
+			cfg.Server.AccountDashboardURL = value
+			require.NoError(t, cfg.Validate())
+		})
+	}
+	for _, value := range []string{"/account", "//example.com/account", "javascript:alert(1)", "https://user:password@example.com/account", "https://example.com/\naccount", "https://example.com/\\account", "https://"} {
+		t.Run("invalid_"+value, func(t *testing.T) {
+			cfg := &Config{}
+			cfg.Server.AccountDashboardURL = value
+			require.ErrorContains(t, cfg.Validate(), "server.account_dashboard_url")
+		})
+	}
 }
 
 func TestConfigSchemaContainsUnconditionalRequirements(t *testing.T) {

@@ -30,24 +30,19 @@ type SettingsHandler struct {
 	docsURL             string
 }
 
-func NewSettingsHandler(service *services.TenantSettingsService, publicDir, fallbackBaseURL, tenancyMode, hostedPasskeyOrigin, docsURL string) *SettingsHandler {
-	accountDashboardURL := ""
-	if origin := strings.TrimRight(strings.TrimSpace(hostedPasskeyOrigin), "/"); origin != "" {
-		accountDashboardURL = origin + "/account"
-	}
-
+func NewSettingsHandler(service *services.TenantSettingsService, publicDir, fallbackBaseURL, tenancyMode, accountDashboardURL, docsURL string) *SettingsHandler {
 	return &SettingsHandler{
 		service:             service,
 		publicDir:           publicDir,
 		fallbackBaseURL:     fallbackBaseURL,
 		tenancyMode:         normalizeTenancyMode(tenancyMode),
-		accountDashboardURL: accountDashboardURL,
+		accountDashboardURL: strings.TrimSpace(accountDashboardURL),
 		docsURL:             docsURL,
 	}
 }
 
-func RegisterSettingsRoutes(insecureAPI, api fiber.Router, service *services.TenantSettingsService, publicDir, fallbackBaseURL, tenancyMode, hostedPasskeyOrigin, docsURL string) {
-	handler := NewSettingsHandler(service, publicDir, fallbackBaseURL, tenancyMode, hostedPasskeyOrigin, docsURL)
+func RegisterSettingsRoutes(insecureAPI, api fiber.Router, service *services.TenantSettingsService, publicDir, fallbackBaseURL, tenancyMode, accountDashboardURL, docsURL string) {
+	handler := NewSettingsHandler(service, publicDir, fallbackBaseURL, tenancyMode, accountDashboardURL, docsURL)
 
 	insecureAPI.Get("/settings/branding", handler.GetBranding)
 	api.Get("/settings/tenant", middleware.RoleRequired("admin"), handler.GetTenantSettings)

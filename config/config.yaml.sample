@@ -3,6 +3,9 @@ server:
   host: "0.0.0.0"
   port: 8080
   base_url: "https://portal.example.com"
+  # Optional external account-management page for the workspace owner.
+  # Blank hides account/upgrade links, independently of passkey configuration.
+  account_dashboard_url: ""
   docs:
     # Where the APP'S "User Guide" menu goes. Blank uses bundled /docs/ in ALL
     # tenancy modes. Set an http(s) URL to use a separately hosted docs site.

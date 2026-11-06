@@ -20,7 +20,7 @@ type QuotaError struct {
 
 func (e *QuotaError) Error() string { return e.Message }
 
-var ErrStaffLimit = &QuotaError{"staff_limit_reached", "Staff user limit reached. Remove a staff user or contact your administrator to increase the limit."}
+var ErrStaffLimit = &QuotaError{"staff_limit_reached", "All staff seats are in use. Free a seat or increase the staff limit before inviting more staff."}
 var ErrStorageLimit = &QuotaError{"storage_limit_reached", "Storage limit reached. Delete files or contact your administrator to increase the limit."}
 
 // lockQuota must run inside the same transaction as the protected mutation.

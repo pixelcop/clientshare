@@ -116,7 +116,7 @@ func NewWebApp(cfg *Config, db *gorm.DB, logger *zap.Logger, emailQueue emailpkg
 
 	// Settings and branding (admin only)
 	publicDir := "./public"
-	handlers.RegisterSettingsRoutes(insecure, api, tenantSettingsService, publicDir, cfg.Server.BaseURL, cfg.Tenancy.Mode, cfg.Auth.HostedPasskeyOrigin, cfg.DocsURL())
+	handlers.RegisterSettingsRoutes(insecure, api, tenantSettingsService, publicDir, cfg.Server.BaseURL, cfg.Tenancy.Mode, cfg.Server.AccountDashboardURL, cfg.DocsURL())
 
 	// Email queue controls (manager/admin)
 	handlers.RegisterEmailQueueRoutes(api, emailQueue)

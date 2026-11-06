@@ -3,8 +3,8 @@ import Avatar from 'openvue/avatar';
 import Menu from 'openvue/menu';
 import { storeToRefs } from 'pinia';
 
+import { useAccountDashboard } from '@/composables/useAccountDashboard';
 import { useLayout } from '@/composables/useLayout';
-import { useBrandingStore } from '@/stores/branding';
 
 import { useAuthStore } from '../stores/auth';
 
@@ -12,7 +12,7 @@ const { isDarkTheme, toggleDarkMode } = useLayout();
 const router = useRouter();
 const auth = useAuthStore();
 const { user } = storeToRefs(auth);
-const { branding } = storeToRefs(useBrandingStore());
+const accountDashboardURL = useAccountDashboard();
 
 const menuRef = ref();
 
@@ -61,14 +61,11 @@ const menuItems = computed(() => {
     });
   }
 
-  if (user.value?.is_initial_admin && branding.value.accountDashboardURL) {
-    const accountURL = new URL(branding.value.accountDashboardURL);
-    // Keep the email hint out of HTTP requests and Referer headers.
-    accountURL.hash = `email=${encodeURIComponent(user.value.email)}`;
+  if (accountDashboardURL.value) {
     items.push({
       label: 'Account & billing',
       icon: 'oi oi-external-link',
-      url: accountURL.toString(),
+      url: accountDashboardURL.value,
     });
   }
 

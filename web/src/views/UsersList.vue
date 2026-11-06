@@ -5,9 +5,11 @@ import { useToast } from 'openvue/usetoast';
 import { storeToRefs } from 'pinia';
 
 import DeleteUserModal from '@/components/DeleteUserModal.vue';
+import StaffSeatUsage from '@/components/StaffSeatUsage.vue';
 import UserListItem from '@/components/UserListItem.vue';
 import UserModal from '@/components/UserModal.vue';
 import { useClientsStore } from '@/stores/clients';
+import { useStaffQuotaStore } from '@/stores/staffQuota';
 import type { GeneratedUserAccessLink } from '@/stores/users';
 import type { UserListFilters } from '@/stores/users';
 import type { UserCreatePayload, UserUpdatePayload } from '@/stores/users';
@@ -25,6 +27,7 @@ const props = withDefaults(
 
 const usersStore = useUsersStore();
 const clientsStore = useClientsStore();
+const staffQuota = useStaffQuotaStore();
 const { listedUsers, listingPagination, listingLoading } = storeToRefs(usersStore);
 const toast = useToast();
 const router = useRouter();
@@ -79,6 +82,7 @@ function fetchUserPage(page = 1, pageSize = listingPagination.value.page_size) {
 }
 
 onMounted(() => {
+  void staffQuota.refresh();
   void fetchUserPage(1, listingPagination.value.page_size);
   void clientsStore.fetchClients();
 });
@@ -122,7 +126,11 @@ function confirmDelete(user: User) {
 }
 
 async function createUser(payload: UserCreatePayload) {
-  await usersStore.createUser(payload);
+  try {
+    await usersStore.createUser(payload);
+  } finally {
+    void staffQuota.refresh();
+  }
   showCreate.value = false;
 }
 
@@ -130,7 +138,11 @@ async function updateUser(payload: UserUpdatePayload) {
   if (!editUserObj.value) {
     return;
   }
-  await usersStore.updateUser(editUserObj.value.id, payload);
+  try {
+    await usersStore.updateUser(editUserObj.value.id, payload);
+  } finally {
+    void staffQuota.refresh();
+  }
   showEdit.value = false;
   editUserObj.value = null;
 }
@@ -140,6 +152,7 @@ async function removeUser() {
     return;
   }
   await usersStore.deleteUser(deleteUserObj.value.id);
+  void staffQuota.refresh();
   showDelete.value = false;
   deleteUserObj.value = null;
 }
@@ -269,6 +282,8 @@ function clearClientScope() {
         </Button>
       </div>
     </div>
+
+    <StaffSeatUsage />
 
     <div class="flex flex-col gap-3 mb-4">
       <div class="flex flex-col gap-3 lg:flex-row lg:items-end">

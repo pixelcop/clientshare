@@ -38,7 +38,7 @@ axios.interceptors.response.use(
 );
 
 export const useAuthStore = defineStore('auth', () => {
-  const user = ref<User | null>(null);
+  const user = ref<(User & { is_initial_admin?: boolean }) | null>(null);
   const token = ref<string | null>(null);
   let sessionID: string | null = null;
   const loading = ref(false);
