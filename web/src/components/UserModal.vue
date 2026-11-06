@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import StaffSeatUsage from '@/components/StaffSeatUsage.vue';
+import { useStaffQuotaStore } from '@/stores/staffQuota';
 import type { Client, User } from '@/types/models';
 
 const props = defineProps<{
@@ -21,6 +23,21 @@ const clientIds = ref<string[]>([]);
 const localError = ref<string | null>(null);
 
 const isEdit = computed(() => props.mode === 'edit');
+const quota = useStaffQuotaStore();
+const existingStaff = computed(
+  () => isEdit.value && (props.user?.role === 'admin' || props.user?.role === 'manager'),
+);
+const staffBlocked = computed(() => !existingStaff.value && !quota.canAddStaff);
+const invitationBlocked = computed(() => role.value !== 'client' && staffBlocked.value);
+
+// Billing opens in another tab. Recheck seats on return without resetting the draft.
+function refreshQuotaOnFocus() {
+  if (props.show) {
+    void quota.refresh();
+  }
+}
+onMounted(() => window.addEventListener('focus', refreshQuotaOnFocus));
+onBeforeUnmount(() => window.removeEventListener('focus', refreshQuotaOnFocus));
 
 function resetForm() {
   name.value = props.user?.name || '';
@@ -36,6 +53,7 @@ watch(
   (show) => {
     if (show) {
       resetForm();
+      void quota.refresh();
     }
   },
 );
@@ -51,6 +69,7 @@ watch(
 
 function onSubmit() {
   localError.value = null;
+  if (invitationBlocked.value || props.loading) {return;}
   if (!name.value.trim() || !email.value.trim()) {
     localError.value = 'Name and email are required.';
     return;
@@ -99,8 +118,17 @@ function onSubmit() {
       </div>
     </template>
     <form @submit.prevent="onSubmit">
+      <StaffSeatUsage v-if="!existingStaff" />
       <div class="grid grid-cols-1 gap-4">
         <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Role</label>
+          <select v-model="role" class="px-3 py-2 border rounded w-full" :disabled="loading">
+            <option value="admin" :disabled="staffBlocked">Admin</option>
+            <option value="manager" :disabled="staffBlocked">Manager</option>
+            <option value="client">Customer</option>
+          </select>
+        </div>
+        <div v-if="!invitationBlocked">
           <label class="block text-sm font-medium text-gray-700 mb-1">Name</label>
           <input
             v-model="name"
@@ -112,7 +140,7 @@ function onSubmit() {
             :disabled="loading"
           />
         </div>
-        <div>
+        <div v-if="!invitationBlocked">
           <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
           <input
             v-model="email"
@@ -122,14 +150,6 @@ function onSubmit() {
             required
             :disabled="loading"
           />
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Role</label>
-          <select v-model="role" class="px-3 py-2 border rounded w-full" :disabled="loading">
-            <option value="admin">Admin</option>
-            <option value="manager">Manager</option>
-            <option value="client">Customer</option>
-          </select>
         </div>
         <div v-if="role === 'client'">
           <label class="block text-sm font-medium text-gray-700 mb-1">Assign Clients</label>
@@ -155,7 +175,7 @@ function onSubmit() {
         <Button type="button" :disabled="loading" @click="$emit('close')" severity="secondary">
           Cancel
         </Button>
-        <Button type="submit" :disabled="loading">
+        <Button type="submit" :disabled="loading || invitationBlocked">
           {{ isEdit ? 'Save' : 'Create' }}
         </Button>
       </div>
