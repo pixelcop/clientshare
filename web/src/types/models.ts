@@ -128,6 +128,24 @@ export interface FileActivity {
 }
 
 //////////
+// source: hosted_email_token.go
+
+/**
+ * HostedEmailToken is separate from portal reset tokens and login handoffs.
+ * Only a keyed hash is stored; one current token exists per user and purpose.
+ */
+export interface HostedEmailToken {
+  ID: string;
+  TenantID: string;
+  UserID: string;
+  Purpose: string;
+  Destination: string;
+  ExpiresAt: string;
+  UsedAt?: string;
+  CreatedAt: string;
+}
+
+//////////
 // source: invite_token.go
 
 export interface InviteToken {

@@ -33,8 +33,56 @@ func RegisterInternalAuthRoutes(router fiber.Router, svc *services.HostedLoginSe
 	router.Post("/auth/hosted-login/passkey/options", h.HostedPasskeyOptions)
 	router.Post("/auth/hosted-login/passkey/verify", h.HostedPasskeyVerify)
 	router.Post("/auth/hosted-login", h.HostedLogin)
+	router.Post("/auth/hosted-email/request", h.HostedEmailRequest)
+	router.Post("/auth/hosted-email/complete", h.HostedEmailComplete)
 	router.Post("/auth/sessions/validate", h.ValidateAccountSession)
 	router.Post("/auth/sessions/revoke", h.RevokeAccountSession)
+}
+
+func (h *InternalAuthHandler) HostedEmailRequest(c fiber.Ctx) error {
+	if h.svc == nil {
+		return c.SendStatus(503)
+	}
+	var req struct {
+		Email       string `json:"email"`
+		Purpose     string `json:"purpose"`
+		Destination string `json:"destination"`
+	}
+	if err := c.Bind().Body(&req); err != nil {
+		return c.SendStatus(400)
+	}
+	result, err := h.svc.IssueEmailToken(c.Context(), req.Email, req.Purpose, req.Destination)
+	if err != nil {
+		return hostedLoginError(c, err)
+	}
+	c.Set("Cache-Control", "no-store")
+	return c.JSON(result)
+}
+
+func (h *InternalAuthHandler) HostedEmailComplete(c fiber.Ctx) error {
+	if h.svc == nil {
+		return c.SendStatus(503)
+	}
+	var req struct {
+		Token    string `json:"token"`
+		Purpose  string `json:"purpose"`
+		Password string `json:"password"`
+	}
+	if err := c.Bind().Body(&req); err != nil {
+		return c.SendStatus(400)
+	}
+	if req.Purpose == services.HostedEmailReset && (len(req.Password) < 12 || len(req.Password) > 72) {
+		return c.Status(400).JSON(fiber.Map{"error": "Password must contain 12 to 72 bytes"})
+	}
+	result, destination, err := h.svc.CompleteEmailToken(c.Context(), req.Token, req.Purpose, req.Password)
+	if err != nil {
+		if errors.Is(err, services.ErrHostedEmailTokenInvalid) {
+			return c.Status(400).JSON(fiber.Map{"error": "Invalid or expired email link"})
+		}
+		return hostedLoginError(c, err)
+	}
+	c.Set("Cache-Control", "no-store")
+	return c.JSON(fiber.Map{"login": result, "destination": destination})
 }
 
 func (h *InternalAuthHandler) ValidateAccountSession(c fiber.Ctx) error {

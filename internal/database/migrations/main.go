@@ -23,6 +23,7 @@ func main() {
 		migration.NewGoMigration(45, upAddBrowserSessions, downAddBrowserSessions),
 		migration.NewGoMigration(46, upImmutableObjectsCompatible, downImmutableObjects),
 		migration.NewGoMigration(47, upAcknowledgedMissingObjects, downAcknowledgedMissingObjects),
+		migration.NewGoMigration(48, upAddHostedEmailTokens, downAddHostedEmailTokens),
 	}
 
 	migration.Run(goMigrations, func(path string) (db.DatabaseConfig, error) {
