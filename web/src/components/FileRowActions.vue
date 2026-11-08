@@ -5,9 +5,11 @@ import type { MenuItem } from 'openvue/menuitem';
 import { useAuthStore } from '@/stores/auth';
 import { useFileManagerStore } from '@/stores/fileManager';
 import type { FileItem } from '@/types/models';
+import type { SharingScope } from '@/types/sharing';
 import { canPreviewFile } from '@/types/util';
 
 import ConfirmDeleteModal from './ConfirmDeleteModal.vue';
+import SharingDialog from './SharingDialog.vue';
 
 const { item } = defineProps<{ item: FileItem }>();
 const emit = defineEmits<{ open: [item: FileItem] }>();
@@ -16,10 +18,21 @@ const auth = useAuthStore();
 const menu = ref<InstanceType<typeof Menu> | null>(null);
 const menuOpen = ref(false);
 const showDelete = ref(false);
+const showShare = ref(false);
 const menuId = `item-actions-${item.id}`;
 const isFolder = computed(() => item.type === 'folder');
 const previewable = computed(() => canPreviewFile(item));
-const canDelete = computed(() => ['admin', 'manager'].includes(auth.user?.role || ''));
+const canDelete = computed(() => !!item.capabilities?.can_delete);
+const canRead = computed(() => !!item.capabilities?.can_read);
+const canShare = computed(
+  () => !!auth.user && auth.user.role !== 'link' && !!item.capabilities?.can_share,
+);
+const sharingScope = computed<SharingScope>(() => ({
+  kind: 'item',
+  id: item.id,
+  name: item.filename,
+  itemType: item.type,
+}));
 const primaryLabel = computed(() =>
   isFolder.value ? 'Open' : previewable.value ? 'Preview' : 'Download',
 );
@@ -40,7 +53,7 @@ function open() {
 }
 const actions = computed<MenuItem[]>(() => {
   const result: MenuItem[] = [];
-  if (fileManager.canRead) {
+  if (canRead.value) {
     if (isFolder.value || previewable.value) {
       result.push({
         label: primaryLabel.value,
@@ -52,6 +65,15 @@ const actions = computed<MenuItem[]>(() => {
       label: isFolder.value ? 'Download ZIP' : 'Download',
       icon: 'oi oi-download',
       command: download,
+    });
+  }
+  if (canShare.value) {
+    result.push({
+      label: 'Share',
+      icon: 'oi oi-users',
+      command: () => {
+        showShare.value = true;
+      },
     });
   }
   if (canDelete.value) {
@@ -74,7 +96,7 @@ const actions = computed<MenuItem[]>(() => {
   <div class="row-actions" :data-menu-open="menuOpen" @click.stop>
     <div class="row-quick-actions">
       <Button
-        v-if="fileManager.canRead"
+        v-if="canRead"
         :icon="isFolder ? 'oi oi-folder-open' : previewable ? 'oi oi-eye' : 'oi oi-download'"
         :aria-label="`${primaryLabel} ${item.filename}`"
         :title="primaryLabel"
@@ -83,7 +105,7 @@ const actions = computed<MenuItem[]>(() => {
         @click.stop="open"
       />
       <Button
-        v-if="fileManager.canRead && (isFolder || previewable)"
+        v-if="canRead && (isFolder || previewable)"
         icon="oi oi-download"
         :aria-label="`Download ${item.filename}${isFolder ? ' as ZIP' : ''}`"
         :title="isFolder ? 'Download ZIP' : 'Download'"
@@ -92,6 +114,19 @@ const actions = computed<MenuItem[]>(() => {
         @click.stop="download"
       />
     </div>
+    <Button
+      v-if="canShare"
+      icon="oi oi-users"
+      :aria-label="`Share ${item.filename}`"
+      title="Share"
+      aria-haspopup="dialog"
+      :aria-expanded="showShare"
+      :aria-controls="`sharing-item-${item.id}`"
+      severity="secondary"
+      variant="text"
+      class="inline-share"
+      @click.stop="showShare = true"
+    />
     <Button
       v-if="actions.length"
       icon="oi oi-ellipsis-h"
@@ -118,6 +153,12 @@ const actions = computed<MenuItem[]>(() => {
       :item="item"
       @close="showDelete = false"
     />
+    <SharingDialog
+      v-if="showShare"
+      :visible="showShare"
+      :scope="sharingScope"
+      @close="showShare = false"
+    />
   </div>
 </template>
 
@@ -126,7 +167,7 @@ const actions = computed<MenuItem[]>(() => {
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  width: 132px;
+  width: 176px;
 }
 .row-actions :deep(button) {
   width: 44px;
@@ -137,9 +178,17 @@ const actions = computed<MenuItem[]>(() => {
   display: flex;
   visibility: hidden;
 }
+.inline-share {
+  visibility: hidden;
+}
 .file-row:hover .row-quick-actions,
 .file-row:focus-within .row-quick-actions,
 .row-actions[data-menu-open='true'] .row-quick-actions {
+  visibility: visible;
+}
+.file-row:hover .inline-share,
+.file-row:focus-within .inline-share,
+.row-actions[data-menu-open='true'] .inline-share {
   visibility: visible;
 }
 /* A hidden control must still become visible as keyboard focus enters its row.
@@ -152,12 +201,18 @@ const actions = computed<MenuItem[]>(() => {
   .row-quick-actions {
     visibility: visible;
   }
+  .inline-share {
+    visibility: visible;
+  }
 }
 @media (max-width: 480px) {
   .row-actions {
     width: 88px;
   }
   .row-quick-actions > :deep(button:nth-child(2)) {
+    display: none;
+  }
+  .inline-share {
     display: none;
   }
 }

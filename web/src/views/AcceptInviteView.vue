@@ -46,16 +46,19 @@ async function onSubmit() {
   error.value = null;
   message.value = null;
   try {
-    const response = await axios.post<{ passkey_enrollment?: boolean }>('/api/auth/accept-invite', {
-      token: token.value,
-      password: password.value,
-    });
+    const response = await axios.post<{ passkey_enrollment?: boolean; redirect_to?: string }>(
+      '/api/auth/accept-invite',
+      {
+        token: token.value,
+        password: password.value,
+      },
+    );
     await auth.fetchMe(true);
     if (response.data.passkey_enrollment) {
       auth.offerPasskeyEnrollment();
     }
     message.value = 'Password set. Signing you in...';
-    await router.push('/');
+    await router.push(response.data.redirect_to || '/');
   } catch (e: unknown) {
     error.value = resolveErrorMessage(e, 'Unable to accept invite.');
   } finally {

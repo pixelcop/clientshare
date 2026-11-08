@@ -9,7 +9,7 @@ import {
   linkAccessLabel,
   linkAccessOptions,
 } from '@/types/linkAccess';
-import type { SecureLink } from '@/types/models';
+import type { AccessCapabilities, SecureLink } from '@/types/models';
 
 import SecureLinkResult from './SecureLinkResult.vue';
 
@@ -25,6 +25,7 @@ const props = defineProps<{
   collection?: boolean;
   targetName?: string;
   result?: SecureLink | null;
+  capabilities?: AccessCapabilities;
 }>();
 const emit = defineEmits<{
   submit: [
@@ -40,6 +41,18 @@ const emit = defineEmits<{
 }>();
 const purpose = ref<'send' | 'collect'>(props.collection ? 'collect' : 'send');
 const accessType = ref<LinkAccessMode>('read');
+const allowedAccess = computed(() =>
+  linkAccessOptions.filter(
+    (option) =>
+      !props.capabilities ||
+      ((option.value !== 'read' || props.capabilities.can_read) &&
+        (option.value !== 'write' || props.capabilities.can_upload) &&
+        (option.value !== 'readwrite' ||
+          (props.capabilities.can_read && props.capabilities.can_upload))),
+  ),
+);
+const allowsMode = (mode: LinkAccessMode) =>
+  allowedAccess.value.some((option) => option.value === mode);
 const expiryDays = ref<number | string>(props.defaultExpiryDays || 90);
 const anchorTime = ref(Date.now());
 const expiryOptions = [7, 14, 30, 60, 90, 120];
@@ -64,16 +77,23 @@ function resetSettings() {
   // client/item dialog. Collect always starts at upload-only, never readwrite.
   purpose.value = props.collection ? 'collect' : 'send';
   accessType.value = props.collection ? 'write' : props.defaultAccessType || 'read';
+  if (!allowsMode(accessType.value)) {
+    accessType.value = (allowedAccess.value[0]?.value as LinkAccessMode) || 'read';
+    purpose.value = accessType.value === 'write' ? 'collect' : 'send';
+  }
   expiryDays.value = normalizeExpiry(props.defaultExpiryDays || 90);
   anchorTime.value = Date.now();
 }
 function setPurpose(value: 'send' | 'collect') {
+  if (!allowsMode(value === 'collect' ? 'write' : 'read')) {
+    return;
+  }
   purpose.value = value;
   accessType.value = value === 'collect' ? 'write' : 'read';
 }
 function getSettings() {
   return {
-    valid: expiryValid.value,
+    valid: expiryValid.value && allowsMode(accessType.value),
     accessType: accessType.value,
     expiryDays: normalizeExpiry(expiryDays.value),
     expiresAt: expiresAt.value,
@@ -129,6 +149,7 @@ const formComponent = computed(() => (props.embedded ? 'div' : 'form'));
             type="radio"
             :name="`${fieldPrefix}-purpose`"
             :checked="purpose === 'send'"
+            :disabled="!allowsMode('read')"
             @change="setPurpose('send')"
           />
           Send documents</label
@@ -138,6 +159,7 @@ const formComponent = computed(() => (props.embedded ? 'div' : 'form'));
             type="radio"
             :name="`${fieldPrefix}-purpose`"
             :checked="purpose === 'collect'"
+            :disabled="!allowsMode('write')"
             @change="setPurpose('collect')"
           />
           Collect uploads</label
@@ -148,7 +170,7 @@ const formComponent = computed(() => (props.embedded ? 'div' : 'form'));
         <Select
           :inputId="`${fieldPrefix}-access`"
           v-model="accessType"
-          :options="linkAccessOptions"
+          :options="allowedAccess"
           optionLabel="label"
           optionValue="value"
           fluid

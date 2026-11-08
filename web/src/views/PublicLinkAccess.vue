@@ -1,18 +1,28 @@
 <script setup lang="ts">
-import { storeToRefs } from 'pinia';
+import axios from 'axios';
 
 import FileList from '@/components/FileList.vue';
 import PublicLinkSignup from '@/components/PublicLinkSignup.vue';
+import { useAuthStore } from '@/stores/auth';
 import { useFileManagerStore } from '@/stores/fileManager';
 import { usePublicLinkStore } from '@/stores/publicLink';
 
-const { folderId } = defineProps<{ folderId: string }>();
+const { folderId } = defineProps<{ folderId?: string }>();
+const router = useRouter();
 
 const publicLink = usePublicLinkStore();
 const fileManager = useFileManagerStore();
+const auth = useAuthStore();
 
-const clientName = computed(() => publicLink.client?.name || 'Client Files');
-const { accessType } = storeToRefs(publicLink);
+const clientName = computed(
+  () =>
+    publicLink.target?.filename ||
+    publicLink.client?.name ||
+    fileManager.context?.client_name ||
+    fileManager.context?.folder.filename ||
+    'Shared files',
+);
+const accessType = computed(() => publicLink.link?.access_type || auth.user?.access_type || 'read');
 
 const accessLabel = computed(() => {
   if (['read', 'view'].includes(accessType.value)) {
@@ -44,11 +54,27 @@ const expiresAt = computed(() => {
 async function loadLink() {
   const token = localStorage.getItem('link');
   if (!token) {
+    if (folderId || auth.user?.file_id) {
+      await fileManager.changeFolder(folderId || auth.user?.file_id);
+    } else {
+      try {
+        const response = await axios.get('/api/folders');
+        await fileManager.changeFolder(response.data.context.folder.id);
+      } catch {
+        fileManager.error = 'This link is unavailable. Open the original sharing link again.';
+      }
+    }
     return;
   }
   await publicLink.validateLink(token);
   if (!publicLink.error) {
-    await fileManager.changeFolder(folderId);
+    if (publicLink.target?.type === 'file') {
+      await router.replace(`/files/${publicLink.target.id}`);
+      return;
+    }
+    await fileManager.changeFolder(
+      folderId || publicLink.target?.id || publicLink.client?.root_folder_id || undefined,
+    );
   }
 }
 

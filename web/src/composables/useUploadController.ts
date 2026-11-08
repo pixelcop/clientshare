@@ -4,6 +4,7 @@
 import { computed, onBeforeUnmount, ref } from 'vue';
 
 import { useFileManagerStore } from '@/stores/fileManager';
+import type { AccessCapabilities } from '@/types/models';
 
 export function useUploadController(options: {
   canNotify: () => boolean;
@@ -21,6 +22,7 @@ export function useUploadController(options: {
   let dragLeaveTimer: ReturnType<typeof setTimeout> | null = null;
   let finishTimer: ReturnType<typeof setTimeout> | null = null;
   let destinationFolderId: string | null = null;
+  let destinationCapabilities: AccessCapabilities | undefined;
   let shouldNotify = false;
   let transfer: AbortController | null = null;
   const preparing = ref(false);
@@ -32,6 +34,7 @@ export function useUploadController(options: {
       return false;
     }
     destinationFolderId = fileManager.currentFolder;
+    destinationCapabilities = { ...fileManager.capabilities };
     shouldNotify = options.canNotify() && options.notifyClient();
     transfer = new AbortController();
     stopped.value = false;
@@ -399,6 +402,7 @@ export function useUploadController(options: {
       }
 
       const folder = await fileManager.createFolder(segment, {
+        destinationCapabilities,
         targetFolderId: parentFolderId,
         reuseExisting: true,
         signal: transfer?.signal,
@@ -499,6 +503,7 @@ export function useUploadController(options: {
           },
           {
             targetFolderId,
+            destinationCapabilities,
             refreshCurrentFolder: false,
             signal: transfer?.signal,
           },
@@ -566,6 +571,7 @@ export function useUploadController(options: {
         },
         {
           targetFolderId: destinationFolderId,
+          destinationCapabilities,
           refreshCurrentFolder: false,
           signal: transfer?.signal,
         },
@@ -583,7 +589,6 @@ export function useUploadController(options: {
           }
         }
         uploadError.value = result.error;
-        
       }
     } catch (error) {
       uploadError.value = getUploadErrorMessage(error, 'Failed to upload files.');
@@ -684,7 +689,9 @@ export function useUploadController(options: {
       const files = pendingFiles.value;
       const targetNames = files.map((file) => renameMap.get(file) ?? file.name);
       uploading.value = true;
-      if (finishTimer) {clearTimeout(finishTimer);}
+      if (finishTimer) {
+        clearTimeout(finishTimer);
+      }
       uploadProgress.value = 0;
       const result = await fileManager.uploadFiles(
         files,
@@ -694,6 +701,7 @@ export function useUploadController(options: {
         },
         {
           targetFolderId: destinationFolderId,
+          destinationCapabilities,
           refreshCurrentFolder: false,
           signal: transfer?.signal,
           targetNames,

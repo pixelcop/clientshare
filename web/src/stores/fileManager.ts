@@ -1,24 +1,30 @@
 import axios from 'axios';
 import { defineStore, storeToRefs } from 'pinia';
 
-import type { FileItem, PaginatedResult, PaginationResponse } from '@/types/models';
+import type {
+  AccessCapabilities,
+  FileItem,
+  PaginatedResult,
+  PaginationResponse,
+} from '@/types/models';
 import { defaultPagination } from '@/types/util';
 import type { WorkspaceContext, WorkspaceListing } from '@/types/workspace';
 
 import { useAuthStore } from './auth';
 import { useClientsStore } from './clients';
-import { usePublicLinkStore } from './publicLink';
 
 export type FileSortField = 'filename' | 'size' | 'uploaded_at';
 
 export const useFileManagerStore = defineStore('fileManager', () => {
   interface CreateFolderOptions {
+    destinationCapabilities?: AccessCapabilities;
     targetFolderId?: string | null;
     reuseExisting?: boolean;
     signal?: AbortSignal;
   }
 
   interface UploadFilesOptions {
+    destinationCapabilities?: AccessCapabilities;
     targetFolderId?: string | null;
     targetNames?: string[];
     refreshCurrentFolder?: boolean;
@@ -59,9 +65,15 @@ export const useFileManagerStore = defineStore('fileManager', () => {
   const sortDirection = ref<'asc' | 'desc'>('desc');
 
   const auth = useAuthStore();
-  const publicLink = usePublicLinkStore();
-  const canRead = computed(() => (auth.user?.role === 'link' ? publicLink.canRead : !!auth.user));
-  const canWrite = computed(() => (auth.user?.role === 'link' ? publicLink.canWrite : !!auth.user));
+  const noCapabilities: AccessCapabilities = {
+    can_read: false,
+    can_upload: false,
+    can_delete: false,
+    can_share: false,
+  };
+  const capabilities = computed(() => context.value?.capabilities ?? noCapabilities);
+  const canRead = computed(() => !!auth.user && capabilities.value.can_read);
+  const canWrite = computed(() => !!auth.user && capabilities.value.can_upload);
 
   async function changeFolder(folderId?: string) {
     currentFolder.value = folderId || null;
@@ -152,14 +164,7 @@ export const useFileManagerStore = defineStore('fileManager', () => {
 
   /** Fetching one file does not establish authority to list its parent. */
   async function fetchFile(fileId: string): Promise<FileItem> {
-    if (currentFolder.value && files.value.length) {
-      const existing = files.value.find((f) => f.id === fileId);
-      if (existing) {
-        return existing;
-      }
-    }
-
-    // If not found in current list, fetch from API
+    // Cached rows are not an authorization snapshot across expiry/revocation.
     try {
       const res = await axios.get<FileItem>(`/api/files/${fileId}`);
       const file = res.data;
@@ -172,7 +177,7 @@ export const useFileManagerStore = defineStore('fileManager', () => {
   }
 
   async function createFolder(name: string, options: CreateFolderOptions = {}) {
-    if (!canWrite.value) {
+    if (!auth.user || !(options.destinationCapabilities?.can_upload ?? canWrite.value)) {
       error.value = 'This link does not allow uploads or changes';
       return null;
     }
@@ -204,8 +209,8 @@ export const useFileManagerStore = defineStore('fileManager', () => {
   }
 
   async function deleteItem(item: FileItem) {
-    if (!canWrite.value) {
-      error.value = 'This link does not allow uploads or changes';
+    if (!auth.user || !item.capabilities?.can_delete) {
+      error.value = 'You do not have permission to delete this item';
       return;
     }
     if (!item.id) {
@@ -226,7 +231,7 @@ export const useFileManagerStore = defineStore('fileManager', () => {
     onProgress?: (percent: number) => void,
     options: UploadFilesOptions = {},
   ) {
-    if (!canWrite.value) {
+    if (!auth.user || !(options.destinationCapabilities?.can_upload ?? canWrite.value)) {
       error.value = 'This link does not allow uploads or changes';
       return { ok: false as const, error: error.value };
     }
@@ -331,6 +336,23 @@ export const useFileManagerStore = defineStore('fileManager', () => {
     },
   );
 
+  watch(
+    () => [auth.user?.id, auth.user?.role, auth.user?.session_id, auth.user?.link_id],
+    () => {
+      requestVersion += 1;
+      currentFolder.value = null;
+      files.value = [];
+      folders.value = [];
+      breadcrumbs.value = [];
+      context.value = null;
+      clientId.value = null;
+      loaded.value = false;
+      error.value = null;
+      loading.value = false;
+    },
+    { flush: 'sync' },
+  );
+
   return {
     folders,
     files,
@@ -347,6 +369,7 @@ export const useFileManagerStore = defineStore('fileManager', () => {
     sortDirection,
     canRead,
     canWrite,
+    capabilities,
 
     changeFolder,
     fetchFiles,

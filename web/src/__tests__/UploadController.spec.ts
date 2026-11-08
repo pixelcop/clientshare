@@ -8,6 +8,7 @@ import { useUploadController } from '@/composables/useUploadController';
 import { useAuthStore } from '@/stores/auth';
 import { useFileManagerStore } from '@/stores/fileManager';
 import type { User } from '@/types/models';
+import type { WorkspaceContext } from '@/types/workspace';
 
 describe('upload controller', () => {
   beforeEach(() => {
@@ -20,6 +21,9 @@ describe('upload controller', () => {
   function setup() {
     const store = useFileManagerStore();
     store.currentFolder = 'original';
+    store.context = {
+      capabilities: { can_read: true, can_upload: true, can_delete: true, can_share: true },
+    } as WorkspaceContext;
     let controller!: ReturnType<typeof useUploadController>;
     const wrapper = mount(
       defineComponent({
@@ -119,12 +123,24 @@ describe('upload controller', () => {
     const create = vi.spyOn(store, 'createFolder').mockResolvedValue({ id: 'empty' } as never);
     const upload = vi.spyOn(store, 'uploadFiles');
     vi.spyOn(store, 'fetchFiles').mockResolvedValue();
-    const directory = { name: 'Empty', isDirectory: true, isFile: false,
-      createReader: () => ({ readEntries: (done: (entries: unknown[]) => void) => done([]) }) };
-    await controller.onDrop({ preventDefault: vi.fn(), dataTransfer: {
-      types: ['Files'], files: [], items: [{ kind: 'file', webkitGetAsEntry: () => directory }],
-    } } as unknown as DragEvent);
-    expect(create).toHaveBeenCalledWith('Empty', expect.objectContaining({ targetFolderId: 'original' }));
+    const directory = {
+      name: 'Empty',
+      isDirectory: true,
+      isFile: false,
+      createReader: () => ({ readEntries: (done: (entries: unknown[]) => void) => done([]) }),
+    };
+    await controller.onDrop({
+      preventDefault: vi.fn(),
+      dataTransfer: {
+        types: ['Files'],
+        files: [],
+        items: [{ kind: 'file', webkitGetAsEntry: () => directory }],
+      },
+    } as unknown as DragEvent);
+    expect(create).toHaveBeenCalledWith(
+      'Empty',
+      expect.objectContaining({ targetFolderId: 'original' }),
+    );
     expect(upload).not.toHaveBeenCalled();
     expect(controller.uploadProgress.value).toBe(100);
     wrapper.unmount();

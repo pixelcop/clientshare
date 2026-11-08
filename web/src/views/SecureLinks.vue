@@ -260,6 +260,7 @@ async function revokeLink(link: SecureLink) {
       </table>
     </div>
     <SecureLinkModal
+      :capabilities="client?.capabilities"
       :key="clientId"
       :show="showCreate"
       :result

@@ -3,6 +3,7 @@ import { createRouter, createWebHistory } from 'vue-router';
 import ClientFiles from '@/views/ClientFiles.vue';
 
 import { useAuthStore } from '../stores/auth';
+import AcceptAccessView from '../views/AcceptAccessView.vue';
 import AcceptInviteView from '../views/AcceptInviteView.vue';
 import ActivityFeed from '../views/ActivityFeed.vue';
 import ClientsList from '../views/ClientsList.vue';
@@ -13,6 +14,7 @@ import ResetPasswordView from '../views/ResetPasswordView.vue';
 import SecureLinks from '../views/SecureLinks.vue';
 import SecurityView from '../views/SecurityView.vue';
 import SettingsView from '../views/SettingsView.vue';
+import SharedWithMe from '../views/SharedWithMe.vue';
 import UsersList from '../views/UsersList.vue';
 
 const router = createRouter({
@@ -28,7 +30,7 @@ const router = createRouter({
         if (user) {
           // If already logged in, redirect to home or intended page
           let redirect = to.query.redirect as string;
-          if (!redirect && (user.role === 'client' || user.role === 'link')) {
+          if (!redirect && ['client', 'customer', 'link'].includes(user.role)) {
             redirect = '/files';
           }
           return redirect || { name: 'Clients' };
@@ -55,6 +57,18 @@ const router = createRouter({
       meta: { public: true },
     },
     {
+      path: '/accept-access',
+      name: 'AcceptAccess',
+      component: AcceptAccessView,
+      meta: { public: true },
+    },
+    {
+      path: '/shared-with-me',
+      name: 'SharedWithMe',
+      component: SharedWithMe,
+      meta: { public: false, roles: ['admin', 'manager', 'client', 'customer'] },
+    },
+    {
       path: '/clients',
       name: 'Clients',
       component: ClientsList,
@@ -71,24 +85,24 @@ const router = createRouter({
       alias: '/folders/:folderId',
       name: 'FolderView',
       component: ClientFiles,
-      meta: { public: false, roles: ['admin', 'manager', 'client', 'link'] },
+      meta: { public: false, roles: ['admin', 'manager', 'client', 'customer', 'link'] },
       props: true,
     },
     {
       path: '/folder',
       name: 'FolderRootView',
       component: ClientFiles,
-      meta: { public: false, roles: ['admin', 'manager', 'client', 'link'] },
+      meta: { public: false, roles: ['admin', 'manager', 'client', 'customer', 'link'] },
       props: { folderId: null },
     },
     {
       path: '/files',
       name: 'ClientFiles',
       component: ClientFiles,
-      meta: { public: false, roles: ['admin', 'manager', 'client', 'link'] },
+      meta: { public: false, roles: ['admin', 'manager', 'client', 'customer', 'link'] },
       beforeEnter: (_to, _from) => {
         const { user } = useAuthStore();
-        if (user?.role === 'link' || user?.role === 'client') {
+        if (user?.role === 'link' || user?.role === 'client' || user?.role === 'customer') {
           return { name: 'FolderRootView' };
         }
         // If not a client, redirect to clients list
@@ -110,7 +124,7 @@ const router = createRouter({
       path: '/clients/:id/links',
       name: 'SecureLinks',
       component: SecureLinks,
-      meta: { public: false, roles: ['admin'] },
+      meta: { public: false, roles: ['admin', 'manager'] },
     },
     {
       path: '/users',
@@ -131,7 +145,7 @@ const router = createRouter({
       path: '/security',
       name: 'Security',
       component: SecurityView,
-      meta: { public: false, roles: ['admin', 'manager', 'client'] },
+      meta: { public: false, roles: ['admin', 'manager', 'client', 'customer'] },
     },
   ],
 });
@@ -161,12 +175,12 @@ router.beforeEach(async (to, _from) => {
   if (auth.user) {
     const allowedRoles = to.meta.roles as string[] | undefined;
     if (allowedRoles && !allowedRoles.includes(auth.user.role)) {
-      return auth.user.role === 'client' || auth.user.role === 'link'
+      return ['client', 'customer', 'link'].includes(auth.user.role)
         ? { name: 'FolderRootView' }
         : { name: 'Clients' };
     }
     if (to.path === '/') {
-      if (auth.user.role === 'client' || auth.user.role === 'link') {
+      if (['client', 'customer', 'link'].includes(auth.user.role)) {
         return { name: 'ClientFiles' };
       }
       if (auth.user.role === 'admin' || auth.user.role === 'manager') {

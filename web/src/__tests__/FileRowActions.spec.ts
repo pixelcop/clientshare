@@ -16,6 +16,7 @@ const item = {
   type: 'file',
   filename: 'report.txt',
   uploaded_at: new Date().toISOString(),
+  capabilities: { can_read: true, can_upload: false, can_share: false, can_delete: true },
 } as FileItem;
 
 describe('file row actions', () => {
@@ -59,7 +60,14 @@ describe('file row actions', () => {
   it('does not offer Delete to a client account and exposes folder Open/ZIP', () => {
     useAuthStore().user = { id: 'client', role: 'client' } as User;
     const wrapper = mount(FileRowActions, {
-      props: { item: { ...item, type: 'folder', filename: 'Documents' } },
+      props: {
+        item: {
+          ...item,
+          type: 'folder',
+          filename: 'Documents',
+          capabilities: { ...item.capabilities!, can_delete: false },
+        },
+      },
       global: { plugins: [OpenVue] },
     });
     const actions = wrapper.findComponent(Menu).props('model')!;

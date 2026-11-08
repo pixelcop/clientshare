@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { defineStore } from 'pinia';
 
-import type { Client, SecureLink } from '@/types/models';
+import type { Client, FileItem, SecureLink } from '@/types/models';
 
 export const usePublicLinkStore = defineStore('publicLink', () => {
   const client = ref<Client | null>(null);
@@ -9,6 +9,8 @@ export const usePublicLinkStore = defineStore('publicLink', () => {
 
   const link = ref<SecureLink | null>(null);
   const linkToken = ref('');
+  const target = ref<FileItem | null>(null);
+  let validationVersion = 0;
   const validating = ref(false);
   const error = ref<string | null>(null);
   const registerError = ref<string | null>(null);
@@ -28,7 +30,9 @@ export const usePublicLinkStore = defineStore('publicLink', () => {
   const canWrite = computed(
     () => available.value && ['write', 'readwrite'].includes(accessType.value),
   );
-  const canRegister = computed(() => available.value && accessType.value === 'readwrite');
+  const canRegister = computed(
+    () => available.value && !link.value?.file_id && accessType.value === 'readwrite',
+  );
 
   function getErrorMessage(err: unknown, fallback: string) {
     if (axios.isAxiosError(err)) {
@@ -38,6 +42,11 @@ export const usePublicLinkStore = defineStore('publicLink', () => {
   }
 
   async function validateLink(token: string) {
+    validationVersion += 1;
+    const version = validationVersion;
+    client.value = null;
+    link.value = null;
+    target.value = null;
     validating.value = true;
     error.value = null;
     registerError.value = null;
@@ -45,19 +54,30 @@ export const usePublicLinkStore = defineStore('publicLink', () => {
     linkToken.value = token;
     try {
       const res = await axios.get(`/api/link/${token}`);
+      if (version !== validationVersion) {
+        return;
+      }
       client.value = res.data.client;
       link.value = res.data.link;
+      target.value = res.data.target ?? null;
     } catch (e: unknown) {
+      if (version !== validationVersion) {
+        return;
+      }
       error.value = getErrorMessage(e, 'Failed to validate link');
       client.value = null;
       link.value = null;
     } finally {
-      validating.value = false;
+      if (version === validationVersion) {
+        validating.value = false;
+      }
     }
   }
 
   async function registerUser(name: string, email: string, password: string) {
-    if (!linkToken.value) {
+    if (!linkToken.value || !canRegister.value) {
+      registerError.value =
+        'This link does not allow account registration. Ask for a named invitation.';
       return false;
     }
     registerError.value = null;
@@ -82,6 +102,7 @@ export const usePublicLinkStore = defineStore('publicLink', () => {
     clientId,
     link,
     linkToken,
+    target,
     validating,
     error,
     registerError,

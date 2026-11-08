@@ -27,7 +27,7 @@ beforeEach(async () => {
 });
 
 describe('folder navigation', () => {
-  it.each(['admin', 'manager', 'client', 'link'])(
+  it.each(['admin', 'manager', 'client', 'customer', 'link'])(
     'lets %s sessions reach a client folder and its root',
     async (role) => {
       auth.user = { role };
@@ -43,7 +43,7 @@ describe('folder navigation', () => {
     },
   );
 
-  it.each(['client', 'link'])(
+  it.each(['client', 'customer', 'link'])(
     'routes %s file entry points without redirect loops',
     async (role) => {
       auth.user = { role };
@@ -65,6 +65,27 @@ describe('folder navigation', () => {
     await router.push('/folder/example-folder');
     expect(router.currentRoute.value.name).toBe('Login');
     expect(router.currentRoute.value.query.redirect).toBe('/folder/example-folder');
+  });
+
+  it.each(['admin', 'manager', 'client', 'customer'])(
+    'lets named %s accounts discover direct shares',
+    async (role) => {
+      auth.user = { role };
+      await router.push('/shared-with-me');
+      expect(router.currentRoute.value.name).toBe('SharedWithMe');
+    },
+  );
+
+  it('never treats a bearer session as a named-share recipient', async () => {
+    auth.user = { role: 'link' };
+    await router.push('/shared-with-me');
+    expect(router.currentRoute.value.name).toBe('FolderRootView');
+  });
+
+  it('preserves an access invitation fragment through the public acceptance route', async () => {
+    await router.push('/accept-access#token=invitation-proof');
+    expect(router.currentRoute.value.name).toBe('AcceptAccess');
+    expect(router.currentRoute.value.hash).toBe('#token=invitation-proof');
   });
 
   it.each(['manager', 'client', 'link'])('keeps Settings restricted for %s', async (role) => {

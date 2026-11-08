@@ -13,7 +13,16 @@ const folder = (id: string) =>
 const listing = (id: string, items: FileItem[] = []) => ({
   items,
   pagination: { ...defaultPagination(), total_items: items.length },
-  context: { folder: folder(id), client_id: `client-${id}`, client_name: id, root_folder_id: id },
+  context: {
+    folder: folder(id),
+    client_id: `client-${id}`,
+    client_name: id,
+    root_folder_id: id,
+    capabilities: { can_read: true, can_upload: true, can_delete: true, can_share: true },
+    client_capabilities: { can_read: true, can_upload: true, can_delete: true, can_share: true },
+    can_manage_client: true,
+    can_manage_queue: true,
+  },
 });
 
 function response(url: string, config?: { params?: { type?: string } }) {

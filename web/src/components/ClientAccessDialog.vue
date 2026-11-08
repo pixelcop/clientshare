@@ -3,11 +3,13 @@ import { Button, Dialog } from 'openvue';
 
 import { useAuthStore } from '@/stores/auth';
 
+import SharingPanel from './SharingPanel.vue';
+
 defineProps<{ visible: boolean; clientId: string; clientName: string }>();
 const emit = defineEmits<{ close: [] }>();
 const auth = useAuthStore();
 const canManagePeople = computed(() => ['admin', 'manager'].includes(auth.user?.role || ''));
-const canManageLinks = computed(() => auth.user?.role === 'admin');
+const canManageLinks = computed(() => ['admin', 'manager'].includes(auth.user?.role || ''));
 </script>
 
 <template>
@@ -19,21 +21,20 @@ const canManageLinks = computed(() => auth.user?.role === 'admin');
     blockScroll
     position="right"
     :draggable="false"
-    :style="{ width: '32rem', maxWidth: 'calc(100vw - 2rem)' }"
+    :style="{ width: '42rem', maxWidth: '95vw' }"
     @update:visible="(value) => !value && emit('close')"
   >
-    <div class="client-access">
-      <p class="access-scope">Scope: entire client workspace</p>
-      <p class="access-note">
-        These controls apply to {{ clientName }}, not just the current folder or file.
-      </p>
-      <section v-if="canManagePeople" aria-labelledby="client-access-people">
-        <h3 id="client-access-people"><i class="oi oi-users" aria-hidden="true" /> People</h3>
-        <p>
-          Manage named accounts assigned to this client. Account access is separate from bearer
-          links.
-        </p>
-        <Button asChild v-slot="slotProps" severity="secondary">
+    <p class="mb-4 text-sm" style="color: var(--p-text-muted-color)">
+      These controls apply to {{ clientName }}, not just the current folder or file.
+    </p>
+    <SharingPanel
+      v-if="visible"
+      :key="clientId"
+      :scope="{ kind: 'client', id: clientId, name: clientName }"
+    />
+    <template #footer>
+      <div class="flex flex-wrap items-center gap-2 w-full">
+        <Button v-if="canManagePeople" asChild v-slot="slotProps" severity="secondary">
           <router-link
             :class="slotProps.class"
             :to="{ name: 'Users', query: { client_id: clientId } }"
@@ -41,14 +42,7 @@ const canManageLinks = computed(() => auth.user?.role === 'admin');
             >Manage people</router-link
           >
         </Button>
-      </section>
-      <section v-if="canManageLinks" aria-labelledby="client-access-links">
-        <h3 id="client-access-links"><i class="oi oi-link" aria-hidden="true" /> Links</h3>
-        <p>
-          Anyone holding an active link can use its permitted actions until it expires or is
-          revoked.
-        </p>
-        <Button asChild v-slot="slotProps" severity="secondary">
+        <Button v-if="canManageLinks" asChild v-slot="slotProps" severity="secondary">
           <router-link
             :class="slotProps.class"
             :to="`/clients/${clientId}/links`"
@@ -56,11 +50,9 @@ const canManageLinks = computed(() => auth.user?.role === 'admin');
             >Manage links</router-link
           >
         </Button>
-      </section>
-      <p v-if="!canManagePeople && !canManageLinks">
-        You do not have permission to manage this client’s access.
-      </p>
-    </div>
+        <Button label="Done" severity="secondary" class="ml-auto" @click="emit('close')" />
+      </div>
+    </template>
   </Dialog>
 </template>
 

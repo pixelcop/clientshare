@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/auth';
 import { useFileManagerStore } from '@/stores/fileManager';
 import { usePublicLinkStore } from '@/stores/publicLink';
 import type { FileItem, SecureLink, User } from '@/types/models';
+import type { WorkspaceContext } from '@/types/workspace';
 
 describe('secure-link permissions', () => {
   beforeEach(() => {
@@ -28,8 +29,10 @@ describe('secure-link permissions', () => {
       expires_at: new Date(Date.now() + 3600000).toISOString(),
     } as SecureLink;
     const files = useFileManagerStore();
-    expect(files.canRead).toBe(read);
-    expect(files.canWrite).toBe(write);
+    expect(link.canRead).toBe(read);
+    expect(link.canWrite).toBe(write);
+    expect(files.canRead).toBe(false); // no authorized folder context yet
+    expect(files.canWrite).toBe(false);
     expect(link.canRegister).toBe(register);
   });
 
@@ -68,7 +71,12 @@ describe('secure-link permissions', () => {
 
   it('does not apply a previous link restriction to signed-in client accounts', () => {
     useAuthStore().user = { role: 'client' } as User;
-    expect(useFileManagerStore().canWrite).toBe(true);
-    expect(useFileManagerStore().canRead).toBe(true);
+    const files = useFileManagerStore();
+    expect(files.canWrite).toBe(false); // role strings do not establish rights
+    files.context = {
+      capabilities: { can_read: true, can_upload: true, can_delete: false, can_share: true },
+    } as WorkspaceContext;
+    expect(files.canWrite).toBe(true);
+    expect(files.canRead).toBe(true);
   });
 });

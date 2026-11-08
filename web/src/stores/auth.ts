@@ -38,7 +38,17 @@ axios.interceptors.response.use(
 );
 
 export const useAuthStore = defineStore('auth', () => {
-  const user = ref<(User & { is_initial_admin?: boolean }) | null>(null);
+  const user = ref<
+    | (User & {
+        is_initial_admin?: boolean;
+        session_id?: string;
+        link_id?: string;
+        file_id?: string;
+        client_id?: string;
+        access_type?: string;
+      })
+    | null
+  >(null);
   const token = ref<string | null>(null);
   let sessionID: string | null = null;
   const loading = ref(false);
@@ -75,17 +85,24 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   window.addEventListener('storage', (event) => {
-    if (event.key === sessionChangeKey) {invalidatePage();}
+    if (event.key === sessionChangeKey) {
+      invalidatePage();
+    }
   });
   async function revalidateOnFocus() {
-    if (document.visibilityState !== 'visible' || !sessionID) {return;}
+    if (document.visibilityState !== 'visible' || !sessionID) {
+      return;
+    }
     const previous = sessionID;
     try {
       const response = await axios.get('/api/auth/me');
-      if (previous !== response.data.session_id || response.data.role !== user.value?.role)
-        {invalidatePage();}
+      if (previous !== response.data.session_id || response.data.role !== user.value?.role) {
+        invalidatePage();
+      }
     } catch (err) {
-      if (axios.isAxiosError(err) && err.response?.status === 401) {invalidatePage();}
+      if (axios.isAxiosError(err) && err.response?.status === 401) {
+        invalidatePage();
+      }
     }
   }
   window.addEventListener('focus', () => {
