@@ -11,6 +11,7 @@ type SecureLink struct {
 	ID           string     `gorm:"primaryKey;size:26" json:"id"`
 	TenantID     string     `gorm:"not null;index" json:"tenant_id"`
 	ClientID     string     `gorm:"not null;index" json:"client_id"`
+	FileID       *string    `gorm:"index" json:"file_id,omitempty"`
 	Token        string     `gorm:"unique;not null" json:"token"`
 	LinkURL      string     `gorm:"-" json:"link_url,omitempty"`
 	Email        string     `gorm:"not null;default:''" json:"email"`

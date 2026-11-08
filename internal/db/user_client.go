@@ -7,13 +7,19 @@ import (
 )
 
 var UserClient = struct {
-	TenantID  field.String
-	UserID    field.String
-	ClientID  field.String
-	CreatedAt field.Time
+	TenantID        field.String
+	UserID          field.String
+	ClientID        field.String
+	CapabilitiesSet field.Bool
+	AccessSource    field.String
+	InvitedBy       field.String
+	CreatedAt       field.Time
 }{
-	TenantID:  field.String{}.WithColumn("tenant_id"),
-	UserID:    field.String{}.WithColumn("user_id"),
-	ClientID:  field.String{}.WithColumn("client_id"),
-	CreatedAt: field.Time{}.WithColumn("created_at"),
+	TenantID:        field.String{}.WithColumn("tenant_id"),
+	UserID:          field.String{}.WithColumn("user_id"),
+	ClientID:        field.String{}.WithColumn("client_id"),
+	CapabilitiesSet: field.Bool{}.WithColumn("capabilities_set"),
+	AccessSource:    field.String{}.WithColumn("access_source"),
+	InvitedBy:       field.String{}.WithColumn("invited_by"),
+	CreatedAt:       field.Time{}.WithColumn("created_at"),
 }

@@ -10,6 +10,7 @@ var SecureLink = struct {
 	ID           field.String
 	TenantID     field.String
 	ClientID     field.String
+	FileID       field.String
 	Token        field.String
 	LinkURL      field.String
 	Email        field.String
@@ -25,6 +26,7 @@ var SecureLink = struct {
 	ID:           field.String{}.WithColumn("id"),
 	TenantID:     field.String{}.WithColumn("tenant_id"),
 	ClientID:     field.String{}.WithColumn("client_id"),
+	FileID:       field.String{}.WithColumn("file_id"),
 	Token:        field.String{}.WithColumn("token"),
 	LinkURL:      field.String{}.WithColumn("link_url"),
 	Email:        field.String{}.WithColumn("email"),

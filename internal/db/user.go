@@ -16,6 +16,7 @@ var User = struct {
 	ClientIDs              field.Slice[string]
 	InviteAccepted         field.Bool
 	PasskeyPromptDismissed field.Bool
+	ManagerFullAccess      field.Bool
 	CreatedAt              field.Time
 	UpdatedAt              field.Time
 }{
@@ -28,6 +29,7 @@ var User = struct {
 	ClientIDs:              field.Slice[string]{}.WithName("ClientIDs"),
 	InviteAccepted:         field.Bool{}.WithColumn("invite_accepted"),
 	PasskeyPromptDismissed: field.Bool{}.WithColumn("passkey_prompt_dismissed"),
+	ManagerFullAccess:      field.Bool{}.WithColumn("manager_full_access"),
 	CreatedAt:              field.Time{}.WithColumn("created_at"),
 	UpdatedAt:              field.Time{}.WithColumn("updated_at"),
 }
