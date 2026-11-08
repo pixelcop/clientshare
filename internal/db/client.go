@@ -3,6 +3,7 @@
 package db
 
 import (
+	"github.com/pixelcop/clientshare/internal/models"
 	"gorm.io/cli/gorm/field"
 )
 
@@ -14,6 +15,8 @@ var Client = struct {
 	RootFolderID field.String
 	CreatedAt    field.Time
 	UpdatedAt    field.Time
+	Capabilities field.Struct[models.AccessCapabilities]
+	CanManage    field.Bool
 }{
 	ID:           field.String{}.WithColumn("id"),
 	TenantID:     field.String{}.WithColumn("tenant_id"),
@@ -22,4 +25,6 @@ var Client = struct {
 	RootFolderID: field.String{}.WithColumn("root_folder_id"),
 	CreatedAt:    field.Time{}.WithColumn("created_at"),
 	UpdatedAt:    field.Time{}.WithColumn("updated_at"),
+	Capabilities: field.Struct[models.AccessCapabilities]{}.WithName("Capabilities"),
+	CanManage:    field.Bool{}.WithColumn("can_manage"),
 }

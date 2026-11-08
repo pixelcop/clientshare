@@ -133,6 +133,38 @@ func TestAccessExplicitMembershipAndAdditiveItemGrants(t *testing.T) {
 	f.check(t, f.req("member", "file", AccessRead), true)
 	require.NoError(t, f.db.Model(&models.UserClient{}).Where("user_id = ?", "manager").Update("capabilities_set", true).Error)
 	f.check(t, f.req("manager", "folder", AccessDelete), false) // explicit zero is not legacy
+	require.NoError(t, f.db.Model(&models.UserClient{}).Where("user_id = ?", "manager").Updates(map[string]any{"can_share": true, "can_upload": true}).Error)
+	f.check(t, f.req("manager", "", AccessManageClient), true)
+	f.check(t, f.req("manager", "", AccessManageQueue), false) // queue bodies contain document names
+}
+
+func TestBatchClientDecisionsMatchResolverAndDoNotPromoteItemGrants(t *testing.T) {
+	f := newAccessFixture(t)
+	f.grant(t, "root", "recipient", models.AccessCapabilities{CanRead: true, CanShare: true})
+	require.NoError(t, f.db.Model(&models.UserClient{}).Where("user_id = 'manager'").Updates(map[string]any{"capabilities_set": true, "can_share": true, "can_upload": true}).Error)
+	ids := []string{"client", "other-client", "foreign-client", "missing"}
+	for _, user := range []string{"admin", "full", "manager", "member", "customer", "recipient", "unknown-role", "missing"} {
+		for _, op := range []AccessOperation{AccessContext, AccessRead, AccessShare, AccessInviteClient, AccessManageClient, AccessManageQueue} {
+			batch, err := f.s.ResolveClients(t.Context(), "tenant", user, ids, op)
+			require.NoError(t, err)
+			scope, err := f.s.ClientScope(t.Context(), "tenant", user, op)
+			require.NoError(t, err)
+			var visible []models.Client
+			require.NoError(t, scope.Find(&visible).Error)
+			allowed := map[string]bool{}
+			for _, client := range visible {
+				allowed[client.ID] = true
+			}
+			for _, id := range ids {
+				req := f.req(user, "", op)
+				req.ClientID = id
+				single, err := f.s.Resolve(t.Context(), req)
+				require.NoError(t, err)
+				require.Equal(t, single, batch[id], "%s %s %s", user, op, id)
+				require.Equal(t, single.Allowed, allowed[id], "%s %s %s query scope", user, op, id)
+			}
+		}
+	}
 }
 
 func TestAccessFileAndFolderGrantBoundaries(t *testing.T) {

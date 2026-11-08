@@ -124,7 +124,14 @@ func (s *ClientService) CreateClientForActor(ctx context.Context, tenantID, user
 		}
 		return nil
 	})
-	return client, err
+	if err != nil {
+		return nil, err
+	}
+	items := []models.Client{*client}
+	if err := s.decorateClientAccess(ctx, tenantID, userID, items); err != nil {
+		return nil, err
+	}
+	return &items[0], nil
 }
 
 // ListClients returns all clients for admins and assigned clients for non-admin users.
@@ -139,6 +146,9 @@ func (s *ClientService) ListClients(ctx context.Context, tenantID, userID, role 
 		return clients, nil
 	}
 	if err := q.Order("clients.name ASC").Find(&clients).Error; err != nil {
+		return nil, err
+	}
+	if err := s.decorateClientAccess(ctx, tenantID, userID, clients); err != nil {
 		return nil, err
 	}
 	return clients, nil
@@ -183,6 +193,9 @@ func (s *ClientService) ListClientsPaginated(ctx context.Context, tenantID, user
 	if err := q.Order("clients.name ASC").Limit(pageSize).Offset(offset).Find(&clients).Error; err != nil {
 		return nil, nil, err
 	}
+	if err := s.decorateClientAccess(ctx, tenantID, userID, clients); err != nil {
+		return nil, nil, err
+	}
 
 	pagination := models.PaginationResponse{
 		TotalItems:   totalItems,
@@ -213,6 +226,30 @@ func (s *ClientService) clientListQuery(ctx context.Context, tenantID, userID, _
 	}
 
 	return q, nil
+}
+
+func (s *ClientService) decorateClientAccess(ctx context.Context, tenantID, userID string, clients []models.Client) error {
+	for start := 0; start < len(clients); start += maxAccessItems {
+		batch := clients[start:min(start+maxAccessItems, len(clients))]
+		ids := make([]string, len(batch))
+		for i := range batch {
+			ids[i] = batch[i].ID
+		}
+		decisions, err := (&AccessService{DB: s.DB}).ResolveClients(ctx, tenantID, userID, ids, AccessContext)
+		if err != nil {
+			return err
+		}
+		for i := range batch {
+			d := decisions[batch[i].ID]
+			if !d.Allowed {
+				return gorm.ErrRecordNotFound
+			}
+			batch[i].Capabilities = &d.Capabilities
+			manage := d.CanManageClient
+			batch[i].CanManage = &manage
+		}
+	}
+	return nil
 }
 
 func normalizePage(page int) int {

@@ -65,6 +65,10 @@ func TestClientHandlers_RouteCoverage(t *testing.T) {
 	if listed[0].ID != env.client.ID {
 		t.Fatalf("expected manager list client %s, got %s", env.client.ID, listed[0].ID)
 	}
+	require.NotNil(t, listed[0].Capabilities)
+	require.True(t, listed[0].Capabilities.CanDelete)
+	require.NotNil(t, listed[0].CanManage)
+	require.True(t, *listed[0].CanManage)
 
 	clientListReq := jsonAuthRequest(http.MethodGet, "/api/clients", env.clientToken, nil)
 	clientListResp, err := env.app.Test(clientListReq)
@@ -81,6 +85,11 @@ func TestClientHandlers_RouteCoverage(t *testing.T) {
 	if len(clientListed) != 1 || clientListed[0].ID != env.client.ID {
 		t.Fatalf("expected client user to only see assigned client %s", env.client.ID)
 	}
+	require.NotNil(t, clientListed[0].Capabilities)
+	require.True(t, clientListed[0].Capabilities.CanShare)
+	require.False(t, clientListed[0].Capabilities.CanDelete)
+	require.NotNil(t, clientListed[0].CanManage)
+	require.False(t, *clientListed[0].CanManage)
 
 	pagedReq := jsonAuthRequest(http.MethodGet, "/api/clients?page=1&page_size=1&search=Ac", env.managerToken, nil)
 	pagedResp, err := env.app.Test(pagedReq)

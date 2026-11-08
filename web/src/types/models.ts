@@ -73,6 +73,8 @@ export interface Client {
   root_folder_id?: string;
   created_at: string;
   updated_at: string;
+  capabilities?: AccessCapabilities;
+  can_manage?: boolean;
 }
 
 //////////

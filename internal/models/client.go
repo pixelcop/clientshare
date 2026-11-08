@@ -8,13 +8,15 @@ import (
 )
 
 type Client struct {
-	ID           string    `gorm:"primaryKey;size:26" json:"id"`
-	TenantID     string    `gorm:"not null;index;uniqueIndex:idx_clients_tenant_folder_path,priority:1" json:"tenant_id"`
-	Name         string    `gorm:"not null" json:"name"`
-	FolderPath   string    `gorm:"not null;uniqueIndex:idx_clients_tenant_folder_path,priority:2" json:"folder_path"`
-	RootFolderID *string   `gorm:"index" json:"root_folder_id"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID           string              `gorm:"primaryKey;size:26" json:"id"`
+	TenantID     string              `gorm:"not null;index;uniqueIndex:idx_clients_tenant_folder_path,priority:1" json:"tenant_id"`
+	Name         string              `gorm:"not null" json:"name"`
+	FolderPath   string              `gorm:"not null;uniqueIndex:idx_clients_tenant_folder_path,priority:2" json:"folder_path"`
+	RootFolderID *string             `gorm:"index" json:"root_folder_id"`
+	CreatedAt    time.Time           `json:"created_at"`
+	UpdatedAt    time.Time           `json:"updated_at"`
+	Capabilities *AccessCapabilities `gorm:"-" json:"capabilities,omitempty"`
+	CanManage    *bool               `gorm:"-" json:"can_manage,omitempty"`
 }
 
 func (c *Client) BeforeCreate(_ *gorm.DB) error {

@@ -362,6 +362,9 @@ func (h *FileHandler) ListFolderFiles(c fiber.Ctx) error {
 	if err != nil {
 		return c.Status(503).JSON(fiber.Map{"error": "Access validation is temporarily unavailable"})
 	}
+	context["client_capabilities"] = clientDecision.Capabilities
+	context["can_manage_queue"] = clientDecision.CanManageQueue
+	context["can_manage_client"] = clientDecision.CanManageClient
 	if clientDecision.Allowed {
 		client, err := h.clientService.GetClient(c.Context(), tenantID, folder.ClientID)
 		if err != nil {

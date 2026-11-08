@@ -64,9 +64,11 @@ type AccessSource struct {
 }
 
 type AccessDecision struct {
-	Allowed      bool                      `json:"allowed"`
-	Capabilities models.AccessCapabilities `json:"capabilities"`
-	Sources      []AccessSource            `json:"-"`
+	Allowed         bool                      `json:"allowed"`
+	Capabilities    models.AccessCapabilities `json:"capabilities"`
+	CanManageClient bool                      `json:"can_manage_client,omitempty"`
+	CanManageQueue  bool                      `json:"can_manage_queue,omitempty"`
+	Sources         []AccessSource            `json:"-"`
 }
 
 // AccessService is deliberately uncached: revocation, expiry, role changes and
@@ -262,11 +264,7 @@ func (s *AccessService) resolveBase(ctx context.Context, req AccessRequest) (acc
 	if err := db.Where("tenant_id = ? AND client_id = ? AND user_id = ?", req.TenantID, req.ClientID, user.ID).First(&membership).Error; err != nil {
 		return base, accessQueryError(err)
 	}
-	if membership.CapabilitiesSet {
-		base.caps = membership.AccessCapabilities
-	} else {
-		base.caps = models.AccessCapabilities{CanRead: true, CanUpload: true, CanShare: true, CanDelete: user.Role == "manager"}
-	}
+	base.caps = membershipCapabilities(user.Role, membership)
 	base.staff = user.Role == "manager"
 	base.sources = []AccessSource{{Kind: "membership", ID: user.ID}}
 	return base, nil
@@ -344,6 +342,13 @@ func unionAccess(a, b models.AccessCapabilities) models.AccessCapabilities {
 	}
 }
 
+func membershipCapabilities(role string, membership models.UserClient) models.AccessCapabilities {
+	if membership.CapabilitiesSet {
+		return membership.AccessCapabilities
+	}
+	return models.AccessCapabilities{CanRead: true, CanUpload: true, CanShare: true, CanDelete: role == "manager"}
+}
+
 func accessDecision(caps models.AccessCapabilities, sources []AccessSource, op AccessOperation, targetType string, staff bool) AccessDecision {
 	var allowed bool
 	switch op {
@@ -363,10 +368,12 @@ func accessDecision(caps models.AccessCapabilities, sources []AccessSource, op A
 		allowed = caps.CanShare
 	case AccessInviteClient:
 		allowed = targetType == "client" && caps.CanShare
-	case AccessManageClient, AccessManageQueue:
+	case AccessManageClient:
 		allowed = targetType == "client" && staff && caps.CanShare
+	case AccessManageQueue:
+		allowed = targetType == "client" && staff && caps.CanShare && caps.CanRead
 	}
-	return AccessDecision{Allowed: allowed, Capabilities: caps, Sources: sources}
+	return AccessDecision{Allowed: allowed, Capabilities: caps, Sources: sources, CanManageClient: targetType == "client" && staff && caps.CanShare, CanManageQueue: targetType == "client" && staff && caps.CanShare && caps.CanRead}
 }
 
 // CanGrant applies a ceiling to a previously resolved exact-scope decision.

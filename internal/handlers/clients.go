@@ -98,6 +98,8 @@ func (h *ClientHandler) GetClient(c fiber.Ctx) error {
 		utils.Logger(c).Debug("client not found", zap.Error(err))
 		return c.Status(404).JSON(fiber.Map{"error": "client not found"})
 	}
+	d := fiber.Locals[services.AccessDecision](c, "client_access")
+	client.Capabilities, client.CanManage = &d.Capabilities, &d.CanManageClient
 	return c.JSON(client)
 }
 
@@ -124,6 +126,8 @@ func (h *ClientHandler) UpdateClient(c fiber.Ctx) error {
 		utils.Logger(c).Error("error updating client", zap.Error(err))
 		return c.Status(400).JSON(fiber.Map{"error": err.Error()})
 	}
+	d := fiber.Locals[services.AccessDecision](c, "client_access")
+	client.Capabilities, client.CanManage = &d.Capabilities, &d.CanManageClient
 	return c.JSON(client)
 }
 
@@ -156,5 +160,6 @@ func (h *ClientHandler) requireClientManagement(c fiber.Ctx) error {
 	if !d.Allowed {
 		return fiber.ErrNotFound
 	}
+	c.Locals("client_access", d)
 	return nil
 }
