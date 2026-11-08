@@ -27,7 +27,7 @@ func TestCollectionStatusEvidenceAndPermissions(t *testing.T) {
 	}
 	path := "/api/clients/" + env.client.ID + "/collection?since=" + url.QueryEscape(since.Format(time.RFC3339Nano))
 	for _, token := range []string{env.managerToken, env.clientToken, env.linkToken} {
-		want := http.StatusForbidden
+		want := http.StatusOK // whole-client read + sharing authority
 		if token == env.linkToken {
 			want = http.StatusUnauthorized
 		} // underlying link was deleted
@@ -37,7 +37,7 @@ func TestCollectionStatusEvidenceAndPermissions(t *testing.T) {
 		}
 		resp.Body.Close()
 		if resp.StatusCode != want {
-			t.Fatalf("expected forbidden, got %d", resp.StatusCode)
+			t.Fatalf("expected %d, got %d", want, resp.StatusCode)
 		}
 	}
 	check := func(want bool, count int) {

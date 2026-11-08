@@ -100,7 +100,7 @@ func (s *AccessService) ResolveClients(ctx context.Context, tenantID, userID str
 			caps = models.AccessCapabilities{CanRead: true, CanUpload: true, CanDelete: true, CanShare: true}
 			sources = append(sources, AccessSource{Kind: "staff", ID: user.ID})
 		} else if membership, ok := memberships[client.ID]; ok {
-			caps = membershipCapabilities(user.Role, membership)
+			caps = MembershipCapabilities(user.Role, membership)
 			staff = user.Role == "manager"
 			sources = append(sources, AccessSource{Kind: "membership", ID: user.ID})
 		}

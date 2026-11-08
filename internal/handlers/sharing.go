@@ -14,9 +14,10 @@ import (
 // lifecycle coverage are incomplete; a hidden Share button is not that gate.
 func RegisterSharingReadRoutes(router fiber.Router, db *gorm.DB, baseURL string) {
 	handler := &SharingHandler{service: &services.SharingService{DB: db}, baseURL: baseURL}
-	router.Get("/shared-with-me", middleware.AuthRequired, handler.SharedWithMe)
-	router.Get("/files/:id/access", middleware.AuthRequired, handler.ItemAccess)
-	router.Get("/files/:id/links", middleware.AuthRequired, handler.ItemLinks)
+	router.Get("/shared-with-me", middleware.AuthRequired, sharingResponse(handler.SharedWithMe))
+	router.Get("/files/:id/access", middleware.AuthRequired, sharingResponse(handler.ItemAccess))
+	router.Get("/files/:id/links", middleware.AuthRequired, sharingResponse(handler.ItemLinks))
+	router.Get("/clients/:id/access", middleware.AuthRequired, sharingResponse(handler.ClientAccess))
 }
 
 type SharingHandler struct {

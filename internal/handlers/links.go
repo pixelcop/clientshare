@@ -53,11 +53,11 @@ func RegisterLinkRoutes(router fiber.Router, db *gorm.DB, signingKey string, sto
 	router.Get("/links/:token", handler.BootstrapLinkSession)
 	router.Post("/links/:token", handler.BootstrapLinkSession)
 
-	router.Post("/api/clients/:id/links", middleware.AuthRequired, handler.CreateSecureLink)
-	router.Get("/api/clients/:id/links", middleware.AuthRequired, handler.ListSecureLinks)
-	router.Get("/api/clients/:id/collection", middleware.AuthRequired, handler.CollectionStatus)
-	router.Delete("/api/links/:id", middleware.AuthRequired, handler.DeleteSecureLink)
-	router.Post("/api/links/:id/email", middleware.AuthRequired, handler.EmailSecureLink)
+	router.Post("/api/clients/:id/links", middleware.AuthRequired, sharingResponse(handler.CreateSecureLink))
+	router.Get("/api/clients/:id/links", middleware.AuthRequired, sharingResponse(handler.ListSecureLinks))
+	router.Get("/api/clients/:id/collection", middleware.AuthRequired, sharingResponse(handler.CollectionStatus))
+	router.Delete("/api/links/:id", middleware.AuthRequired, sharingResponse(handler.DeleteSecureLink))
+	router.Post("/api/links/:id/email", middleware.AuthRequired, sharingResponse(handler.EmailSecureLink))
 	router.Get("/api/link/:token", handler.ViewLink)
 }
 
@@ -110,14 +110,13 @@ func (h *LinkHandler) BootstrapLinkSession(c fiber.Ctx) error {
 		return c.Status(404).JSON(fiber.Map{"error": "link not found"})
 	}
 	_, valid := links.ValidateSecureToken(token, h.signingKey)
-	if !valid || link.FileID != nil || link.RevokedAt != nil || links.IsExpired(link.ExpiresAt) {
+	if !valid || link.RevokedAt != nil || links.IsExpired(link.ExpiresAt) {
 		utils.Logger(c).Warn("link expired or invalid")
 		return c.Status(403).JSON(fiber.Map{"error": "link expired or invalid"})
 	}
-	client, err := h.clientService.GetClient(c.Context(), tenantID, link.ClientID)
+	_, _, redirectPath, err := h.publicLinkContext(c, link)
 	if err != nil {
-		utils.Logger(c).Warn("client not found", zap.Error(err))
-		return c.Status(404).JSON(fiber.Map{"error": "client not found"})
+		return c.Status(403).JSON(fiber.Map{"error": "link expired or invalid"})
 	}
 	if _, err := h.setLinkSessionCookie(c, link); err != nil {
 		var conflict *fiber.Error
@@ -134,7 +133,6 @@ func (h *LinkHandler) BootstrapLinkSession(c fiber.Ctx) error {
 		return err
 	}
 
-	redirectPath := fmt.Sprintf("/folder/%s", derefString(client.RootFolderID))
 	page := fmt.Sprintf(
 		"<!doctype html><html><head><meta charset=\"utf-8\"><meta http-equiv=\"cache-control\" content=\"no-store\"></head><body>"+
 			"<script>"+
@@ -316,7 +314,7 @@ func (h *LinkHandler) EmailSecureLink(c fiber.Ctx) error {
 	}
 	authorizedLink, err := (&services.SharingService{DB: h.db}).LinkForDelivery(c.Context(), middleware.AccessRequest(c, "", "", services.AccessShare), c.Params("id"))
 	if err != nil {
-		return sharingError(err)
+		return sharingJSONError(c, sharingError(err))
 	}
 	link := *authorizedLink
 	siteTitle, _ := h.tenantEmailSettings(c, link.TenantID)
@@ -455,20 +453,58 @@ func (h *LinkHandler) ViewLink(c fiber.Ctx) error {
 		return c.Status(404).JSON(fiber.Map{"error": "link not found"})
 	}
 	_, valid := links.ValidateSecureToken(token, h.signingKey)
-	if !valid || link.FileID != nil || link.RevokedAt != nil || links.IsExpired(link.ExpiresAt) {
+	if !valid || link.RevokedAt != nil || links.IsExpired(link.ExpiresAt) {
 		utils.Logger(c).Warn("link expired or invalid")
 		return c.Status(403).JSON(fiber.Map{"error": "link expired or invalid"})
 	}
-	var client models.Client
-	if err := h.db.WithContext(c.Context()).Where("tenant_id = ? AND id = ?", tenantID, link.ClientID).First(&client).Error; err != nil {
-		utils.Logger(c).Warn("client not found", zap.Error(err))
-		return c.Status(404).JSON(fiber.Map{"error": "client not found"})
+	client, target, _, err := h.publicLinkContext(c, link)
+	if err != nil {
+		return c.Status(403).JSON(fiber.Map{"error": "link expired or invalid"})
 	}
 	if _, err := h.setLinkSessionCookie(c, link); err != nil {
 		return err
 	}
-	logFileActivity(c.Context(), h.db, tenantID, link.ClientID, nil, nil, &link.ID, "view_link", "")
-	return c.JSON(fiber.Map{"client": client, "link": link})
+	logFileActivity(c.Context(), h.db, tenantID, link.ClientID, link.FileID, nil, &link.ID, "view_link", "")
+	return c.JSON(fiber.Map{"client": client, "target": target, "link": fiber.Map{"id": link.ID, "client_id": link.ClientID, "file_id": link.FileID, "access_type": link.AccessType, "expires_at": link.ExpiresAt}})
+}
+
+// The bearer token authorizes only its own target. Public inspection never
+// serializes management provenance, recipient contacts or private ancestors.
+func (h *LinkHandler) publicLinkContext(c fiber.Ctx, link models.SecureLink) (fiber.Map, *models.File, string, error) {
+	req := services.AccessRequest{TenantID: link.TenantID, ClientID: link.ClientID, Actor: services.AccessActor{LinkID: link.ID}, Operation: services.AccessContext}
+	if link.FileID != nil {
+		req.FileID = *link.FileID
+	}
+	resolver := &services.AccessService{DB: h.db}
+	d, err := resolver.Resolve(c.Context(), req)
+	if err != nil {
+		return nil, nil, "", err
+	}
+	if !d.Allowed {
+		return nil, nil, "", gorm.ErrRecordNotFound
+	}
+	client := fiber.Map{"id": link.ClientID, "name": "", "root_folder_id": nil, "capabilities": d.Capabilities, "can_manage": false}
+	if link.FileID != nil {
+		target, err := resolver.DescribeItem(c.Context(), req)
+		if err != nil {
+			return nil, nil, "", err
+		}
+		redirect := "/files/" + target.ID
+		if target.Type == "folder" {
+			redirect = "/folder/" + target.ID
+			client["root_folder_id"] = target.ID
+		}
+		return client, target, redirect, nil
+	}
+	legacy, err := h.clientService.GetClient(c.Context(), link.TenantID, link.ClientID)
+	if err != nil {
+		return nil, nil, "", err
+	}
+	if legacy.RootFolderID == nil {
+		return nil, nil, "", gorm.ErrRecordNotFound
+	}
+	client["name"], client["root_folder_id"] = legacy.Name, legacy.RootFolderID
+	return client, nil, "/folder/" + *legacy.RootFolderID, nil
 }
 
 func derefString(value *string) string {

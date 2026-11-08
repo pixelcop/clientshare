@@ -116,7 +116,7 @@ func TestInvitationHTTPDeliveryCredentialsAreEmailOnlyAndQueueInspectionCannotRe
 	require.NoError(t, env.db.Where("access_invitation_id = ?", invite.ID).Find(&jobs).Error)
 	require.Len(t, jobs, 1)
 	require.NotNil(t, jobs[0].IdentityInviteID)
-	require.Contains(t, jobs[0].Body, "/accept-invite?token=")
+	require.Contains(t, jobs[0].Body, "/accept-invite#token=")
 	// Add the normal queue routes around the durable queue, with the same real
 	// sessions. Neither the inviter nor another admin can inspect credentials.
 	apphandlers.RegisterEmailQueueRoutes(app.Group("/api", middleware.AuthRequired), env.db, queue)
@@ -130,9 +130,9 @@ func TestInvitationHTTPDeliveryCredentialsAreEmailOnlyAndQueueInspectionCannotRe
 	require.NotContains(t, string(data), "token=")
 	// Only the recipient's emailed token can set up their account and grant
 	// the item; this does not create a client membership.
-	start := strings.Index(jobs[0].Body, "/accept-invite?token=")
+	start := strings.Index(jobs[0].Body, "/accept-invite#token=")
 	require.GreaterOrEqual(t, start, 0)
-	token := strings.Fields(jobs[0].Body[start+len("/accept-invite?token="):])[0]
+	token := strings.Fields(jobs[0].Body[start+len("/accept-invite#token="):])[0]
 	token = strings.Trim(token, "<>\"()")
 	resp, err = env.app.Test(jsonRequest(http.MethodPost, "/api/auth/accept-invite", map[string]any{"token": token, "password": "recipient-password"}))
 	require.NoError(t, err)

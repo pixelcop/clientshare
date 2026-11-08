@@ -264,7 +264,7 @@ func (s *AccessService) resolveBase(ctx context.Context, req AccessRequest) (acc
 	if err := db.Where("tenant_id = ? AND client_id = ? AND user_id = ?", req.TenantID, req.ClientID, user.ID).First(&membership).Error; err != nil {
 		return base, accessQueryError(err)
 	}
-	base.caps = membershipCapabilities(user.Role, membership)
+	base.caps = MembershipCapabilities(user.Role, membership)
 	base.staff = user.Role == "manager"
 	base.sources = []AccessSource{{Kind: "membership", ID: user.ID}}
 	return base, nil
@@ -342,7 +342,9 @@ func unionAccess(a, b models.AccessCapabilities) models.AccessCapabilities {
 	}
 }
 
-func membershipCapabilities(role string, membership models.UserClient) models.AccessCapabilities {
+// MembershipCapabilities decorates an already-authorized membership DTO. It
+// does not establish identity, staff authority, or permission to inspect it.
+func MembershipCapabilities(role string, membership models.UserClient) models.AccessCapabilities {
 	if membership.CapabilitiesSet {
 		return membership.AccessCapabilities
 	}

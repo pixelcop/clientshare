@@ -19,16 +19,17 @@ import (
 // real handlers without enabling creation before the enforcement release gate.
 func RegisterSharingLifecycleRoutes(router fiber.Router, db *gorm.DB, secret, signingKey string, queue emailpkg.EmailQueue, baseURL string, identityTTL time.Duration) {
 	h := &SharingHandler{service: &services.SharingService{DB: db, TokenSecret: secret, LinkSigningKey: signingKey}, emailQueue: queue, baseURL: baseURL, identityTTL: identityTTL}
-	router.Post("/files/:id/grants", middleware.AuthRequired, h.CreateGrant)
-	router.Patch("/files/:id/grants/:grantID", middleware.AuthRequired, h.UpdateGrant)
-	router.Delete("/files/:id/grants/:grantID", middleware.AuthRequired, h.RevokeGrant)
-	router.Post("/files/:id/invitations", middleware.AuthRequired, h.CreateItemInvitation)
-	router.Post("/clients/:id/invitations", middleware.AuthRequired, h.CreateClientInvitation)
-	router.Post("/invitations/:invitationID/email", middleware.AuthRequired, h.EmailInvitation)
-	router.Delete("/invitations/:invitationID", middleware.AuthRequired, h.RevokeInvitation)
-	router.Post("/invitations/accept", middleware.AuthRequired, h.AcceptInvitation)
-	router.Delete("/clients/:id/members/:userID", middleware.AuthRequired, h.RemoveMember)
-	router.Post("/files/:id/links", middleware.AuthRequired, h.CreateItemLink)
+	router.Post("/files/:id/grants", middleware.AuthRequired, sharingResponse(h.CreateGrant))
+	router.Patch("/files/:id/grants/:grantID", middleware.AuthRequired, sharingResponse(h.UpdateGrant))
+	router.Delete("/files/:id/grants/:grantID", middleware.AuthRequired, sharingResponse(h.RevokeGrant))
+	router.Post("/files/:id/invitations", middleware.AuthRequired, sharingResponse(h.CreateItemInvitation))
+	router.Post("/clients/:id/invitations", middleware.AuthRequired, sharingResponse(h.CreateClientInvitation))
+	router.Post("/invitations/:invitationID/email", middleware.AuthRequired, sharingResponse(h.EmailInvitation))
+	router.Delete("/invitations/:invitationID", middleware.AuthRequired, sharingResponse(h.RevokeInvitation))
+	router.Post("/invitations/accept", middleware.AuthRequired, sharingResponse(h.AcceptInvitation))
+	router.Delete("/clients/:id/members/:userID", middleware.AuthRequired, sharingResponse(h.RemoveMember))
+	router.Post("/files/:id/links", middleware.AuthRequired, sharingResponse(h.CreateItemLink))
+	router.Delete("/clients/:id/links", middleware.AuthRequired, sharingResponse(h.RevokeClientLinks))
 }
 
 func sharingError(err error) error {
@@ -43,6 +44,24 @@ func sharingError(err error) error {
 		return fiber.NewError(400, "Invalid sharing settings")
 	default:
 		return fiber.NewError(503, "Access validation is temporarily unavailable")
+	}
+}
+
+func sharingJSONError(c fiber.Ctx, err error) error {
+	code, message := 503, "Access validation is temporarily unavailable"
+	var apiError *fiber.Error
+	if errors.As(err, &apiError) {
+		code, message = apiError.Code, apiError.Message
+	}
+	return c.Status(code).JSON(fiber.Map{"error": message})
+}
+
+func sharingResponse(handler fiber.Handler) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		if err := handler(c); err != nil {
+			return sharingJSONError(c, err)
+		}
+		return nil
 	}
 }
 
@@ -163,9 +182,9 @@ func (h *SharingHandler) EmailInvitation(c fiber.Ctx) error {
 	if baseURL == "" {
 		return fiber.NewError(503, "Invitation URL is unavailable")
 	}
-	path := "/accept-access?token="
+	path := "/accept-access#token="
 	if delivery.NeedsIdentity {
-		path = "/accept-invite?token="
+		path = "/accept-invite#token="
 	}
 	inviteURL := baseURL + path + url.QueryEscape(delivery.RawToken)
 	subject, body, htmlBody := emailpkg.RenderUserInviteEmail(delivery.User.Name, inviteURL, services.DefaultSiteTitle, "You have been invited to shared content. Sign in with the invited email to accept.", delivery.ExpiresAt)
@@ -225,4 +244,20 @@ func (h *SharingHandler) RemoveMember(c fiber.Ctx) error {
 		return sharingError(err)
 	}
 	return c.SendStatus(204)
+}
+
+func (h *SharingHandler) ClientAccess(c fiber.Ctx) error {
+	view, err := h.service.ClientAccess(c.Context(), middleware.AccessRequest(c, c.Params("id"), "", services.AccessShare))
+	if err != nil {
+		return sharingError(err)
+	}
+	return c.JSON(view)
+}
+
+func (h *SharingHandler) RevokeClientLinks(c fiber.Ctx) error {
+	count, err := h.service.RevokeClientLinks(c.Context(), middleware.AccessRequest(c, c.Params("id"), "", services.AccessShare))
+	if err != nil {
+		return sharingError(err)
+	}
+	return c.JSON(fiber.Map{"revoked": count})
 }

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/pixelcop/clientshare/internal/models"
+	"github.com/pixelcop/clientshare/internal/services"
 	emailpkg "github.com/pixelcop/clientshare/internal/services/email"
 	"github.com/stretchr/testify/require"
 )
@@ -17,6 +18,59 @@ type sharingMailSender struct{ messages []emailpkg.Email }
 func (s *sharingMailSender) Send(message emailpkg.Email) error {
 	s.messages = append(s.messages, message)
 	return nil
+}
+
+func TestPublicScopedLinkLandingAndInspectionRedactPrivateContext(t *testing.T) {
+	for _, kind := range []string{"file", "folder"} {
+		t.Run(kind, func(t *testing.T) {
+			env := setupFileTestEnv(t)
+			target := &models.File{TenantID: env.client.TenantID, ClientID: env.client.ID, FolderID: &env.rootFolder.ID, Type: kind, Filename: "Shared target", Path: env.rootFolder.Path + "/Shared target"}
+			require.NoError(t, env.db.Create(target).Error)
+			service := &services.SharingService{DB: env.db, LinkSigningKey: env.signingKey}
+			link, err := service.CreateLink(t.Context(), services.AccessRequest{TenantID: env.client.TenantID, ClientID: env.client.ID, FileID: target.ID, Actor: services.AccessActor{UserID: env.adminUser.ID}}, services.LinkInput{AccessType: "read", ExpiryDays: 7, Email: "private-contact@example.test"}, "public-item-link")
+			require.NoError(t, err)
+			resp, err := env.app.Test(jsonRequest(http.MethodGet, "/links/"+link.Token, nil))
+			require.NoError(t, err)
+			require.Equal(t, 200, resp.StatusCode)
+			body, err := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			require.NoError(t, err)
+			redirect := "/files/" + target.ID
+			if kind == "folder" {
+				redirect = "/folder/" + target.ID
+			}
+			require.Contains(t, string(body), redirect)
+			require.NotContains(t, string(body), env.rootFolder.ID)
+			cookie := ""
+			for _, item := range resp.Cookies() {
+				if item.Name == "clientshare_session" {
+					cookie = item.Value
+				}
+			}
+			require.NotEmpty(t, cookie)
+			resp, err = env.app.Test(jsonAuthRequest(http.MethodGet, "/api/link/"+link.Token, cookie, nil))
+			require.NoError(t, err)
+			require.Equal(t, 200, resp.StatusCode)
+			body, err = io.ReadAll(resp.Body)
+			resp.Body.Close()
+			require.NoError(t, err)
+			for _, secret := range []string{env.rootFolder.ID, env.rootFolder.Path, env.client.Name, link.CreatedBy, link.Email, "created_by", "last_accessed"} {
+				require.NotContains(t, string(body), secret)
+			}
+			var result struct {
+				Target models.File `json:"target"`
+			}
+			require.NoError(t, json.Unmarshal(body, &result))
+			require.Equal(t, target.ID, result.Target.ID)
+			require.Nil(t, result.Target.FolderID)
+			require.Equal(t, target.Filename, result.Target.Path)
+			require.NoError(t, env.db.Model(link).Update("revoked_at", time.Now()).Error)
+			resp, err = env.app.Test(jsonRequest(http.MethodGet, "/links/"+link.Token, nil))
+			require.NoError(t, err)
+			require.Equal(t, 403, resp.StatusCode)
+			resp.Body.Close()
+		})
+	}
 }
 
 func TestScopedLinkLifecycleHTTPUsesExactTargetAndRevalidatesMail(t *testing.T) {
