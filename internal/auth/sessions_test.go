@@ -14,7 +14,7 @@ func sessionTestStore(t *testing.T) *SessionStore {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(t.TempDir()+"/sessions.db"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&models.BrowserSession{}, &models.User{}, &models.TenantEntitlement{}, &models.SecureLink{}, &models.HostedLoginHandoff{}, &models.WebAuthnChallenge{}))
+	require.NoError(t, db.AutoMigrate(&models.BrowserSession{}, &models.User{}, &models.TenantEntitlement{}, &models.SecureLink{}, &models.HostedLoginHandoff{}, &models.WebAuthnChallenge{}, &models.Client{}, &models.File{}))
 	require.NoError(t, db.Create(&models.User{ID: "user", TenantID: "tenant", Email: "user@example.test", Role: "admin"}).Error)
 	return &SessionStore{DB: db}
 }
@@ -95,13 +95,23 @@ func TestUserRevocationInvalidatesHandoffsAndChallenges(t *testing.T) {
 	}
 }
 
-func TestScopedLinkSessionsStayUnavailableBeforeEnforcement(t *testing.T) {
+func TestScopedLinkSessionsRevalidateTargetAndAncestry(t *testing.T) {
 	s := sessionTestStore(t)
 	target := "item"
+	root := "root"
+	require.NoError(t, s.DB.Create(&models.Client{ID: "client", TenantID: "tenant", RootFolderID: &root}).Error)
+	require.NoError(t, s.DB.Create(&models.File{ID: root, TenantID: "tenant", ClientID: "client", Type: "folder"}).Error)
+	require.NoError(t, s.DB.Create(&models.File{ID: target, TenantID: "tenant", ClientID: "client", Type: "file", FolderID: &root}).Error)
 	link := models.SecureLink{ID: "scoped", TenantID: "tenant", ClientID: "client", FileID: &target, Token: "scoped", AccessType: "read", ExpiresAt: time.Now().Add(time.Hour)}
 	require.NoError(t, s.DB.Create(&link).Error)
 	raw, err := s.Create(t.Context(), "tenant", "", link.ID, PortalAudience, "", "")
 	require.NoError(t, err)
+	identity, err := s.Validate(t.Context(), raw, PortalAudience, "tenant")
+	require.NoError(t, err)
+	require.Equal(t, target, identity.FileID)
+	require.Equal(t, "link", identity.Role)
+	require.Empty(t, identity.UserID)
+	require.NoError(t, s.DB.Model(&models.File{}).Where("id = ?", root).Update("deleted_at", time.Now()).Error)
 	_, err = s.Validate(t.Context(), raw, PortalAudience, "tenant")
 	require.ErrorIs(t, err, ErrSessionInvalid)
 }

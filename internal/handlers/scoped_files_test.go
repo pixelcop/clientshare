@@ -128,3 +128,46 @@ func TestPrivateCollectionCannotProbeOrReuseExistingFolders(t *testing.T) {
 	resp.Body.Close()
 	require.Empty(t, result.Existing)
 }
+
+func TestScopedBearerSessionsCannotEscapeItemOrAcquireSharingAuthority(t *testing.T) {
+	for _, mode := range []string{"read", "view", "write", "readwrite"} {
+		t.Run(mode, func(t *testing.T) {
+			env := setupFileTestEnv(t)
+			folder := &models.File{TenantID: env.client.TenantID, ClientID: env.client.ID, FolderID: &env.rootFolder.ID, Filename: "Shared", Path: filepath.Join(env.rootFolder.Path, "Shared"), Type: "folder"}
+			_, err := services.NewFileService(env.db).CreateFolderRecord(t.Context(), folder)
+			require.NoError(t, err)
+			file := createFileRecord(t, env, folder, "visible.txt", "content")
+			private := createFileRecord(t, env, env.rootFolder, "private.txt", "private")
+			link := models.SecureLink{TenantID: env.client.TenantID, ClientID: env.client.ID, FileID: &folder.ID, Token: "scoped-session", AccessType: mode, ExpiresAt: time.Now().Add(time.Hour)}
+			require.NoError(t, env.db.Create(&link).Error)
+			token, err := (&auth.SessionStore{DB: env.db}).Create(t.Context(), env.client.TenantID, "", link.ID, auth.PortalAudience, "", "")
+			require.NoError(t, err)
+			get := func(path string, status int) []byte {
+				t.Helper()
+				resp, err := env.app.Test(jsonAuthRequest(http.MethodGet, path, token, nil))
+				require.NoError(t, err)
+				defer resp.Body.Close()
+				require.Equal(t, status, resp.StatusCode, path)
+				body, err := io.ReadAll(resp.Body)
+				require.NoError(t, err)
+				return body
+			}
+			body := get("/api/folders", 200)
+			require.NotContains(t, string(body), env.rootFolder.ID)
+			require.NotContains(t, string(body), private.Filename)
+			get("/api/folders/"+env.rootFolder.ID, 404)
+			get("/api/files/"+private.ID, 404)
+			get("/api/files/"+file.ID+"/access", 404)
+			get("/api/shared-with-me", 404)
+			status := 200
+			if mode == "write" {
+				status = 404
+				require.NotContains(t, string(body), file.Filename)
+			}
+			get("/api/files/"+file.ID+"/download", status)
+			get("/api/folders/"+folder.ID+"/download-zip", status)
+			require.NoError(t, env.db.Model(&models.File{}).Where("id = ?", env.rootFolder.ID).Update("deleted_at", time.Now()).Error)
+			get("/api/folders/"+folder.ID, 401)
+		})
+	}
+}

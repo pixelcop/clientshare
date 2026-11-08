@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"github.com/gofiber/fiber/v3"
+	"github.com/pixelcop/clientshare/internal/access"
 	"github.com/pixelcop/clientshare/internal/models"
 	"gorm.io/gorm"
 	"time"
@@ -31,6 +32,7 @@ type SessionIdentity struct {
 	LinkID     string `json:"link_id,omitempty"`
 	ClientID   string `json:"client_id,omitempty"`
 	AccessType string `json:"access_type,omitempty"`
+	FileID     string `json:"file_id,omitempty"`
 }
 
 func SessionHash(raw string) string {
@@ -112,10 +114,19 @@ func (s *SessionStore) Validate(ctx context.Context, raw, audience, tenantID str
 		if err := s.DB.WithContext(ctx).Where("tenant_id = ? AND id = ?", record.TenantID, record.LinkID).First(&link).Error; err != nil {
 			return nil, sessionError(err)
 		}
-		// Schema lands before scoped endpoint enforcement. Never interpret an
-		// item-targeted link as the legacy whole-client recipient session.
-		if link.FileID != nil || link.RevokedAt != nil || !link.ExpiresAt.After(now) {
+		if link.RevokedAt != nil || !link.ExpiresAt.After(now) {
 			return nil, ErrSessionInvalid
+		}
+		if link.FileID != nil {
+			req := access.AccessRequest{TenantID: record.TenantID, ClientID: link.ClientID, FileID: *link.FileID, Actor: access.AccessActor{LinkID: link.ID, SessionID: record.ID}, Operation: access.AccessContext, Now: now}
+			d, err := (&access.AccessService{DB: s.DB}).Resolve(ctx, req)
+			if err != nil {
+				return nil, err
+			}
+			if !d.Allowed {
+				return nil, ErrSessionInvalid
+			}
+			identity.FileID = *link.FileID
 		}
 		identity.Role, identity.ClientID, identity.AccessType = "link", link.ClientID, link.AccessType
 	}

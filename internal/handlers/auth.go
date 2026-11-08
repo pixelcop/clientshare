@@ -517,13 +517,15 @@ func (h *AuthHandler) MeHandler(c fiber.Ctx) error {
 		clientID, _ := c.Locals("client_id").(string)
 		linkID, _ := c.Locals("link_id").(string)
 		return c.JSON(fiber.Map{
-			"session_id": c.Locals("session_id"),
-			"id":         "",
-			"email":      "",
-			"role":       "link",
-			"name":       "Secure Link",
-			"client_id":  clientID,
-			"link_id":    linkID,
+			"session_id":  c.Locals("session_id"),
+			"id":          "",
+			"email":       "",
+			"role":        "link",
+			"name":        "Secure Link",
+			"client_id":   clientID,
+			"link_id":     linkID,
+			"file_id":     c.Locals("link_file_id"),
+			"access_type": c.Locals("access_type"),
 		})
 	}
 	userID, ok := c.Locals("user_id").(string)

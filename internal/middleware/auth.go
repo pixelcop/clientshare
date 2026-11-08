@@ -67,6 +67,7 @@ func AuthRequired(c fiber.Ctx) error {
 	}
 	c.Locals("link_id", identity.LinkID)
 	c.Locals("access_type", identity.AccessType)
+	c.Locals("link_file_id", identity.FileID)
 	return c.Next()
 }
 
