@@ -94,3 +94,14 @@ func TestUserRevocationInvalidatesHandoffsAndChallenges(t *testing.T) {
 		require.Zero(t, count)
 	}
 }
+
+func TestScopedLinkSessionsStayUnavailableBeforeEnforcement(t *testing.T) {
+	s := sessionTestStore(t)
+	target := "item"
+	link := models.SecureLink{ID: "scoped", TenantID: "tenant", ClientID: "client", FileID: &target, Token: "scoped", AccessType: "read", ExpiresAt: time.Now().Add(time.Hour)}
+	require.NoError(t, s.DB.Create(&link).Error)
+	raw, err := s.Create(t.Context(), "tenant", "", link.ID, PortalAudience, "", "")
+	require.NoError(t, err)
+	_, err = s.Validate(t.Context(), raw, PortalAudience, "tenant")
+	require.ErrorIs(t, err, ErrSessionInvalid)
+}

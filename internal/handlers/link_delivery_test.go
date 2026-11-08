@@ -11,6 +11,7 @@ import (
 	apphandlers "github.com/pixelcop/clientshare/internal/handlers"
 	"github.com/pixelcop/clientshare/internal/middleware"
 	"github.com/pixelcop/clientshare/internal/models"
+	"github.com/pixelcop/clientshare/internal/services"
 	"github.com/pixelcop/clientshare/internal/services/email"
 	"github.com/pixelcop/clientshare/internal/services/storage"
 	tenantctx "github.com/pixelcop/clientshare/internal/tenant"
@@ -161,4 +162,22 @@ func TestRevocationRetainsHistoryAndDeniesOpenSessions(t *testing.T) {
 		}
 	}
 	t.Fatal("revoked history missing")
+}
+
+func TestScopedLinkCannotUseLegacyClientEndpoints(t *testing.T) {
+	env := setupOtherHandlersEnv(t)
+	resp, err := env.app.Test(jsonAuthRequest(http.MethodPost, "/api/clients/"+env.client.ID+"/links", env.adminToken, map[string]any{"access_type": "read", "expiry_days": 1}))
+	require.NoError(t, err)
+	var link models.SecureLink
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&link))
+	resp.Body.Close()
+	require.NoError(t, env.db.Model(&link).Update("file_id", env.client.RootFolderID).Error)
+	for _, path := range []string{"/links/" + link.Token, "/api/link/" + link.Token} {
+		resp, err = env.app.Test(jsonAuthRequest(http.MethodGet, path, env.adminToken, nil))
+		require.NoError(t, err)
+		require.Equal(t, 403, resp.StatusCode)
+		resp.Body.Close()
+	}
+	link.FileID = env.client.RootFolderID
+	require.ErrorIs(t, services.PersistSecureLink(t.Context(), env.db, &link), services.ErrScopedSharingUnavailable)
 }

@@ -112,7 +112,9 @@ func (s *SessionStore) Validate(ctx context.Context, raw, audience, tenantID str
 		if err := s.DB.WithContext(ctx).Where("tenant_id = ? AND id = ?", record.TenantID, record.LinkID).First(&link).Error; err != nil {
 			return nil, sessionError(err)
 		}
-		if link.RevokedAt != nil || !link.ExpiresAt.After(now) {
+		// Schema lands before scoped endpoint enforcement. Never interpret an
+		// item-targeted link as the legacy whole-client recipient session.
+		if link.FileID != nil || link.RevokedAt != nil || !link.ExpiresAt.After(now) {
 			return nil, ErrSessionInvalid
 		}
 		identity.Role, identity.ClientID, identity.AccessType = "link", link.ClientID, link.AccessType

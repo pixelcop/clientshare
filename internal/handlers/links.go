@@ -110,7 +110,7 @@ func (h *LinkHandler) BootstrapLinkSession(c fiber.Ctx) error {
 		return c.Status(404).JSON(fiber.Map{"error": "link not found"})
 	}
 	_, valid := links.ValidateSecureToken(token, h.signingKey)
-	if !valid || link.RevokedAt != nil || links.IsExpired(link.ExpiresAt) {
+	if !valid || link.FileID != nil || link.RevokedAt != nil || links.IsExpired(link.ExpiresAt) {
 		utils.Logger(c).Warn("link expired or invalid")
 		return c.Status(403).JSON(fiber.Map{"error": "link expired or invalid"})
 	}
@@ -248,7 +248,7 @@ func (h *LinkHandler) CreateSecureLink(c fiber.Ctx) error {
 }
 
 func (h *LinkHandler) queueSecureLinkEmail(c fiber.Ctx, link models.SecureLink, recipient, key, siteTitle string) (string, error) {
-	if link.RevokedAt != nil || !link.ExpiresAt.After(time.Now()) {
+	if link.FileID != nil || link.RevokedAt != nil || !link.ExpiresAt.After(time.Now()) {
 		return "unavailable", errors.New("This link is expired or revoked")
 	}
 	if h.emailQueue == nil {
@@ -303,7 +303,7 @@ func (h *LinkHandler) EmailSecureLink(c fiber.Ctx) error {
 	if err := h.db.WithContext(c.Context()).Where("tenant_id = ? AND id = ?", tenantIDFromCtx(c), c.Params("id")).First(&link).Error; err != nil {
 		return c.Status(404).JSON(fiber.Map{"error": "Link not found"})
 	}
-	if link.RevokedAt != nil || !link.ExpiresAt.After(time.Now()) {
+	if link.FileID != nil || link.RevokedAt != nil || !link.ExpiresAt.After(time.Now()) {
 		return c.Status(410).JSON(fiber.Map{"status": "unavailable", "error": "This link is expired or revoked"})
 	}
 	siteTitle, _ := h.tenantEmailSettings(c, link.TenantID)
@@ -387,7 +387,7 @@ func (h *LinkHandler) ListSecureLinks(c fiber.Ctx) error {
 	}
 	baseURL := tenantBaseURLFromCtx(c, h.baseURL)
 	for index := range linksList {
-		if linksList[index].RevokedAt == nil && linksList[index].ExpiresAt.After(time.Now()) {
+		if linksList[index].FileID == nil && linksList[index].RevokedAt == nil && linksList[index].ExpiresAt.After(time.Now()) {
 			linksList[index].LinkURL = buildSecureLinkURL(baseURL, linksList[index].Token)
 		} else {
 			linksList[index].Token = ""
@@ -424,7 +424,7 @@ func (h *LinkHandler) ViewLink(c fiber.Ctx) error {
 		return c.Status(404).JSON(fiber.Map{"error": "link not found"})
 	}
 	_, valid := links.ValidateSecureToken(token, h.signingKey)
-	if !valid || link.RevokedAt != nil || links.IsExpired(link.ExpiresAt) {
+	if !valid || link.FileID != nil || link.RevokedAt != nil || links.IsExpired(link.ExpiresAt) {
 		utils.Logger(c).Warn("link expired or invalid")
 		return c.Status(403).JSON(fiber.Map{"error": "link expired or invalid"})
 	}

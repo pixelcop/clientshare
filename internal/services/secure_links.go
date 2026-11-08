@@ -11,10 +11,14 @@ import (
 )
 
 var ErrLinkRequestConflict = errors.New("request key was already used with different link settings")
+var ErrScopedSharingUnavailable = errors.New("item sharing is not available until scoped enforcement is complete")
 
 // PersistSecureLink deduplicates a retried creation without ever reviving an
 // expired/revoked link. Tokens and existing expiry timestamps are preserved.
 func PersistSecureLink(ctx context.Context, db *gorm.DB, link *models.SecureLink) error {
+	if link.FileID != nil {
+		return ErrScopedSharingUnavailable
+	}
 	return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var client models.Client
 		if err := tx.Where("tenant_id = ? AND id = ?", link.TenantID, link.ClientID).First(&client).Error; err != nil {

@@ -170,7 +170,7 @@ func (q *DBEmailQueue) send(item models.QueuedEmail) error {
 		}
 		// Legacy SQLite timestamps can contain different offsets. Compare the
 		// actual instants in Go, not lexicographically as wall-clock strings.
-		if errors.Is(err, gorm.ErrRecordNotFound) || !link.ExpiresAt.After(q.now()) {
+		if errors.Is(err, gorm.ErrRecordNotFound) || link.FileID != nil || !link.ExpiresAt.After(q.now()) {
 			return q.DB.Model(&models.QueuedEmail{}).Where("id = ? AND sent_at IS NULL", item.ID).Update("canceled_at", q.now()).Error
 		}
 	}
