@@ -7,7 +7,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 	"github.com/pixelcop/clientshare/internal/auth"
 	"github.com/pixelcop/clientshare/internal/db"
-	"github.com/pixelcop/clientshare/internal/models"
+	"github.com/pixelcop/clientshare/internal/services"
 	tenantctx "github.com/pixelcop/clientshare/internal/tenant"
 	"github.com/pixelcop/clientshare/pkg/utils"
 	"go.uber.org/zap"
@@ -98,40 +98,5 @@ func RoleRequired(role string) fiber.Handler {
 }
 
 func UserCanAccessFile(c fiber.Ctx) error {
-	// file routes have an :id param for the folder or file ID
-	fileID := c.Params("id")
-	userID, _ := c.Locals("user_id").(string)
-	clientID, _ := c.Locals("client_id").(string)
-	tenantID := strings.TrimSpace(tenantctx.IDFromFiber(c))
-
-	// Deletion workflows maintain subtree state transactionally. Check the file
-	// and its client in one query rather than walking ancestors on every request.
-	file, err := db.G[*models.File]().Where(`tenant_id = ? AND id = ? AND deleted_at IS NULL AND disk_deleted_at IS NULL
-		AND EXISTS (SELECT 1 FROM clients WHERE clients.tenant_id = files.tenant_id AND clients.id = files.client_id)`, tenantID, fileID).First(c.Context())
-	if err != nil {
-		utils.Logger(c).Debug("file not found", zap.Error(err))
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": fiber.ErrNotFound.Error()})
-	}
-	c.Locals("file", file)
-
-	role, _ := c.Locals("role").(string)
-	if role == "admin" || role == "manager" {
-		// admins and managers have access to all files, so we can proceed without further checks
-		return c.Next()
-	}
-
-	if role == "link" {
-		if clientID == "" || clientID != file.ClientID {
-			utils.Logger(c).Debug("forbidden link access", zap.String("token_client_id", clientID), zap.String("file_client_id", file.ClientID))
-			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": fiber.ErrNotFound.Error()})
-		}
-		return c.Next()
-	}
-
-	_, err = db.G[*models.UserClient]().Where("tenant_id = ? AND user_id = ? AND client_id = ?", tenantID, userID, file.ClientID).First(c.Context())
-	if err != nil {
-		utils.Logger(c).Debug("user has no access to this client", zap.Error(err), zap.String("user_id", userID), zap.String("client_id", file.ClientID))
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": fiber.ErrNotFound.Error()})
-	}
-	return c.Next()
+	return FileAccess(db.DB(), services.AccessRead)(c)
 }

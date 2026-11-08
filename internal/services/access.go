@@ -36,8 +36,9 @@ const (
 // LinkID takes precedence even when UserID also identifies a signed-in admin.
 // Authentication/session expiry remains the responsibility of auth middleware.
 type AccessActor struct {
-	UserID string
-	LinkID string
+	UserID    string
+	LinkID    string
+	SessionID string
 }
 
 type AccessRequest struct {
@@ -156,19 +157,38 @@ func (s *AccessService) ResolveItems(ctx context.Context, req AccessRequest, fil
 		if nodes[id].Type != "folder" {
 			caps.CanUpload = false
 		}
+		if !caps.CanRead && caps.CanUpload && (req.Operation == AccessContext || req.Operation == AccessUpload || req.Operation == AccessShare) {
+			// Private collection may address its explicit destination and new
+			// directory trees from this session, never probe/reuse old folders.
+			knownDestination := base.rootFolderID == id && base.caps.CanUpload
+			if base.link != nil && base.link.FileID != nil {
+				knownDestination = *base.link.FileID == id
+			}
+			if grant, ok := grants[id]; ok && grant.CanUpload {
+				knownDestination = true
+			}
+			file := nodes[id]
+			if req.Actor.SessionID != "" && file.UploadSessionID != nil && *file.UploadSessionID == req.Actor.SessionID {
+				knownDestination = true
+			}
+			if !knownDestination {
+				continue
+			}
+		}
 		decisions[id] = accessDecision(caps, sources, req.Operation, nodes[id].Type, base.staff)
 	}
 	return decisions, nil
 }
 
 type accessBase struct {
-	valid   bool
-	staff   bool // authority for staff-only client/queue operations
-	user    *models.User
-	link    *models.SecureLink
-	now     time.Time
-	caps    models.AccessCapabilities
-	sources []AccessSource
+	valid        bool
+	staff        bool // authority for staff-only client/queue operations
+	user         *models.User
+	link         *models.SecureLink
+	now          time.Time
+	caps         models.AccessCapabilities
+	sources      []AccessSource
+	rootFolderID string
 }
 
 func (s *AccessService) resolveBase(ctx context.Context, req AccessRequest) (accessBase, error) {
@@ -184,6 +204,9 @@ func (s *AccessService) resolveBase(ctx context.Context, req AccessRequest) (acc
 	var client models.Client
 	if err := db.Where("tenant_id = ? AND id = ?", req.TenantID, req.ClientID).First(&client).Error; err != nil {
 		return base, accessQueryError(err)
+	}
+	if client.RootFolderID != nil {
+		base.rootFolderID = *client.RootFolderID
 	}
 	if req.Actor.LinkID != "" {
 		var link models.SecureLink

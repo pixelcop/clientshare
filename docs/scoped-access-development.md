@@ -7,6 +7,10 @@ creation is rejected and legacy bootstrap, session, inspection, registration and
 email paths reject item-targeted links instead of treating them as client-wide.
 There are no item-grant creation routes or item Share controls yet.
 
+File/folder routes now use exact-resource, operation-specific resolver checks,
+including uploads, downloads, deletion, breadcrumbs and ZIP entries. This is
+only part of the enforcement inventory, not permission to enable scoped links.
+
 ## Storage
 
 - `item_grants` keeps one current row per tenant, recipient and item. Updating or
@@ -24,6 +28,19 @@ There are no item-grant creation routes or item Share controls yet.
 - `users.manager_full_access` defaults to false. Migration 050 sets it true only
   for managers already present at upgrade, preserving access to future clients.
   Endpoint integration of this policy is a separate release gate.
+- Migration 051 adds nullable `files.upload_session_id`. Private-collection
+  recipients can address their explicit upload destination and newly created
+  directory trees in the same authenticated session, not enumerate or reuse
+  pre-existing child folders. Existing records remain unowned by a collection
+  session. Directory continuation does not confer read permission.
+
+Private collection returns empty file **and folder** lists and duplicate checks,
+with only generic destination context. New file/folder names always receive an
+opaque suffix, even when there is no collision. This avoids both overwrites and
+a collision oracle. Named read/upload access retains ordinary name handling.
+Recipient metadata and breadcrumb paths are derived only from the contiguous
+authorized root, not the stored full path. Item access does not return the
+client's name or private root metadata.
 
 ## Resolver
 

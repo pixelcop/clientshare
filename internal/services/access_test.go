@@ -200,11 +200,12 @@ func TestAccessLinkOnlyScopeAndModes(t *testing.T) {
 				d := f.check(t, r, false)
 				require.False(t, d.CanGrant(models.AccessCapabilities{CanRead: true}))
 				r.FileID, r.Operation = "folder", AccessUpload
-				f.check(t, r, valid && scope != "file" && upload)
+				knownFolder := scope == "folder" || read
+				f.check(t, r, valid && scope != "file" && upload && knownFolder)
 				r.Operation = AccessList
 				f.check(t, r, valid && scope != "file" && read)
 				r.Operation = AccessContext
-				f.check(t, r, valid && scope != "file")
+				f.check(t, r, valid && scope != "file" && knownFolder)
 				r.FileID, r.Operation = "sibling", AccessRead
 				f.check(t, r, valid && scope == "" && read)
 				r.FileID = "root"

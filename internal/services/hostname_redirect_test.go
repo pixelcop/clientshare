@@ -1,4 +1,4 @@
-package services
+package services_test
 
 import (
 	"errors"
@@ -9,11 +9,19 @@ import (
 	"github.com/gofiber/fiber/v3"
 	"github.com/pixelcop/clientshare/internal/middleware"
 	"github.com/pixelcop/clientshare/internal/models"
+	"github.com/pixelcop/clientshare/internal/services"
+	"github.com/stretchr/testify/require"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
 func TestHostedHostnameActivationPreservesLinksAndOwnership(t *testing.T) {
-	db := setupTenantSettingsTestDB(t)
-	if err := db.AutoMigrate(&models.Tenant{}, &models.AuditEvent{}); err != nil {
+	db, err := gorm.Open(sqlite.Open(t.TempDir()+"/hostname.db"), &gorm.Config{})
+	require.NoError(t, err)
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, sqlDB.Close()) })
+	if err := db.AutoMigrate(&models.TenantSettings{}, &models.TenantDomain{}, &models.Tenant{}, &models.AuditEvent{}); err != nil {
 		t.Fatal(err)
 	}
 	tenant := models.Tenant{Slug: "original", Name: "Example"}
@@ -23,10 +31,10 @@ func TestHostedHostnameActivationPreservesLinksAndOwnership(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	svc := NewTenantProvisioningService(db, "", 0, nil, "")
+	svc := services.NewTenantProvisioningService(db, "", 0, nil, "")
 	register := func(host string) *models.TenantDomain {
 		t.Helper()
-		d, err := svc.RegisterDomain(tenant.ID, RegisterDomainInput{Domain: host, Kind: "subdomain"})
+		d, err := svc.RegisterDomain(tenant.ID, services.RegisterDomainInput{Domain: host, Kind: "subdomain"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -36,7 +44,7 @@ func TestHostedHostnameActivationPreservesLinksAndOwnership(t *testing.T) {
 	if again := register(old.Domain); again.ID != old.ID {
 		t.Fatal("retry created another domain")
 	}
-	if _, err := svc.RegisterDomain(other.ID, RegisterDomainInput{Domain: old.Domain, Kind: "subdomain"}); !errors.Is(err, ErrTenantPublicBaseURLConflict) {
+	if _, err := svc.RegisterDomain(other.ID, services.RegisterDomainInput{Domain: old.Domain, Kind: "subdomain"}); !errors.Is(err, services.ErrTenantPublicBaseURLConflict) {
 		t.Fatalf("hostname ownership not protected: %v", err)
 	}
 	register("new.portal.test")

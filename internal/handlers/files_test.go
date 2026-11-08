@@ -129,7 +129,7 @@ func TestEmptyFolderListingReturnsAuthorizedDestinationContext(t *testing.T) {
 	}
 }
 
-func TestFileAuthorizationUsesOneQueryRegardlessOfDepth(t *testing.T) {
+func TestFileAuthorizationValidatesBoundedAncestryAtEveryDepth(t *testing.T) {
 	env := setupFileTestEnv(t)
 	shallow := createFileRecord(t, env, env.rootFolder, "shallow.txt", "hello")
 	parent := env.rootFolder
@@ -144,6 +144,7 @@ func TestFileAuthorizationUsesOneQueryRegardlessOfDepth(t *testing.T) {
 	app.Get("/files/:id", func(c fiber.Ctx) error {
 		tenantctx.SetLocal(c, tenantctx.RequestContext{ID: env.client.TenantID})
 		c.Locals("role", "admin")
+		c.Locals("user_id", env.adminUser.ID)
 		return c.Next()
 	}, middleware.UserCanAccessFile, func(c fiber.Ctx) error { return c.SendStatus(200) })
 	var queries atomic.Int32
@@ -156,7 +157,7 @@ func TestFileAuthorizationUsesOneQueryRegardlessOfDepth(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 200, resp.StatusCode)
 		resp.Body.Close()
-		require.EqualValues(t, 1, queries.Load())
+		require.LessOrEqual(t, queries.Load(), int32(11))
 	}
 	// A client from another tenant must not satisfy the correlated existence check.
 	require.NoError(t, env.db.Model(&models.Client{}).Where("id = ?", env.client.ID).Update("tenant_id", "another-tenant").Error)
@@ -165,7 +166,7 @@ func TestFileAuthorizationUsesOneQueryRegardlessOfDepth(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 404, resp.StatusCode)
 	resp.Body.Close()
-	require.EqualValues(t, 1, queries.Load())
+	require.LessOrEqual(t, queries.Load(), int32(2))
 }
 
 func TestFolderDeletionDeniesDescendantDownloads(t *testing.T) {
@@ -305,8 +306,8 @@ func TestCreateFolderForbiddenForClient(t *testing.T) {
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
-	if resp.StatusCode != http.StatusForbidden {
-		t.Fatalf("expected 403, got %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected 404 without existence disclosure, got %d", resp.StatusCode)
 	}
 }
 
@@ -388,8 +389,8 @@ func TestUploadFilesForbiddenForClient(t *testing.T) {
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
-	if resp.StatusCode != http.StatusForbidden {
-		t.Fatalf("expected 403, got %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected 404 without existence disclosure, got %d", resp.StatusCode)
 	}
 }
 
@@ -656,8 +657,8 @@ func TestDownloadFileByPublicIDForbidden(t *testing.T) {
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
-	if resp.StatusCode != http.StatusForbidden {
-		t.Fatalf("expected 403, got %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected 404 without existence disclosure, got %d", resp.StatusCode)
 	}
 }
 

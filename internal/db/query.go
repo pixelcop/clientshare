@@ -11,6 +11,8 @@ func SetDB(db *gorm.DB) {
 	instance = db
 }
 
+func DB() *gorm.DB { return instance }
+
 func G[T any](opts ...clause.Expression) gorm.Interface[T] {
 	return gorm.G[T](instance, opts...)
 }

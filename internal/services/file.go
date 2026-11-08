@@ -195,7 +195,7 @@ func (s *FileService) ListFilesInFolder(ctx context.Context, tenantID string, cl
 	if err != nil {
 		return nil, nil, err
 	}
-	q := s.DB.WithContext(ctx).Model(&models.File{}).Where("tenant_id = ? AND client_id = ? AND folder_id = ? AND type = ? AND deleted_at IS NULL", tenantID, clientID, folderID, fileType)
+	q := s.DB.WithContext(ctx).Model(&models.File{}).Where("tenant_id = ? AND client_id = ? AND folder_id = ? AND type = ? AND deleted_at IS NULL AND disk_deleted_at IS NULL", tenantID, clientID, folderID, fileType)
 
 	var totalItems int64
 	if err := q.Count(&totalItems).Error; err != nil {

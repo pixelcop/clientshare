@@ -203,6 +203,7 @@ func setupSharedHandlersEnvWithOptions(t *testing.T, options handlersTestOptions
 		&models.StorageReservation{},
 		&models.User{},
 		&models.UserClient{},
+		&models.ItemGrant{},
 		&models.Client{},
 		&models.File{},
 		&models.FileActivity{},

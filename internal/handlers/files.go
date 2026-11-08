@@ -57,18 +57,18 @@ func RegisterFileRoutes(api fiber.Router, db *gorm.DB, store storage.Storage, em
 	api.Get("/folders", handler.ListFolderFiles)
 	api.Post("/folders/exists", handler.CheckFileExists)
 
-	secureFolder := api.Group("/folders/:id", middleware.UserCanAccessFile)
-	secureFolder.Get("", handler.ListFolderFiles)
-	secureFolder.Post("", handler.CreateFolder)
-	secureFolder.Get("/breadcrumbs", handler.GetBreadcrumbs)
-	secureFolder.Post("/exists", handler.CheckFileExists)
-	secureFolder.Post("/upload", handler.UploadFiles)
-	secureFolder.Get("/download-zip", handler.DownloadFolderZip)
+	secureFolder := api.Group("/folders/:id")
+	secureFolder.Get("", middleware.FileAccess(db, services.AccessContext), handler.ListFolderFiles)
+	secureFolder.Post("", middleware.FileAccess(db, services.AccessUpload), handler.CreateFolder)
+	secureFolder.Get("/breadcrumbs", middleware.FileAccess(db, services.AccessContext), handler.GetBreadcrumbs)
+	secureFolder.Post("/exists", middleware.FileAccess(db, services.AccessContext), handler.CheckFileExists)
+	secureFolder.Post("/upload", middleware.FileAccess(db, services.AccessUpload), handler.UploadFiles)
+	secureFolder.Get("/download-zip", middleware.FileAccess(db, services.AccessZIP), handler.DownloadFolderZip)
 
-	secureFile := api.Group("/files/:id", middleware.UserCanAccessFile)
-	secureFile.Get("", handler.GetFileOrFolder)
-	secureFile.Delete("", handler.DeleteFileByPublicID)
-	secureFile.Get("/download", handler.DownloadFileByPublicID)
+	secureFile := api.Group("/files/:id")
+	secureFile.Get("", middleware.FileAccess(db, services.AccessRead), handler.GetFileOrFolder)
+	secureFile.Delete("", middleware.FileAccess(db, services.AccessDelete), handler.DeleteFileByPublicID)
+	secureFile.Get("/download", middleware.FileAccess(db, services.AccessDownload), handler.DownloadFileByPublicID)
 }
 
 // Enforce the same access and lifetime advertised by secure-link controls, including
@@ -84,12 +84,6 @@ func (h *FileHandler) enforceLinkFileAccess(c fiber.Ctx) error {
 	c.Locals("access_type", link.AccessType)
 	write := link.AccessType == "write" || link.AccessType == "readwrite"
 	read := link.AccessType == "read" || link.AccessType == "readwrite" || link.AccessType == "view"
-	if c.Method() != fiber.MethodGet && !write {
-		return c.Status(403).JSON(fiber.Map{"error": "This link does not allow uploads or changes"})
-	}
-	if !read && (strings.Contains(c.Path(), "/download") || c.Method() == fiber.MethodDelete) {
-		return c.Status(403).JSON(fiber.Map{"error": "This link does not allow reading files"})
-	}
 	if !read && !write {
 		return c.Status(403).JSON(fiber.Map{"error": "Unsupported secure link access"})
 	}
@@ -125,6 +119,14 @@ func fileLocalForTenant(c fiber.Ctx) (*models.File, *fiber.Error) {
 	return file, nil
 }
 
+func accessSessionID(c fiber.Ctx) *string {
+	id := fiber.Locals[string](c, "session_id")
+	if id == "" {
+		return nil
+	}
+	return &id
+}
+
 func (h *FileHandler) CheckFileExists(c fiber.Ctx) error {
 	tenantID := tenantIDFromCtx(c)
 	folder, tenantErr := fileLocalForTenant(c)
@@ -142,6 +144,13 @@ func (h *FileHandler) CheckFileExists(c fiber.Ctx) error {
 		utils.Logger(c).Debug("invalid folder type", zap.String("type", folder.Type))
 		return c.Status(400).JSON(fiber.Map{"error": "invalid folder type"})
 	}
+	decision, err := (&services.AccessService{DB: h.db}).Resolve(c.Context(), middleware.AccessRequest(c, folder.ClientID, folder.ID, services.AccessContext))
+	if err != nil {
+		return c.Status(503).JSON(fiber.Map{"error": "Access validation is temporarily unavailable"})
+	}
+	if !decision.Allowed {
+		return c.Status(404).JSON(fiber.Map{"error": "Not Found"})
+	}
 
 	var body struct {
 		Names []string `json:"names"`
@@ -149,6 +158,10 @@ func (h *FileHandler) CheckFileExists(c fiber.Ctx) error {
 	if err := c.Bind().Body(&body); err != nil || len(body.Names) == 0 {
 		utils.Logger(c).Debug("invalid names payload", zap.Error(err))
 		return c.Status(400).JSON(fiber.Map{"error": "invalid names payload"})
+	}
+	if !decision.Capabilities.CanRead {
+		// Private collection reveals neither collisions nor existing names.
+		return c.JSON(fiber.Map{"existing": []string{}})
 	}
 
 	existing, err := h.fileService.ListExistingNamesInFolder(c.Context(), tenantID, folder.ClientID, folder.ID, body.Names)
@@ -272,7 +285,28 @@ func (h *FileHandler) getDefaultFolder(c fiber.Ctx) (*models.File, *fiber.Error)
 				Where("clients.tenant_id = ? AND uc.tenant_id = ? AND uc.user_id = ?", tenantID, tenantID, userID).
 				Order("clients.created_at ASC").
 				First(&client).Error; err != nil {
-				utils.Logger(c).Debug("user has no client assignments", zap.String("user_id", userID), zap.String("role", role), zap.Error(err))
+				// Item-only recipients land on an actual granted folder, never
+				// its private parent/client root. Expiry is resolved per request.
+				var grants []models.ItemGrant
+				if queryErr := h.db.WithContext(c.Context()).Where("tenant_id = ? AND user_id = ? AND revoked_at IS NULL", tenantID, userID).Order("created_at ASC, id ASC").Find(&grants).Error; queryErr != nil {
+					return nil, fiber.ErrServiceUnavailable
+				}
+				for _, grant := range grants {
+					if grant.ExpiresAt != nil && !grant.ExpiresAt.After(time.Now()) {
+						continue
+					}
+					folder, queryErr := h.fileService.GetFolderByPublicID(c.Context(), tenantID, grant.FileID)
+					if queryErr != nil {
+						continue
+					}
+					d, queryErr := (&services.AccessService{DB: h.db}).Resolve(c.Context(), middleware.AccessRequest(c, folder.ClientID, folder.ID, services.AccessContext))
+					if queryErr != nil {
+						return nil, fiber.ErrServiceUnavailable
+					}
+					if d.Allowed {
+						return folder, nil
+					}
+				}
 				return nil, fiber.ErrNotFound
 			}
 			clientID = client.ID
@@ -318,10 +352,10 @@ func (h *FileHandler) GetBreadcrumbs(c fiber.Ctx) error {
 		return c.Status(404).JSON(fiber.Map{"error": "folder not found"})
 	}
 
-	hierarchy, err := h.fileService.GetFolderHierarchyByID(c.Context(), tenantIDFromCtx(c), folder.ClientID, folder.ID)
+	hierarchy, err := (&services.AccessService{DB: h.db}).ItemNavigation(c.Context(), middleware.AccessRequest(c, folder.ClientID, folder.ID, services.AccessContext))
 	if err != nil {
 		utils.Logger(c).Error("error getting folder hierarchy", zap.Error(err))
-		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+		return c.Status(404).JSON(fiber.Map{"error": "Not Found"})
 	}
 	return c.JSON(hierarchy)
 }
@@ -339,19 +373,43 @@ func (h *FileHandler) ListFolderFiles(c fiber.Ctx) error {
 			return c.Status(err.Code).JSON(fiber.Map{"error": err.Error()})
 		}
 	}
+	access := &services.AccessService{DB: h.db}
+	req := middleware.AccessRequest(c, folder.ClientID, folder.ID, services.AccessContext)
+	decision, err := access.Resolve(c.Context(), req)
+	if err != nil {
+		return c.Status(503).JSON(fiber.Map{"error": "Access validation is temporarily unavailable"})
+	}
+	if !decision.Allowed || folder.Type != "folder" {
+		return c.Status(404).JSON(fiber.Map{"error": "Not Found"})
+	}
+	description, err := access.DescribeItem(c.Context(), req)
+	if err != nil {
+		return c.Status(404).JSON(fiber.Map{"error": "Not Found"})
+	}
 
 	fileType := fiber.Query[string](c, "type", "file")
+	if fileType != "file" && fileType != "folder" {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid item type"})
+	}
 	// Context belongs to the authorized destination, not the first child. Empty
 	// folders must be just as navigable as populated folders.
-	client, err := h.clientService.GetClient(c.Context(), tenantID, folder.ClientID)
-	if err != nil {
-		return c.Status(404).JSON(fiber.Map{"error": "folder not found"})
-	}
 	context := fiber.Map{
-		"folder": folder, "client_id": client.ID, "client_name": client.Name,
-		"root_folder_id": client.RootFolderID,
+		"folder": description, "client_id": folder.ClientID, "client_name": "",
+		"root_folder_id": description.NavigationRootID, "capabilities": decision.Capabilities,
 	}
-	if fiber.Locals[string](c, "role") == "link" && fiber.Locals[string](c, "access_type") == "write" && fileType != "folder" {
+	clientReq := middleware.AccessRequest(c, folder.ClientID, "", services.AccessContext)
+	clientDecision, err := access.Resolve(c.Context(), clientReq)
+	if err != nil {
+		return c.Status(503).JSON(fiber.Map{"error": "Access validation is temporarily unavailable"})
+	}
+	if clientDecision.Allowed {
+		client, err := h.clientService.GetClient(c.Context(), tenantID, folder.ClientID)
+		if err != nil {
+			return c.Status(404).JSON(fiber.Map{"error": "Not Found"})
+		}
+		context["client_name"] = client.Name
+	}
+	if !decision.Capabilities.CanRead {
 		return c.JSON(fiber.Map{"context": context, "pagination": models.PaginationResponse{Page: 1, PageSize: 20}, "items": []models.File{}})
 	}
 	page, pageSize := getPageParams(c)
@@ -361,6 +419,27 @@ func (h *FileHandler) ListFolderFiles(c fiber.Ctx) error {
 	if err != nil {
 		utils.Logger(c).Error("db error counting files", zap.Error(err))
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+	}
+	ids := make([]string, len(dbFiles))
+	for i := range dbFiles {
+		ids[i] = dbFiles[i].ID
+	}
+	req.Operation = services.AccessRead
+	childAccess, err := access.ResolveItems(c.Context(), req, ids)
+	if err != nil {
+		return c.Status(503).JSON(fiber.Map{"error": "Access validation is temporarily unavailable"})
+	}
+	for i := range dbFiles {
+		d := childAccess[dbFiles[i].ID]
+		if !d.Allowed {
+			// Additive folder access must cover each active child. A concurrent
+			// change must not return an unfiltered page or its previous counts.
+			return c.Status(404).JSON(fiber.Map{"error": "Not Found"})
+		}
+		dbFiles[i].Capabilities = &d.Capabilities
+		dbFiles[i].NavigationRootID = description.NavigationRootID
+		dbFiles[i].Path = filepath.Join(description.Path, dbFiles[i].Filename)
+		dbFiles[i].UserID = nil
 	}
 
 	userID := fiber.Locals[string](c, "user_id")
@@ -384,7 +463,11 @@ func (h *FileHandler) GetFileOrFolder(c fiber.Ctx) error {
 	if file.Type != "folder" && fiber.Locals[string](c, "role") == "link" && fiber.Locals[string](c, "access_type") == "write" {
 		return c.Status(403).JSON(fiber.Map{"error": "This link does not allow reading files"})
 	}
-	return c.JSON(file)
+	description, err := (&services.AccessService{DB: h.db}).DescribeItem(c.Context(), middleware.AccessRequest(c, file.ClientID, file.ID, services.AccessRead))
+	if err != nil {
+		return c.Status(404).JSON(fiber.Map{"error": "Not Found"})
+	}
+	return c.JSON(description)
 }
 
 // Pagination parameters
@@ -475,11 +558,23 @@ func (h *FileHandler) UploadFiles(c fiber.Ctx) error {
 			utils.Logger(c).Error("error opening file", zap.Error(err))
 			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 		}
-		dstPath := filepath.Join(folder.Path, file.Filename)
+		filename := file.Filename
+		if err := services.LogicalName(filename); err != nil {
+			_ = f.Close()
+			return c.Status(400).JSON(fiber.Map{"error": "Invalid filename"})
+		}
+		// Always allocate an opaque suffix for private collection, regardless
+		// of whether the requested name exists. No collision oracle/overwrite.
+		if !fiber.Locals[services.AccessDecision](c, "file_access").Capabilities.CanRead {
+			ext := filepath.Ext(filename)
+			filename = strings.TrimSuffix(filename, ext) + "-" + ids.NewULID() + ext
+		}
+		dstPath := filepath.Join(folder.Path, filename)
 		fileRecord := &models.File{
 			TenantID: tenantID, ClientID: client.ID, UserID: &userID,
-			FolderID: &folder.ID, Filename: file.Filename, Path: dstPath,
+			FolderID: &folder.ID, Filename: filename, Path: dstPath,
 			Type: "file", UploadedAt: time.Now(),
+			UploadSessionID: accessSessionID(c),
 		}
 		err = services.UploadFile(c.Context(), h.db, tenantStore, fileRecord, f, file.Size)
 		_ = f.Close()
@@ -614,6 +709,9 @@ func (h *FileHandler) CreateFolder(c fiber.Ctx) error {
 	if err := services.LogicalName(body.Name); err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "invalid folder name"})
 	}
+	if !fiber.Locals[services.AccessDecision](c, "file_access").Capabilities.CanRead {
+		body.Name += "-" + ids.NewULID()
+	}
 	subPath, err := resolveClientPath(parentFolder.Path, body.Name)
 	if err != nil {
 		utils.Logger(c).Debug("invalid folder path", zap.Error(err))
@@ -622,15 +720,16 @@ func (h *FileHandler) CreateFolder(c fiber.Ctx) error {
 
 	userID := fiber.Locals[string](c, "user_id")
 	folderRecord := &models.File{
-		TenantID:   tenantIDFromCtx(c),
-		ClientID:   parentFolder.ClientID,
-		UserID:     &userID,
-		FolderID:   &parentFolder.ID,
-		Filename:   filepath.Base(subPath),
-		Path:       subPath,
-		Type:       "folder",
-		Size:       0,
-		UploadedAt: time.Now(),
+		TenantID:        tenantIDFromCtx(c),
+		ClientID:        parentFolder.ClientID,
+		UserID:          &userID,
+		FolderID:        &parentFolder.ID,
+		Filename:        filepath.Base(subPath),
+		Path:            subPath,
+		Type:            "folder",
+		Size:            0,
+		UploadedAt:      time.Now(),
+		UploadSessionID: accessSessionID(c),
 	}
 	if folderRecord, err = h.fileService.CreateFolderRecord(c.Context(), folderRecord); err != nil {
 		if errors.Is(err, os.ErrExist) {
@@ -640,7 +739,11 @@ func (h *FileHandler) CreateFolder(c fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
 	logFileActivity(c.Context(), h.db, tenantIDFromCtx(c), parentFolder.ClientID, &folderRecord.ID, &userID, nil, "create_folder", subPath)
-	return c.JSON(folderRecord)
+	description, err := (&services.AccessService{DB: h.db}).DescribeItem(c.Context(), middleware.AccessRequest(c, folderRecord.ClientID, folderRecord.ID, services.AccessContext))
+	if err != nil {
+		return c.Status(404).JSON(fiber.Map{"error": "Not Found"})
+	}
+	return c.JSON(description)
 }
 
 // DownloadZip handles GET /api/clients/:id/download-zip/*
@@ -665,7 +768,7 @@ func (h *FileHandler) DownloadFolderZip(c fiber.Ctx) error {
 	}
 	tmpZip := tmp.Name()
 	defer os.Remove(tmpZip)
-	err = h.fileService.WriteFolderZip(c.Context(), h.storeForTenant(tenantIDFromCtx(c)), file, tmp)
+	err = h.fileService.WriteAuthorizedFolderZip(c.Context(), h.storeForTenant(tenantIDFromCtx(c)), file, tmp, middleware.AccessRequest(c, file.ClientID, file.ID, services.AccessRead))
 	closeErr := tmp.Close()
 	if err == nil {
 		err = closeErr

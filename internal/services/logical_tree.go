@@ -147,12 +147,53 @@ func (s *FileService) RenameMove(ctx context.Context, tenantID, fileID, name, pa
 	return err
 }
 
-// WriteFolderZip follows active child relationships under the authorized folder.
-// The current authorization model grants access to a client's entire tree.
+// WriteFolderZip is the internal trusted-storage helper. HTTP delivery must use
+// WriteAuthorizedFolderZip, which checks each archive entry with the resolver.
 func (s *FileService) WriteFolderZip(ctx context.Context, store storage.Storage, folder *models.File, out io.Writer) error {
-	var files []models.File
-	if err := s.DB.WithContext(ctx).Where("tenant_id = ? AND client_id = ? AND deleted_at IS NULL", folder.TenantID, folder.ClientID).Find(&files).Error; err != nil {
+	return s.writeFolderZip(ctx, store, folder, out, nil)
+}
+
+func (s *FileService) WriteAuthorizedFolderZip(ctx context.Context, store storage.Storage, folder *models.File, out io.Writer, req AccessRequest) error {
+	req.TenantID, req.ClientID, req.FileID, req.Operation = folder.TenantID, folder.ClientID, folder.ID, AccessZIP
+	decision, err := (&AccessService{DB: s.DB}).Resolve(ctx, req)
+	if err != nil {
 		return err
+	}
+	if !decision.Allowed {
+		return gorm.ErrRecordNotFound
+	}
+	return s.writeFolderZip(ctx, store, folder, out, &req)
+}
+
+func (s *FileService) writeFolderZip(ctx context.Context, store storage.Storage, folder *models.File, out io.Writer, req *AccessRequest) error {
+	var files []models.File
+	if err := s.DB.WithContext(ctx).Where("tenant_id = ? AND client_id = ? AND deleted_at IS NULL AND disk_deleted_at IS NULL", folder.TenantID, folder.ClientID).Find(&files).Error; err != nil {
+		return err
+	}
+	if req != nil {
+		allowed := make(map[string]bool)
+		request := *req
+		request.Operation = AccessRead
+		for start := 0; start < len(files); start += maxAccessItems {
+			ids := make([]string, 0, maxAccessItems)
+			for _, f := range files[start:min(start+maxAccessItems, len(files))] {
+				ids = append(ids, f.ID)
+			}
+			decisions, err := (&AccessService{DB: s.DB}).ResolveItems(ctx, request, ids)
+			if err != nil {
+				return err
+			}
+			for id, decision := range decisions {
+				allowed[id] = decision.Allowed
+			}
+		}
+		filtered := make([]models.File, 0, len(files))
+		for _, f := range files {
+			if allowed[f.ID] {
+				filtered = append(filtered, f)
+			}
+		}
+		files = filtered
 	}
 	children := map[string][]models.File{}
 	for _, f := range files {
@@ -169,6 +210,9 @@ func (s *FileService) WriteFolderZip(ctx context.Context, store storage.Storage,
 		}
 		seen[id] = true
 		for _, f := range children[id] {
+			if f.Type != "file" && f.Type != "folder" {
+				return errors.New("invalid archive item type")
+			}
 			if err := LogicalName(f.Filename); err != nil {
 				return err
 			}

@@ -117,6 +117,8 @@ export interface File {
   uploaded_at: string;
   deleted_at?: string;
   disk_deleted_at?: string;
+  capabilities?: AccessCapabilities;
+  navigation_root_id?: string;
 }
 /**
  * FileItem is used for TypeScript type generation

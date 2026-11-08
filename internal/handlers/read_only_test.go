@@ -34,10 +34,10 @@ func TestReadOnlyLinkFileAccess(t *testing.T) {
 				{http.MethodGet, "/api/files/" + file.ID, 200},
 				{http.MethodGet, "/api/files/" + file.ID + "/download", 200},
 				{http.MethodGet, "/api/folders/" + env.rootFolder.ID + "/download-zip", 200},
-				{http.MethodPost, "/api/folders/" + env.rootFolder.ID, 403},
-				{http.MethodPost, "/api/folders/" + env.rootFolder.ID + "/upload", 403},
-				{http.MethodDelete, "/api/files/" + file.ID, 403},
-				{http.MethodDelete, "/api/files/" + env.rootFolder.ID, 403},
+				{http.MethodPost, "/api/folders/" + env.rootFolder.ID, 404},
+				{http.MethodPost, "/api/folders/" + env.rootFolder.ID + "/upload", 404},
+				{http.MethodDelete, "/api/files/" + file.ID, 404},
+				{http.MethodDelete, "/api/files/" + env.rootFolder.ID, 404},
 			} {
 				resp, err := env.app.Test(newAuthRequest(tc.method, tc.path, token, nil))
 				if err != nil {

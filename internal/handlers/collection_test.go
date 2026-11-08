@@ -148,15 +148,15 @@ func TestCollectionUploadAttributionAndAccess(t *testing.T) {
 			t.Fatalf("%s %s: got %d want %d", method, path, resp.StatusCode, status)
 		}
 	}
-	check("GET", "/api/files/"+*activity.FileID, 403)
-	check("GET", "/api/files/"+*activity.FileID+"/download", 403)
-	check("GET", "/api/folders/"+env.rootFolder.ID+"/download-zip", 403)
-	check("GET", "/api/files/"+env.rootFolder.ID, 200)
-	check("DELETE", "/api/files/"+*activity.FileID, 403)
+	check("GET", "/api/files/"+*activity.FileID, 404)
+	check("GET", "/api/files/"+*activity.FileID+"/download", 404)
+	check("GET", "/api/folders/"+env.rootFolder.ID+"/download-zip", 404)
+	check("GET", "/api/folders/"+env.rootFolder.ID, 200)
+	check("DELETE", "/api/files/"+*activity.FileID, 404)
 	if err := env.db.Model(&link).Update("access_type", "read").Error; err != nil {
 		t.Fatal(err)
 	}
-	check("POST", "/api/folders/"+env.rootFolder.ID+"/upload", 403)
+	check("POST", "/api/folders/"+env.rootFolder.ID+"/upload", 404)
 	check("GET", "/api/files/"+*activity.FileID, 200)
 	if err := env.db.Model(&link).Update("expires_at", time.Now().Add(-time.Hour)).Error; err != nil {
 		t.Fatal(err)
