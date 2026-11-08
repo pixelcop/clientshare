@@ -82,6 +82,11 @@ do not trust `path`. No long-lived authorization cache.
 - Notification eligibility is item-aware. Direct grants do not automatically
   subscribe recipients to the whole client. Revalidate queued content before
   dispatch and partition batches by recipient visibility.
+- Resource-bound mail requires a database-backed queue. The in-memory fallback
+  refuses upload notifications, bearer-link mail and target-aware invitations
+  because it cannot revalidate current access before dispatch. Generic queue
+  inspection never exposes target-aware identity/acceptance credentials, even
+  to the inviter, and requires a matching ceiling for bearer-link credentials.
 - Link creation and email delivery are separate, retry-safe operations. Return
   unavailable/failed/queued truthfully; queued is not delivered. Do not log
   bearer tokens or return recipient/provenance data outside management views.
@@ -124,3 +129,24 @@ not a document authorization path.
 
 Optional combined listing is deferred: retain two groups in one compact
 surface until there is a single deterministic paginated listing contract.
+
+## Enforcement regression coverage
+
+The following checks accompany the scoped routes; these are implementation
+invariants, not a substitute for testing an installation's configuration.
+
+| Boundary | Regression coverage |
+| --- | --- |
+| Exact file/folder, parents/siblings, redacted navigation, ZIP and private collection | `handlers/scoped_files_test.go`, resolver and immutable-storage tests |
+| Current scoped sessions and exact public landings | `auth/sessions_test.go`, `handlers/sharing_links_test.go` |
+| Client/manager scope and per-recipient capability DTOs | Client/user handler tests and batched/single/query resolver parity tests |
+| Grant ceilings, optimistic versions, provenance and onward-share survival | `services/sharing*_test.go`, sharing lifecycle HTTP tests |
+| Identity-bound acceptance without membership promotion | Invitation/delivery tests, auth acceptance HTTP tests |
+| Concurrent acceptance and removal on the migrated PostgreSQL schema | `database/migrations/sharing_lifecycle_integration_test.go` |
+| Filtered feed counts/read mutations and partitioned dispatch | Scoped feed tests and email notification tests |
+| Dispatch-time revocation, expiry, deleted ancestry and credential changes | Invitation/link email tests, in-memory fail-closed test |
+| Explicit shared roots, overlap deduplication and authorized pagination | `services/shared_test.go`, discovery HTTP tests |
+
+Existing client-link creation keeps its legacy retry-key format. New item links
+use the authorized sharing lifecycle; the low-level legacy persistence helper
+does not accept item targets. No recipient UI gate replaces these server checks.

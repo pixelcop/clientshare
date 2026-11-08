@@ -50,7 +50,7 @@ func TestSharedWithMeHTTPDoesNotGrantClientOrAncestryAccess(t *testing.T) {
 	require.Empty(t, page.Items)
 }
 
-func TestScopedCreationRemainsUnregisteredInApplication(t *testing.T) {
+func TestApplicationScopedCreationUsesAuthorizedLifecycle(t *testing.T) {
 	env := setupFileTestEnv(t)
 	file := createFileRecord(t, env, env.rootFolder, "not-shared.txt", "content")
 	for _, suffix := range []string{"grants", "invitations", "links"} {
@@ -58,12 +58,20 @@ func TestScopedCreationRemainsUnregisteredInApplication(t *testing.T) {
 		req.Header.Set("Idempotency-Key", "release-gate-test")
 		resp, err := env.app.Test(req)
 		require.NoError(t, err)
-		require.GreaterOrEqual(t, resp.StatusCode, 400, "creation is gated on the server, not only hidden in the UI")
+		require.Equal(t, 201, resp.StatusCode, "creation is enabled only with complete server-side enforcement")
 		resp.Body.Close()
 	}
 	for _, model := range []any{&models.ItemGrant{}, &models.AccessInvitation{}} {
 		var count int64
 		require.NoError(t, env.db.Model(model).Count(&count).Error)
-		require.Zero(t, count)
+		require.EqualValues(t, 1, count)
 	}
+	resp, err := env.app.Test(jsonAuthRequest(http.MethodGet, "/api/files/"+file.ID+"/download", env.otherToken, nil))
+	require.NoError(t, err)
+	require.Equal(t, 200, resp.StatusCode)
+	resp.Body.Close()
+	resp, err = env.app.Test(jsonAuthRequest(http.MethodGet, "/api/folders/"+env.rootFolder.ID, env.otherToken, nil))
+	require.NoError(t, err)
+	require.Equal(t, 404, resp.StatusCode)
+	resp.Body.Close()
 }

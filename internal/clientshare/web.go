@@ -108,6 +108,7 @@ func NewWebApp(cfg *Config, db *gorm.DB, logger *zap.Logger, emailQueue emailpkg
 	handlers.RegisterClientRoutes(api, db, store)
 	handlers.RegisterFeedRoutes(api, db)
 	handlers.RegisterSharingReadRoutes(api, db, cfg.Server.BaseURL)
+	handlers.RegisterSharingLifecycleRoutes(api, db, inviteTokenSecret, cfg.SecureLinks.SigningKey, emailQueue, cfg.Server.BaseURL, inviteTTL)
 
 	// File endpoints (protected)
 	handlers.RegisterFileRoutes(api, db, store, emailQueue, cfg.Server.BaseURL, tenantSettingsService)

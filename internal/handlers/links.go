@@ -281,6 +281,9 @@ func (h *LinkHandler) queueSecureLinkEmail(c fiber.Ctx, link models.SecureLink, 
 	item, err := h.emailQueue.Queue(emailpkg.Email{TenantID: link.TenantID, To: recipient, Subject: subject, Body: body, HTMLBody: htmlBody, DeduplicationKey: key, SecureLinkID: &link.ID, ClientID: &link.ClientID}, models.Now())
 	if err != nil {
 		utils.Logger(c).Error("failed to queue secure link email", zap.Error(err))
+		if errors.Is(err, emailpkg.ErrAccessValidationUnavailable) {
+			return "unavailable", err
+		}
 		return "failed", err
 	}
 	if item == nil {

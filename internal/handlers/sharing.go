@@ -9,9 +9,8 @@ import (
 	"time"
 )
 
-// RegisterSharingReadRoutes deliberately registers no grant/invitation/link
-// creation endpoints. Creation remains unavailable while M4 enforcement and
-// lifecycle coverage are incomplete; a hidden Share button is not that gate.
+// RegisterSharingReadRoutes exposes authorized discovery and management views.
+// Recipient navigation and management use distinct capability checks.
 func RegisterSharingReadRoutes(router fiber.Router, db *gorm.DB, baseURL string) {
 	handler := &SharingHandler{service: &services.SharingService{DB: db}, baseURL: baseURL}
 	router.Get("/shared-with-me", middleware.AuthRequired, sharingResponse(handler.SharedWithMe))

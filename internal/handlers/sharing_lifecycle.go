@@ -14,9 +14,9 @@ import (
 	"gorm.io/gorm"
 )
 
-// RegisterSharingLifecycleRoutes is intentionally not called by NewWebApp yet.
-// Keeping registration separate lets HTTP lifecycle/security tests exercise the
-// real handlers without enabling creation before the enforcement release gate.
+// RegisterSharingLifecycleRoutes is registered only alongside exact-resource
+// enforcement on files, client/user management, sessions, feeds and mail. Its
+// handlers independently revalidate scope and ceilings on every operation.
 func RegisterSharingLifecycleRoutes(router fiber.Router, db *gorm.DB, secret, signingKey string, queue emailpkg.EmailQueue, baseURL string, identityTTL time.Duration) {
 	h := &SharingHandler{service: &services.SharingService{DB: db, TokenSecret: secret, LinkSigningKey: signingKey}, emailQueue: queue, baseURL: baseURL, identityTTL: identityTTL}
 	router.Post("/files/:id/grants", middleware.AuthRequired, sharingResponse(h.CreateGrant))
@@ -190,7 +190,14 @@ func (h *SharingHandler) EmailInvitation(c fiber.Ctx) error {
 	subject, body, htmlBody := emailpkg.RenderUserInviteEmail(delivery.User.Name, inviteURL, services.DefaultSiteTitle, "You have been invited to shared content. Sign in with the invited email to accept.", delivery.ExpiresAt)
 	item, err := h.emailQueue.Queue(emailpkg.Email{TenantID: req.TenantID, To: delivery.Invitation.Email, Subject: subject, Body: body, HTMLBody: htmlBody, ClientID: &delivery.Invitation.ClientID, AccessInvitationID: &delivery.Invitation.ID, IdentityInviteID: delivery.IdentityInviteID, DeduplicationKey: *key}, models.Now())
 	if err != nil {
-		return sharingError(err)
+		code, status, message := 503, "failed", "Could not queue this invitation email; retry keeps the same invitation"
+		if errors.Is(err, emailpkg.ErrAccessValidationUnavailable) {
+			status, message = "unavailable", err.Error()
+		}
+		if errors.Is(err, emailpkg.ErrIdempotencyConflict) {
+			code = 409
+		}
+		return c.Status(code).JSON(fiber.Map{"status": status, "error": message})
 	}
 	if item == nil {
 		return fiber.NewError(503, "Email queue did not accept the invitation")
@@ -227,8 +234,33 @@ func (h *SharingHandler) AcceptInvitation(c fiber.Ctx) error {
 	if err != nil {
 		return sharingError(err)
 	}
+	redirect := "/shared-with-me"
+	req.ClientID = invitation.ClientID
+	if invitation.FileID != nil {
+		req.FileID = *invitation.FileID
+		if target, err := (&services.AccessService{DB: h.service.DB}).DescribeItem(c.Context(), req); err == nil {
+			redirect = "/files/" + url.PathEscape(target.ID)
+			if target.Type == "folder" {
+				redirect = "/folder/" + url.PathEscape(target.ID)
+			}
+		}
+	} else {
+		decision, err := (&services.AccessService{DB: h.service.DB}).Resolve(c.Context(), req)
+		if err != nil {
+			return sharingError(err)
+		}
+		if decision.Allowed {
+			client, err := (&services.ClientService{DB: h.service.DB}).GetClient(c.Context(), req.TenantID, req.ClientID)
+			if err != nil {
+				return sharingError(err)
+			}
+			if client.RootFolderID != nil {
+				redirect = "/folder/" + url.PathEscape(*client.RootFolderID)
+			}
+		}
+	}
 	// Recipient results omit inviter/other-recipient provenance and secrets.
-	return c.JSON(fiber.Map{"accepted": true, "file_id": invitation.FileID, "client_id": invitation.ClientID})
+	return c.JSON(fiber.Map{"accepted": true, "file_id": invitation.FileID, "client_id": invitation.ClientID, "redirect_to": redirect})
 }
 func (h *SharingHandler) RemoveMember(c fiber.Ctx) error {
 	var body struct {

@@ -17,11 +17,20 @@ type InMemoryEmailQueue struct {
 	Sender            EmailSender
 }
 
+var ErrAccessValidationUnavailable = errors.New("resource-bound email requires a database-backed queue for dispatch-time access validation")
+
+func resourceBoundEmail(item Email) bool {
+	return item.AccessInvitationID != nil || item.IdentityInviteID != nil || item.SecureLinkID != nil || item.RecipientUserID != nil || item.RecipientLinkID != nil || item.FileIDsCSV != ""
+}
+
 func NewInMemoryEmailQueue(sender EmailSender, defaultBatchDelay time.Duration) *InMemoryEmailQueue {
 	return &InMemoryEmailQueue{Sender: sender, defaultBatchDelay: defaultBatchDelay}
 }
 
 func (q *InMemoryEmailQueue) Queue(email Email, sendAt *time.Time) (*models.QueuedEmail, error) {
+	if resourceBoundEmail(email) {
+		return nil, ErrAccessValidationUnavailable
+	}
 	if sendAt == nil {
 		t := time.Now().Add(q.defaultBatchDelay)
 		sendAt = &t
@@ -121,15 +130,22 @@ func (q *InMemoryEmailQueue) Update(tenantID, id, recipient, subject, body strin
 
 func ToEmail(e *models.QueuedEmail) Email {
 	return Email{
-		TenantID:       e.TenantID,
-		To:             e.Recipient,
-		ReplyTo:        e.ReplyTo,
-		HideRecipients: e.HideRecipients,
-		Subject:        e.Subject,
-		Body:           e.Body,
-		HTMLBody:       e.HTMLBody,
-		ClientID:       e.ClientID,
-		SecureLinkID:   e.SecureLinkID,
+		TenantID:                e.TenantID,
+		To:                      e.Recipient,
+		ReplyTo:                 e.ReplyTo,
+		HideRecipients:          e.HideRecipients,
+		Subject:                 e.Subject,
+		Body:                    e.Body,
+		HTMLBody:                e.HTMLBody,
+		ClientID:                e.ClientID,
+		SecureLinkID:            e.SecureLinkID,
+		FileIDsCSV:              e.FileIDsCSV,
+		RecipientUserID:         e.RecipientUserID,
+		RecipientLinkID:         e.RecipientLinkID,
+		NotificationBaseURL:     e.NotificationBaseURL,
+		NotificationProductName: e.NotificationProductName,
+		AccessInvitationID:      e.AccessInvitationID,
+		IdentityInviteID:        e.IdentityInviteID,
 	}
 }
 
@@ -143,6 +159,10 @@ func (q *InMemoryEmailQueue) SendNow(tenantID, id string) error {
 	for i := range q.Emails {
 		item := &q.Emails[i]
 		if item.ID == id && !item.Sent() && item.CanceledAt == nil && (tenantID == "" || strings.TrimSpace(item.TenantID) == strings.TrimSpace(tenantID)) {
+			if resourceBoundEmail(ToEmail(item)) {
+				item.CanceledAt = &now
+				return ErrAccessValidationUnavailable
+			}
 			if err := q.Sender.Send(ToEmail(item)); err != nil {
 				return err
 			}
@@ -165,6 +185,10 @@ func (q *InMemoryEmailQueue) ProcessTenant(tenantID string) error {
 		if strings.TrimSpace(e.TenantID) != strings.TrimSpace(tenantID) || e.Sent() || e.CanceledAt != nil {
 			continue
 		}
+		if resourceBoundEmail(ToEmail(e)) {
+			e.CanceledAt = &now
+			continue
+		}
 		if err := q.Sender.Send(ToEmail(e)); err == nil {
 			e.SentAt = &now
 		}
@@ -179,6 +203,10 @@ func (q *InMemoryEmailQueue) ProcessBatch() error {
 	for i := range q.Emails {
 		e := &q.Emails[i]
 		if !e.Sent() && e.CanceledAt == nil && !now.Before(e.ScheduledFor) {
+			if resourceBoundEmail(ToEmail(e)) {
+				e.CanceledAt = &now
+				continue
+			}
 			if err := q.Sender.Send(ToEmail(e)); err == nil {
 				e.SentAt = &now
 			}
@@ -193,6 +221,10 @@ func (q *InMemoryEmailQueue) ProcessAll() error {
 	for i := range q.Emails {
 		e := &q.Emails[i]
 		if !e.Sent() && e.CanceledAt == nil {
+			if resourceBoundEmail(ToEmail(e)) {
+				e.CanceledAt = models.Now()
+				continue
+			}
 			if err := q.Sender.Send(ToEmail(e)); err == nil {
 				e.SentAt = models.Now()
 			}
