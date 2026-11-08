@@ -8,6 +8,26 @@ import (
 	"gorm.io/gorm"
 )
 
+// ValidateTarget is an internal liveness/integrity check for transactional
+// invitation acceptance. It grants no authority and must not replace Resolve
+// on protected endpoints.
+func (s *AccessService) ValidateTarget(ctx context.Context, tenantID, clientID, fileID string) (*models.File, error) {
+	var client models.Client
+	if err := s.DB.WithContext(ctx).Where("tenant_id = ? AND id = ?", tenantID, clientID).First(&client).Error; err != nil {
+		return nil, err
+	}
+	req := AccessRequest{TenantID: tenantID, ClientID: clientID}
+	nodes, err := s.loadAccessAncestry(ctx, req, []string{fileID})
+	if err != nil {
+		return nil, err
+	}
+	if _, valid := accessChain(nodes, fileID); !valid {
+		return nil, gorm.ErrRecordNotFound
+	}
+	file := nodes[fileID]
+	return &file, nil
+}
+
 // ItemNavigation returns a contiguous authorized chain (root first), never a
 // private ancestor used merely to validate inheritance. Readable targets cannot
 // use upload-only ancestors to browse existing content.
