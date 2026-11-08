@@ -50,6 +50,15 @@ It reloads current users/links rather than trusting role strings or session
 capability snapshots. Authentication and session lifetime remain auth middleware's
 responsibility. Link identity takes precedence over named-user identity.
 
+The implementation lives in dependency-light `internal/access`; the services
+package re-exports it for application composition. Dispatchers use the same
+resolver without depending on the higher-level email/service wiring.
+`ClientScope` produces a tenant-safe whole-client SQL scope for listings and
+management queries. It deliberately ignores item grants and reloads the current
+user instead of accepting a role string as proof of authority. Client APIs apply
+assigned/full manager policy; creating a client assigns its manager creator
+transactionally, rather than granting the creator access to unrelated clients.
+
 `ResolveItems` batches up to 500 exact items in one client, with parent/grant SQL
 batches of 200. Parent traversal is limited to 128 nodes per chain, rejects
 cycles, non-folder parents, foreign/missing/deleted ancestors and never uses

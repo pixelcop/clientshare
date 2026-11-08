@@ -40,7 +40,7 @@ func (h *ClientHandler) ListClients(c fiber.Ctx) error {
 	role, _ := c.Locals("role").(string)
 	userID, _ := c.Locals("user_id").(string)
 	tenantID := tenantIDFromCtx(c)
-	if role != "admin" && role != "manager" && role != "client" {
+	if role != "admin" && role != "manager" && role != "client" && role != "customer" {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "forbidden"})
 	}
 	search := strings.TrimSpace(c.Query("search"))
@@ -75,7 +75,7 @@ func (h *ClientHandler) CreateClient(c fiber.Ctx) error {
 		utils.Logger(c).Debug("invalid request body", zap.Error(err))
 		return c.Status(400).JSON(fiber.Map{"error": "invalid request"})
 	}
-	client, err := h.service.CreateClient(c.Context(), tenantIDFromCtx(c), body.Name)
+	client, err := h.service.CreateClientForActor(c.Context(), tenantIDFromCtx(c), fiber.Locals[string](c, "user_id"), body.Name)
 	if err != nil {
 		utils.Logger(c).Error("error creating client", zap.Error(err))
 		return c.Status(400).JSON(fiber.Map{"error": err.Error()})
@@ -85,6 +85,9 @@ func (h *ClientHandler) CreateClient(c fiber.Ctx) error {
 
 // GetClient handles GET /clients/:id
 func (h *ClientHandler) GetClient(c fiber.Ctx) error {
+	if err := h.requireClientManagement(c); err != nil {
+		return err
+	}
 	id := c.Params("id")
 	if id == "" {
 		utils.Logger(c).Debug("invalid id")
@@ -100,6 +103,9 @@ func (h *ClientHandler) GetClient(c fiber.Ctx) error {
 
 // UpdateClient handles PUT /clients/:id
 func (h *ClientHandler) UpdateClient(c fiber.Ctx) error {
+	if err := h.requireClientManagement(c); err != nil {
+		return err
+	}
 	id := c.Params("id")
 	if id == "" {
 		utils.Logger(c).Debug("invalid id")
@@ -123,6 +129,9 @@ func (h *ClientHandler) UpdateClient(c fiber.Ctx) error {
 
 // DeleteClient handles DELETE /clients/:id
 func (h *ClientHandler) DeleteClient(c fiber.Ctx) error {
+	if err := h.requireClientManagement(c); err != nil {
+		return err
+	}
 	id := c.Params("id")
 	if id == "" {
 		utils.Logger(c).Debug("invalid id")
@@ -137,4 +146,15 @@ func (h *ClientHandler) DeleteClient(c fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": err.Error()})
 	}
 	return c.SendStatus(204)
+}
+
+func (h *ClientHandler) requireClientManagement(c fiber.Ctx) error {
+	d, err := (&services.AccessService{DB: h.service.DB}).Resolve(c.Context(), middleware.AccessRequest(c, c.Params("id"), "", services.AccessManageClient))
+	if err != nil {
+		return fiber.NewError(503, "Access validation is temporarily unavailable")
+	}
+	if !d.Allowed {
+		return fiber.ErrNotFound
+	}
+	return nil
 }

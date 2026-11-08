@@ -313,3 +313,31 @@ func TestAccessReparentingAndBatchQueries(t *testing.T) {
 	_, err = f.s.ResolveItems(context.Background(), f.req("recipient", "", AccessRead), make([]string, maxAccessItems+1))
 	require.Error(t, err)
 }
+
+func TestClientScopeMatchesResolverWithoutTrustingRoleStrings(t *testing.T) {
+	f := newAccessFixture(t)
+	f.grant(t, "root", "recipient", models.AccessCapabilities{CanRead: true, CanShare: true})
+	for _, user := range []string{"admin", "full", "manager", "member", "customer", "recipient", "missing", "unknown-role"} {
+		for _, op := range []AccessOperation{AccessContext, AccessRead, AccessShare, AccessInviteClient, AccessManageClient, AccessManageQueue} {
+			q, err := f.s.ClientScope(t.Context(), "tenant", user, op)
+			require.NoError(t, err)
+			var clients []models.Client
+			require.NoError(t, q.Find(&clients).Error)
+			ids := map[string]bool{}
+			for _, client := range clients {
+				ids[client.ID] = true
+			}
+			for _, id := range []string{"client", "other-client"} {
+				r := f.req(user, "", op)
+				r.ClientID = id
+				d, err := f.s.Resolve(t.Context(), r)
+				require.NoError(t, err)
+				require.Equal(t, d.Allowed, ids[id], "user=%s op=%s client=%s", user, op, id)
+			}
+		}
+	}
+	service := &ClientService{DB: f.db}
+	clients, err := service.ListClients(t.Context(), "tenant", "recipient", "admin")
+	require.NoError(t, err)
+	require.Empty(t, clients)
+}

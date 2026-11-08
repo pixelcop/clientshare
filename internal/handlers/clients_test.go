@@ -6,11 +6,33 @@ import (
 	"testing"
 
 	"github.com/pixelcop/clientshare/internal/models"
+	"github.com/stretchr/testify/require"
 )
 
 type paginatedClientsResponse struct {
 	Pagination models.PaginationResponse `json:"pagination"`
 	Items      []models.Client           `json:"items"`
+}
+
+func TestAssignedManagerCannotInspectOrManageUnassignedClient(t *testing.T) {
+	env := setupOtherHandlersEnv(t)
+	for _, method := range []string{http.MethodGet, http.MethodPut, http.MethodDelete} {
+		resp, err := env.app.Test(jsonAuthRequest(method, "/api/clients/"+env.otherClient.ID+"?confirm=true", env.managerToken, map[string]any{"name": "Unauthorized rename"}))
+		require.NoError(t, err)
+		require.Equal(t, 404, resp.StatusCode)
+		resp.Body.Close()
+	}
+	// The explicit option is reloaded for an already-open session.
+	require.NoError(t, env.db.Model(env.managerUser).Update("manager_full_access", true).Error)
+	resp, err := env.app.Test(jsonAuthRequest(http.MethodGet, "/api/clients/"+env.otherClient.ID, env.managerToken, nil))
+	require.NoError(t, err)
+	require.Equal(t, 200, resp.StatusCode)
+	resp.Body.Close()
+	require.NoError(t, env.db.Model(env.managerUser).Update("manager_full_access", false).Error)
+	resp, err = env.app.Test(jsonAuthRequest(http.MethodGet, "/api/clients/"+env.otherClient.ID, env.managerToken, nil))
+	require.NoError(t, err)
+	require.Equal(t, 404, resp.StatusCode)
+	resp.Body.Close()
 }
 
 func TestClientHandlers_RouteCoverage(t *testing.T) {
@@ -37,8 +59,8 @@ func TestClientHandlers_RouteCoverage(t *testing.T) {
 	if err := json.NewDecoder(listResp.Body).Decode(&listed); err != nil {
 		t.Fatalf("decode list failed: %v", err)
 	}
-	if len(listed) != 2 {
-		t.Fatalf("expected manager to see 2 assigned clients, got %d", len(listed))
+	if len(listed) != 1 {
+		t.Fatalf("expected assigned-only manager to see 1 assigned client, got %d", len(listed))
 	}
 	if listed[0].ID != env.client.ID {
 		t.Fatalf("expected manager list client %s, got %s", env.client.ID, listed[0].ID)

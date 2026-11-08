@@ -39,7 +39,12 @@ func setupTestDB(t *testing.T) (*gorm.DB, func()) {
 	if err != nil {
 		t.Fatalf("failed to open test db: %v", err)
 	}
-	db.AutoMigrate(&models.ReadableView{}, &models.Client{}, &models.File{}, &models.FileActivity{})
+	if err := db.AutoMigrate(&models.ReadableView{}, &models.Client{}, &models.File{}, &models.FileActivity{}, &models.User{}, &models.UserClient{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&models.User{ID: "test-admin", TenantID: tenantctx.DefaultTenantID, Email: "test-admin@example.test", Role: "admin"}).Error; err != nil {
+		t.Fatal(err)
+	}
 	return db, func() {}
 }
 
@@ -64,7 +69,7 @@ func TestClientCRUD(t *testing.T) {
 	}
 
 	// List
-	clients, err := service.ListClients(context.Background(), tenantID, "", "admin")
+	clients, err := service.ListClients(context.Background(), tenantID, "test-admin", "admin")
 	if err != nil || len(clients) != 1 {
 		t.Errorf("list failed: %v", err)
 	}
@@ -111,7 +116,7 @@ func TestListClientsPaginated(t *testing.T) {
 		}
 	}
 
-	pagination, clients, err := service.ListClientsPaginated(context.Background(), tenantID, "", "admin", "a", 1, 2)
+	pagination, clients, err := service.ListClientsPaginated(context.Background(), tenantID, "test-admin", "admin", "a", 1, 2)
 	if err != nil {
 		t.Fatalf("paginated list failed: %v", err)
 	}
@@ -128,7 +133,7 @@ func TestListClientsPaginated(t *testing.T) {
 		t.Fatalf("unexpected client order: %+v", []string{clients[0].Name, clients[1].Name})
 	}
 
-	pagination, clients, err = service.ListClientsPaginated(context.Background(), tenantID, "", "admin", "char", 1, 2)
+	pagination, clients, err = service.ListClientsPaginated(context.Background(), tenantID, "test-admin", "admin", "char", 1, 2)
 	if err != nil {
 		t.Fatalf("search list failed: %v", err)
 	}

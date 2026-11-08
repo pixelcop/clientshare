@@ -101,9 +101,38 @@ func (s *ClientService) CreateClient(ctx context.Context, tenantID, name string)
 	return client, nil
 }
 
+// CreateClientForActor preserves manager client creation without turning it
+// into tenant-wide authority: the creator is assigned the newly created client
+// in the same transaction. Role strings from the request are never trusted.
+func (s *ClientService) CreateClientForActor(ctx context.Context, tenantID, userID, name string) (*models.Client, error) {
+	var client *models.Client
+	err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var user models.User
+		if err := tx.Where("tenant_id = ? AND id = ?", tenantID, userID).First(&user).Error; err != nil {
+			return err
+		}
+		if user.Role != "admin" && user.Role != "manager" {
+			return gorm.ErrRecordNotFound
+		}
+		var err error
+		client, err = (&ClientService{DB: tx, Storage: s.Storage}).CreateClient(ctx, tenantID, name)
+		if err != nil {
+			return err
+		}
+		if user.Role == "manager" {
+			return tx.Create(&models.UserClient{TenantID: tenantID, UserID: user.ID, ClientID: client.ID}).Error
+		}
+		return nil
+	})
+	return client, err
+}
+
 // ListClients returns all clients for admins and assigned clients for non-admin users.
 func (s *ClientService) ListClients(ctx context.Context, tenantID, userID, role string) ([]models.Client, error) {
-	q := s.clientListQuery(ctx, tenantID, userID, role, "")
+	q, err := s.clientListQuery(ctx, tenantID, userID, role, "")
+	if err != nil {
+		return nil, err
+	}
 
 	var clients []models.Client
 	if q == nil {
@@ -120,7 +149,10 @@ func (s *ClientService) ListClientsPaginated(ctx context.Context, tenantID, user
 	page = normalizePage(page)
 	pageSize = normalizePageSize(pageSize)
 
-	q := s.clientListQuery(ctx, tenantID, userID, role, search)
+	q, err := s.clientListQuery(ctx, tenantID, userID, role, search)
+	if err != nil {
+		return nil, nil, err
+	}
 	if q == nil {
 		pagination := models.PaginationResponse{
 			TotalItems:   0,
@@ -164,17 +196,14 @@ func (s *ClientService) ListClientsPaginated(ctx context.Context, tenantID, user
 	return &pagination, clients, nil
 }
 
-func (s *ClientService) clientListQuery(ctx context.Context, tenantID, userID, role, search string) *gorm.DB {
+func (s *ClientService) clientListQuery(ctx context.Context, tenantID, userID, _ string, search string) (*gorm.DB, error) {
 	tenantID, err := requireTenantID(tenantID)
 	if err != nil {
-		return nil
+		return nil, err
 	}
-	q := s.DB.WithContext(ctx).Table("clients").Where("clients.tenant_id = ?", tenantID).Distinct()
-	if role != "admin" && role != "manager" {
-		if strings.TrimSpace(userID) == "" {
-			return nil
-		}
-		q = q.Joins("JOIN user_clients uc ON uc.client_id = clients.id AND uc.tenant_id = clients.tenant_id").Where("uc.user_id = ? AND uc.tenant_id = ?", userID, tenantID)
+	q, err := (&AccessService{DB: s.DB}).ClientScope(ctx, tenantID, userID, AccessContext)
+	if err != nil {
+		return nil, err
 	}
 
 	search = strings.TrimSpace(search)
@@ -183,7 +212,7 @@ func (s *ClientService) clientListQuery(ctx context.Context, tenantID, userID, r
 		q = q.Where("clients.name LIKE ? OR clients.folder_path LIKE ?", like, like)
 	}
 
-	return q
+	return q, nil
 }
 
 func normalizePage(page int) int {
