@@ -8,6 +8,7 @@ import DeleteUserModal from '@/components/DeleteUserModal.vue';
 import StaffSeatUsage from '@/components/StaffSeatUsage.vue';
 import UserListItem from '@/components/UserListItem.vue';
 import UserModal from '@/components/UserModal.vue';
+import { useAuthStore } from '@/stores/auth';
 import { useClientsStore } from '@/stores/clients';
 import { useStaffQuotaStore } from '@/stores/staffQuota';
 import type { GeneratedUserAccessLink } from '@/stores/users';
@@ -28,6 +29,7 @@ const props = withDefaults(
 const usersStore = useUsersStore();
 const clientsStore = useClientsStore();
 const staffQuota = useStaffQuotaStore();
+const isAdmin = computed(() => useAuthStore().user?.role === 'admin');
 const { listedUsers, listingPagination, listingLoading } = storeToRefs(usersStore);
 const toast = useToast();
 const router = useRouter();
@@ -259,7 +261,9 @@ function clearClientScope() {
           {{
             scopedClient
               ? 'Manage users assigned to this client.'
-              : 'Manage admin, manager, and customer accounts.'
+              : isAdmin
+                ? 'Manage admin, manager, and customer accounts.'
+                : 'Invite customers to your assigned clients. Manage workspace membership from Manage client access.'
           }}
         </p>
       </div>
@@ -283,7 +287,7 @@ function clearClientScope() {
       </div>
     </div>
 
-    <StaffSeatUsage />
+    <StaffSeatUsage v-if="isAdmin" />
 
     <div class="flex flex-col gap-3 mb-4">
       <div class="flex flex-col gap-3 lg:flex-row lg:items-end">
@@ -307,7 +311,7 @@ function clearClientScope() {
             class="w-full"
           />
         </div>
-        <div class="w-full lg:w-56">
+        <div v-if="isAdmin" class="w-full lg:w-56">
           <label class="block text-sm font-medium text-muted-color mb-1">Role</label>
           <Select
             v-model="selectedRole"

@@ -1,5 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils';
 import axios from 'axios';
+import Checkbox from 'openvue/checkbox';
+import OpenVue from 'openvue/config';
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -13,6 +15,7 @@ import type { User } from '../types/models';
 describe('staff invitation quota', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
+    useAuthStore().user = { id: 'admin', role: 'admin' } as User;
     vi.spyOn(axios, 'get').mockResolvedValue({ data: {} });
   });
   afterEach(() => vi.restoreAllMocks());
@@ -70,6 +73,7 @@ describe('staff invitation quota', () => {
     const wrapper = mount(UserModal, {
       props: { show: false, mode: user ? 'edit' : 'add', clients: [], user },
       global: {
+        plugins: [OpenVue],
         stubs: {
           Dialog: { template: '<div><slot name="header" /><slot /></div>' },
           Button: { template: '<button><slot /></button>' },
@@ -122,6 +126,9 @@ describe('staff invitation quota', () => {
     expect(staff.get('button[type="submit"]').attributes('disabled')).toBeUndefined();
     await staff.get('form').trigger('submit');
     expect(staff.emitted('submit')).toHaveLength(1);
+    expect(staff.emitted('submit')?.[0]).toEqual([
+      expect.objectContaining({ manager_full_access: false, client_ids: [] }),
+    ]);
     staff.unmount();
     const customer = await openModal({
       role: 'client',
@@ -133,6 +140,52 @@ describe('staff invitation quota', () => {
     expect(customer.emitted('submit')).toBeUndefined();
     customer.unmount();
   });
+
+  it('preserves explicit manager full access and permits assigned client selection', async () => {
+    const wrapper = await openModal({
+      role: 'manager',
+      name: 'Staff',
+      email: 'staff@example.com',
+      manager_full_access: true,
+      client_ids: ['client-1'],
+    } as User);
+    expect(wrapper.findComponent(Checkbox).props('modelValue')).toBe(true);
+    await wrapper.get('form').trigger('submit');
+    expect(wrapper.emitted('submit')?.[0]).toEqual([
+      expect.objectContaining({ manager_full_access: true, client_ids: ['client-1'] }),
+    ]);
+    wrapper.findComponent(Checkbox).vm.$emit('update:modelValue', false);
+    await flushPromises();
+    expect(wrapper.findComponent({ name: 'MultiSelect' }).exists()).toBe(true);
+    wrapper.unmount();
+  });
+
+  it('offers managers only customer creation, never staff escalation', async () => {
+    useAuthStore().user = { id: 'manager', role: 'manager' } as User;
+    const wrapper = await openModal();
+    expect(wrapper.find('option[value="admin"]').exists()).toBe(false);
+    expect(wrapper.find('option[value="manager"]').exists()).toBe(false);
+    expect(wrapper.get('select').element.value).toBe('client');
+    expect(wrapper.find('input[type="email"]').exists()).toBe(true);
+    wrapper.unmount();
+  });
+
+  it.each(['client', 'customer'])(
+    'edits an item-only %s without assigning a client',
+    async (role) => {
+      const wrapper = await openModal({
+        role,
+        name: 'Recipient',
+        email: 'recipient@example.com',
+        client_ids: [],
+      } as User);
+      await wrapper.get('form').trigger('submit');
+      expect(wrapper.emitted('submit')?.[0]).toEqual([
+        expect.objectContaining({ role: 'client', client_ids: [] }),
+      ]);
+      wrapper.unmount();
+    },
+  );
 
   it('rechecks seats after upgrading in another tab without losing the draft', async () => {
     const wrapper = await openModal();

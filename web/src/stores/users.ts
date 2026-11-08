@@ -9,6 +9,7 @@ export interface UserCreatePayload {
   role: string;
   name: string;
   client_ids?: string[];
+  manager_full_access?: boolean;
 }
 
 export interface UserUpdatePayload {
@@ -17,6 +18,7 @@ export interface UserUpdatePayload {
   role?: string;
   name?: string;
   client_ids?: string[];
+  manager_full_access?: boolean;
 }
 
 export interface UserListFilters {

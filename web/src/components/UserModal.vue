@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import StaffSeatUsage from '@/components/StaffSeatUsage.vue';
+import { useAuthStore } from '@/stores/auth';
 import { useStaffQuotaStore } from '@/stores/staffQuota';
 import type { Client, User } from '@/types/models';
 
@@ -20,7 +21,11 @@ const name = ref('');
 const email = ref('');
 const role = ref<'admin' | 'manager' | 'client'>('manager');
 const clientIds = ref<string[]>([]);
+const managerFullAccess = ref(false);
 const localError = ref<string | null>(null);
+const auth = useAuthStore();
+const isAdmin = computed(() => auth.user?.role === 'admin');
+const fieldPrefix = useId();
 
 const isEdit = computed(() => props.mode === 'edit');
 const quota = useStaffQuotaStore();
@@ -43,8 +48,13 @@ function resetForm() {
   name.value = props.user?.name || '';
   email.value = props.user?.email || '';
   role.value =
-    (props.user?.role as 'admin' | 'manager' | 'client') || props.defaultRole || 'manager';
+    (props.user?.role === 'customer'
+      ? 'client'
+      : (props.user?.role as 'admin' | 'manager' | 'client')) ||
+    props.defaultRole ||
+    (isAdmin.value ? 'manager' : 'client');
   clientIds.value = props.user?.client_ids || props.defaultClientIds || [];
+  managerFullAccess.value = props.user?.manager_full_access || false;
   localError.value = null;
 }
 
@@ -69,12 +79,14 @@ watch(
 
 function onSubmit() {
   localError.value = null;
-  if (invitationBlocked.value || props.loading) {return;}
+  if (invitationBlocked.value || props.loading) {
+    return;
+  }
   if (!name.value.trim() || !email.value.trim()) {
     localError.value = 'Name and email are required.';
     return;
   }
-  if (role.value === 'client' && clientIds.value.length === 0) {
+  if (!isEdit.value && role.value === 'client' && clientIds.value.length === 0) {
     localError.value = 'Please assign at least one client for customer users.';
     return;
   }
@@ -85,8 +97,11 @@ function onSubmit() {
     role: role.value,
   };
 
-  if (role.value === 'client') {
+  if (role.value === 'client' || role.value === 'manager') {
     payload.client_ids = clientIds.value;
+  }
+  if (role.value === 'manager' && isAdmin.value) {
+    payload.manager_full_access = managerFullAccess.value;
   }
 
   emit('submit', payload);
@@ -118,13 +133,20 @@ function onSubmit() {
       </div>
     </template>
     <form @submit.prevent="onSubmit">
-      <StaffSeatUsage v-if="!existingStaff" />
+      <StaffSeatUsage v-if="isAdmin && !existingStaff" />
       <div class="grid grid-cols-1 gap-4">
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Role</label>
-          <select v-model="role" class="px-3 py-2 border rounded w-full" :disabled="loading">
-            <option value="admin" :disabled="staffBlocked">Admin</option>
-            <option value="manager" :disabled="staffBlocked">Manager</option>
+          <label :for="`${fieldPrefix}-role`" class="block text-sm font-medium text-gray-700 mb-1"
+            >Role</label
+          >
+          <select
+            :id="`${fieldPrefix}-role`"
+            v-model="role"
+            class="px-3 py-2 border rounded w-full"
+            :disabled="loading"
+          >
+            <option v-if="isAdmin" value="admin" :disabled="staffBlocked">Admin</option>
+            <option v-if="isAdmin" value="manager" :disabled="staffBlocked">Manager</option>
             <option value="client">Customer</option>
           </select>
         </div>
@@ -151,10 +173,25 @@ function onSubmit() {
             :disabled="loading"
           />
         </div>
-        <div v-if="role === 'client'">
-          <label class="block text-sm font-medium text-gray-700 mb-1">Assign Clients</label>
+        <div v-if="role === 'manager' && isAdmin">
+          <label class="flex items-center gap-2 min-h-11">
+            <Checkbox v-model="managerFullAccess" binary :disabled="loading" />
+            Full access to all current and future clients
+          </label>
+          <p class="text-sm text-muted-color">
+            New managers are assigned-only by default. Full access is not required for staff to work
+            with selected clients.
+          </p>
+        </div>
+        <div v-if="role === 'client' || (role === 'manager' && !managerFullAccess)">
+          <label
+            :id="`${fieldPrefix}-clients-label`"
+            class="block text-sm font-medium text-gray-700 mb-1"
+            >Assign Clients</label
+          >
           <MultiSelect
             v-model="clientIds"
+            :ariaLabelledby="`${fieldPrefix}-clients-label`"
             :options="clients"
             optionLabel="name"
             optionValue="id"

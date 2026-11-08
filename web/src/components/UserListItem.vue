@@ -2,6 +2,7 @@
 import { breakpointsTailwind, useBreakpoints } from '@vueuse/core';
 import type { MenuItem } from 'openvue/menuitem';
 
+import { useAuthStore } from '@/stores/auth';
 import { useClientsStore } from '@/stores/clients';
 import type { Client, User } from '@/types/models';
 import { formatDate } from '@/types/util';
@@ -22,6 +23,7 @@ const breakpoints = useBreakpoints(breakpointsTailwind);
 const xs = breakpoints.smaller('sm');
 
 const clientsStore = useClientsStore();
+const isAdmin = computed(() => useAuthStore().user?.role === 'admin');
 
 const clientsById = computed(() => {
   const map = new Map<string, Client>();
@@ -61,7 +63,7 @@ const primaryLabel = computed(() => {
     return undefined;
   }
   if (user.invite_accepted) {
-    return 'Edit';
+    return isAdmin.value ? 'Edit' : 'Client access';
   }
   return 'Resend Invite';
 });
@@ -75,7 +77,9 @@ const primaryIcon = computed(() => {
 
 const primaryAction = () => {
   if (user.invite_accepted) {
-    emit('edit', user);
+    if (isAdmin.value) {
+      emit('edit', user);
+    }
   } else {
     emit('resend-invite', user);
   }
@@ -91,23 +95,25 @@ const userActions = computed<MenuItem[]>(() => {
       command: () => emit('resend-invite', user),
     });
   }
-  actions.push(
-    {
-      label: copyLinkLabel(user),
-      icon: 'oi oi-copy',
-      command: () => emit('copy-link', user),
-    },
-    {
-      label: 'Edit',
-      icon: 'oi oi-pencil',
-      command: () => emit('edit', user),
-    },
-    {
-      label: 'Delete',
-      icon: 'oi oi-trash',
-      command: () => emit('delete', user),
-    },
-  );
+  if (isAdmin.value) {
+    actions.push(
+      {
+        label: copyLinkLabel(user),
+        icon: 'oi oi-copy',
+        command: () => emit('copy-link', user),
+      },
+      {
+        label: 'Edit',
+        icon: 'oi oi-pencil',
+        command: () => emit('edit', user),
+      },
+      {
+        label: 'Delete',
+        icon: 'oi oi-trash',
+        command: () => emit('delete', user),
+      },
+    );
+  }
 
   return actions;
 });
@@ -127,13 +133,22 @@ const userActions = computed<MenuItem[]>(() => {
       </span>
     </td>
     <td class="px-4 py-2">
-      <span v-if="user.role === 'customer' || user.role === 'client'">{{ clientNames(user) }}</span>
+      <span v-if="user.role === 'manager' && user.manager_full_access"
+        >All current and future clients</span
+      >
+      <span v-else-if="['manager', 'customer', 'client'].includes(user.role)">{{
+        clientNames(user)
+      }}</span>
       <span v-else class="text-gray-400">—</span>
     </td>
     <td class="px-4 py-2">{{ formatDate(user.created_at) }}</td>
     <td class="px-4 py-2">
       <div class="flex gap-2 flex-wrap">
+        <span v-if="!isAdmin && user.invite_accepted" class="text-sm text-muted-color"
+          >Use Manage client access in the workspace</span
+        >
         <SplitButton
+          v-else
           :label="primaryLabel"
           :icon="primaryIcon"
           @click.stop="primaryAction"
