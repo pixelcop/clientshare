@@ -56,4 +56,15 @@ func TestDurableEmailDeduplicationAndLinkRevalidation(t *testing.T) {
 	require.NoError(t, db.Where("deduplication_key = ?", message.DeduplicationKey).First(&canceled).Error)
 	require.NotNil(t, canceled.CanceledAt)
 	require.Nil(t, canceled.SentAt)
+	// A UTC expiry that is earlier in absolute time but later as a wall-clock
+	// string must still be rejected when the worker runs in another timezone.
+	queue.Now = func() time.Time { return time.Date(2026, 11, 8, 12, 0, 0, 0, time.FixedZone("EST", -5*3600)) }
+	expired := models.SecureLink{TenantID: "tenant", ClientID: client.ID, Token: "expired-token", AccessType: "read", ExpiresAt: time.Date(2026, 11, 8, 16, 0, 0, 0, time.UTC)}
+	require.NoError(t, db.Create(&expired).Error)
+	message.SecureLinkID = &expired.ID
+	message.DeduplicationKey = "expired-timezone-request"
+	_, err = queue.Queue(message, models.Now())
+	require.NoError(t, err)
+	require.NoError(t, queue.ProcessAll())
+	require.Len(t, sender.messages, 1, "an expired link must not be mailed across timestamp offsets")
 }

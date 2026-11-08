@@ -16,12 +16,15 @@ and may include an exact RFC 3339 `expires_at` within the supported maximum
 lifetime. The interactive form displays and submits that exact timestamp.
 Without it, legacy callers retain expiry-days behavior.
 
-Repeating a key with the same normalized request returns the original link,
+Repeating a key with the same valid normalized request returns the original link,
 token and expiry. Reusing it with different settings returns `409`. Keys are
-hashed with tenant, actor and operation/target scope; raw keys and bearer
-tokens are not added to retry records. Nullable unique creation keys preserve
+hashed with tenant, actor and operation/target scope; raw keys are not stored.
+Retry digests do not contain bearer credentials. The existing link record and
+queued email payload necessarily contain the URL/token and must be protected
+according to the installation's data-retention policy. Nullable unique creation keys preserve
 legacy links. A revoked/expired request never creates a replacement under the
-same key; it returns the original, unavailable link.
+same key. A replay can return the original, unavailable link; a request with an
+explicit expiry already in the past is rejected instead.
 
 New UI flows create without emailing, then retain the result for Copy or Email.
 The legacy `email_queued` response means queue acceptance, not recipient

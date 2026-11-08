@@ -162,12 +162,15 @@ func (q *DBEmailQueue) send(item models.QueuedEmail) error {
 		return nil
 	}
 	if item.SecureLinkID != nil {
-		var count int64
-		if err := q.DB.Model(&models.SecureLink{}).Where(`tenant_id = ? AND id = ? AND revoked_at IS NULL AND expires_at > ?
-			AND EXISTS (SELECT 1 FROM clients WHERE clients.tenant_id = secure_links.tenant_id AND clients.id = secure_links.client_id)`, item.TenantID, *item.SecureLinkID, q.now()).Count(&count).Error; err != nil {
+		var link models.SecureLink
+		err := q.DB.Where(`tenant_id = ? AND id = ? AND revoked_at IS NULL
+			AND EXISTS (SELECT 1 FROM clients WHERE clients.tenant_id = secure_links.tenant_id AND clients.id = secure_links.client_id)`, item.TenantID, *item.SecureLinkID).First(&link).Error
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
 		}
-		if count == 0 {
+		// Legacy SQLite timestamps can contain different offsets. Compare the
+		// actual instants in Go, not lexicographically as wall-clock strings.
+		if errors.Is(err, gorm.ErrRecordNotFound) || !link.ExpiresAt.After(q.now()) {
 			return q.DB.Model(&models.QueuedEmail{}).Where("id = ? AND sent_at IS NULL", item.ID).Update("canceled_at", q.now()).Error
 		}
 	}

@@ -234,10 +234,13 @@ func notificationRecipients(ctx context.Context, db *gorm.DB, tenantID, role str
 			return nil, err
 		}
 		var secureLinks []models.SecureLink
-		if err := db.WithContext(ctx).Where("tenant_id = ? AND client_id = ? AND email <> '' AND revoked_at IS NULL AND expires_at > ?", tenantID, clientID, time.Now()).Find(&secureLinks).Error; err != nil {
+		if err := db.WithContext(ctx).Where("tenant_id = ? AND client_id = ? AND email <> '' AND revoked_at IS NULL", tenantID, clientID).Find(&secureLinks).Error; err != nil {
 			return nil, err
 		}
 		for _, link := range secureLinks {
+			if !link.ExpiresAt.After(time.Now()) {
+				continue
+			}
 			appendRecipient(link.Email)
 		}
 	case "client", "customer", "link":
