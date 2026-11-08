@@ -25,6 +25,7 @@ type CreateClientPayload = {
   sendEmail: boolean;
   accessType: 'read' | 'write' | 'readwrite';
   expiryDays: number;
+  expiresAt?: string;
   email: string;
 };
 
@@ -112,12 +113,14 @@ async function create(payload: CreateClientPayload | { name: string }) {
   showCreate.value = false;
   if (payload.generateLink) {
     try {
-      await secureLinksStore.createLink(
+      const link = await secureLinksStore.createLink(
         client.id,
         payload.accessType,
         payload.expiryDays,
-        payload.sendEmail ? payload.email : '',
+        '',
+        payload.expiresAt,
       );
+      await router.push({ path: `/clients/${client.id}/links`, query: { created: link.id } });
     } catch (e: unknown) {
       createLinkError.value =
         (axios.isAxiosError(e) ? e.response?.data?.error : null) ||

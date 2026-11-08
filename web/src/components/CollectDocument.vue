@@ -85,7 +85,7 @@ const nextAction = computed(() => {
   }
   if (links && workflow.step === 2) {
     return {
-      targets: [`collect-copy-${workflow.link?.id}`],
+      targets: [`collect-result-copy-${workflow.link?.id}`, `collect-copy-${workflow.link?.id}`],
       title: 'Copy the upload link',
       body: 'Select Copy, then paste the link into your message. Copying does not send it.',
     };

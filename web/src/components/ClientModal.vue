@@ -12,6 +12,7 @@ type LinkSettingsPayload = {
   sendEmail: boolean;
   accessType: 'read' | 'write' | 'readwrite';
   expiryDays: number;
+  expiresAt?: string;
   email: string;
 };
 
@@ -92,6 +93,8 @@ const canSubmit = computed(() => {
   if (!name.value.trim()) {
     return false;
   }
+  if (generateLink.value && linkSettingsRef.value && !linkSettingsRef.value.getSettings().valid)
+    {return false;}
   return true;
 });
 
@@ -101,12 +104,14 @@ function onSubmit() {
     return;
   }
   const settings = linkSettingsRef.value?.getSettings?.();
+  if (generateLink.value && !settings?.valid) {return;}
   emit('submit', {
     name: name.value.trim(),
     generateLink: generateLink.value,
-    sendEmail: settings?.sendEmail ?? true,
+    sendEmail: false,
     accessType: settings?.accessType ?? 'readwrite',
     expiryDays: settings?.expiryDays ?? props.defaultSecureLinkExpiryDays ?? 90,
+    expiresAt: settings?.expiresAt,
     email: settings?.email ?? '',
   });
 }
@@ -155,6 +160,7 @@ function onSubmit() {
           embedded
           :collection="collection"
           :defaultExpiryDays="defaultSecureLinkExpiryDays"
+          :targetName="name"
         />
       </div>
       <div class="flex justify-end gap-2">
