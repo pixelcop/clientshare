@@ -53,11 +53,11 @@ func RegisterLinkRoutes(router fiber.Router, db *gorm.DB, signingKey string, sto
 	router.Get("/links/:token", handler.BootstrapLinkSession)
 	router.Post("/links/:token", handler.BootstrapLinkSession)
 
-	router.Post("/api/clients/:id/links", middleware.RoleRequired("admin"), handler.CreateSecureLink)
-	router.Get("/api/clients/:id/links", middleware.RoleRequired("admin"), handler.ListSecureLinks)
-	router.Get("/api/clients/:id/collection", middleware.RoleRequired("admin"), handler.CollectionStatus)
-	router.Delete("/api/links/:id", middleware.RoleRequired("admin"), handler.DeleteSecureLink)
-	router.Post("/api/links/:id/email", middleware.RoleRequired("admin"), handler.EmailSecureLink)
+	router.Post("/api/clients/:id/links", middleware.AuthRequired, handler.CreateSecureLink)
+	router.Get("/api/clients/:id/links", middleware.AuthRequired, handler.ListSecureLinks)
+	router.Get("/api/clients/:id/collection", middleware.AuthRequired, handler.CollectionStatus)
+	router.Delete("/api/links/:id", middleware.AuthRequired, handler.DeleteSecureLink)
+	router.Post("/api/links/:id/email", middleware.AuthRequired, handler.EmailSecureLink)
 	router.Get("/api/link/:token", handler.ViewLink)
 }
 
@@ -153,6 +153,9 @@ func (h *LinkHandler) BootstrapLinkSession(c fiber.Ctx) error {
 func (h *LinkHandler) CreateSecureLink(c fiber.Ctx) error {
 	id := c.Params("id")
 	tenantID := tenantIDFromCtx(c)
+	if _, err := h.requireClientSharing(c, id, false); err != nil {
+		return err
+	}
 	if id == "" {
 		utils.Logger(c).Warn("invalid client id")
 		return c.Status(400).JSON(fiber.Map{"error": "invalid client id"})
@@ -228,9 +231,12 @@ func (h *LinkHandler) CreateSecureLink(c fiber.Ctx) error {
 		CreationKey:  creationKey,
 		CreationHash: requestDigest(string(fingerprint)),
 	}
-	if err := services.PersistSecureLink(c.Context(), h.db, &link); err != nil {
+	if err := (&services.SharingService{DB: h.db}).PersistClientLinkForActor(c.Context(), middleware.AccessRequest(c, id, "", services.AccessShare), &link); err != nil {
 		if errors.Is(err, services.ErrLinkRequestConflict) {
 			return c.Status(409).JSON(fiber.Map{"error": err.Error()})
+		}
+		if errors.Is(err, gorm.ErrRecordNotFound) || errors.Is(err, services.ErrSharingCapabilities) {
+			return sharingError(err)
 		}
 		utils.Logger(c).Error("error creating secure link", zap.Error(err))
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
@@ -248,24 +254,33 @@ func (h *LinkHandler) CreateSecureLink(c fiber.Ctx) error {
 }
 
 func (h *LinkHandler) queueSecureLinkEmail(c fiber.Ctx, link models.SecureLink, recipient, key, siteTitle string) (string, error) {
-	if link.FileID != nil || link.RevokedAt != nil || !link.ExpiresAt.After(time.Now()) {
+	if link.RevokedAt != nil || !link.ExpiresAt.After(time.Now()) {
 		return "unavailable", errors.New("This link is expired or revoked")
 	}
 	if h.emailQueue == nil {
 		return "unavailable", errors.New("Email is unavailable. Copy the existing link instead, or retry after email is configured.")
 	}
-	client, err := h.clientService.GetClient(c.Context(), link.TenantID, link.ClientID)
-	if err != nil {
-		utils.Logger(c).Error("error fetching client for secure link email", zap.Error(err))
-		return "failed", errors.New("Could not load the link destination")
+	targetName := "Shared content"
+	if link.FileID == nil {
+		client, err := h.clientService.GetClient(c.Context(), link.TenantID, link.ClientID)
+		if err != nil {
+			return "failed", errors.New("Could not load the link destination")
+		}
+		targetName = client.Name
+	} else {
+		target, err := (&services.AccessService{DB: h.db}).DescribeItem(c.Context(), middleware.AccessRequest(c, link.ClientID, *link.FileID, services.AccessContext))
+		if err != nil {
+			return "failed", errors.New("Could not load the link destination")
+		}
+		targetName = target.Filename
 	}
 	linkURL := buildSecureLinkURL(tenantBaseURLFromCtx(c, h.baseURL), link.Token)
 	if linkURL == "" {
 		utils.Logger(c).Warn("secure link base url missing")
 		return "unavailable", errors.New("Secure link URL is unavailable")
 	}
-	subject, body, htmlBody := emailpkg.RenderSecureLinkEmail(client.Name, link.AccessType, linkURL, siteTitle, link.ExpiresAt)
-	item, err := h.emailQueue.Queue(emailpkg.Email{TenantID: link.TenantID, To: recipient, Subject: subject, Body: body, HTMLBody: htmlBody, DeduplicationKey: key, SecureLinkID: &link.ID}, models.Now())
+	subject, body, htmlBody := emailpkg.RenderSecureLinkEmail(targetName, link.AccessType, linkURL, siteTitle, link.ExpiresAt)
+	item, err := h.emailQueue.Queue(emailpkg.Email{TenantID: link.TenantID, To: recipient, Subject: subject, Body: body, HTMLBody: htmlBody, DeduplicationKey: key, SecureLinkID: &link.ID, ClientID: &link.ClientID}, models.Now())
 	if err != nil {
 		utils.Logger(c).Error("failed to queue secure link email", zap.Error(err))
 		return "failed", err
@@ -299,13 +314,11 @@ func (h *LinkHandler) EmailSecureLink(c fiber.Ctx) error {
 	if err != nil || strings.ContainsAny(body.Email, "\r\n") {
 		return c.Status(400).JSON(fiber.Map{"error": "A valid recipient email is required"})
 	}
-	var link models.SecureLink
-	if err := h.db.WithContext(c.Context()).Where("tenant_id = ? AND id = ?", tenantIDFromCtx(c), c.Params("id")).First(&link).Error; err != nil {
-		return c.Status(404).JSON(fiber.Map{"error": "Link not found"})
+	authorizedLink, err := (&services.SharingService{DB: h.db}).LinkForDelivery(c.Context(), middleware.AccessRequest(c, "", "", services.AccessShare), c.Params("id"))
+	if err != nil {
+		return sharingError(err)
 	}
-	if link.FileID != nil || link.RevokedAt != nil || !link.ExpiresAt.After(time.Now()) {
-		return c.Status(410).JSON(fiber.Map{"status": "unavailable", "error": "This link is expired or revoked"})
-	}
+	link := *authorizedLink
 	siteTitle, _ := h.tenantEmailSettings(c, link.TenantID)
 	status, queueErr := h.queueSecureLinkEmail(c, link, address.Address, *key, siteTitle)
 	if queueErr != nil {
@@ -347,6 +360,9 @@ func requestIdempotencyKey(c fiber.Ctx, operation string, required bool) (*strin
 
 func (h *LinkHandler) CollectionStatus(c fiber.Ctx) error {
 	tenantID := tenantIDFromCtx(c)
+	if _, err := h.requireClientSharing(c, c.Params("id"), true); err != nil {
+		return err
+	}
 	if _, err := h.clientService.GetClient(c.Context(), tenantID, c.Params("id")); err != nil {
 		return c.Status(404).JSON(fiber.Map{"error": "client not found"})
 	}
@@ -373,6 +389,10 @@ func buildSecureLinkURL(baseURL, token string) string {
 func (h *LinkHandler) ListSecureLinks(c fiber.Ctx) error {
 	id := c.Params("id")
 	tenantID := tenantIDFromCtx(c)
+	decision, accessErr := h.requireClientSharing(c, id, false)
+	if accessErr != nil {
+		return accessErr
+	}
 	if id == "" {
 		utils.Logger(c).Warn("invalid client id")
 		return c.Status(400).JSON(fiber.Map{"error": "invalid client id"})
@@ -381,13 +401,14 @@ func (h *LinkHandler) ListSecureLinks(c fiber.Ctx) error {
 		return c.Status(404).JSON(fiber.Map{"error": "client not found"})
 	}
 	var linksList []models.SecureLink
-	if err := h.db.WithContext(c.Context()).Where("tenant_id = ? AND client_id = ?", tenantID, id).Order("created_at DESC, id DESC").Find(&linksList).Error; err != nil {
+	if err := h.db.WithContext(c.Context()).Where("tenant_id = ? AND client_id = ? AND file_id IS NULL", tenantID, id).Order("created_at DESC, id DESC").Find(&linksList).Error; err != nil {
 		utils.Logger(c).Error("error listing secure links", zap.Error(err))
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
 	baseURL := tenantBaseURLFromCtx(c, h.baseURL)
 	for index := range linksList {
-		if linksList[index].FileID == nil && linksList[index].RevokedAt == nil && linksList[index].ExpiresAt.After(time.Now()) {
+		caps := models.AccessCapabilities{CanRead: linksList[index].AccessType == "read" || linksList[index].AccessType == "view" || linksList[index].AccessType == "readwrite", CanUpload: linksList[index].AccessType == "write" || linksList[index].AccessType == "readwrite"}
+		if (caps.CanRead || caps.CanUpload) && decision.CanGrant(caps) && linksList[index].FileID == nil && linksList[index].RevokedAt == nil && linksList[index].ExpiresAt.After(time.Now()) {
 			linksList[index].LinkURL = buildSecureLinkURL(baseURL, linksList[index].Token)
 		} else {
 			linksList[index].Token = ""
@@ -399,12 +420,11 @@ func (h *LinkHandler) ListSecureLinks(c fiber.Ctx) error {
 // DeleteSecureLink handles DELETE /api/links/:id
 func (h *LinkHandler) DeleteSecureLink(c fiber.Ctx) error {
 	id := c.Params("id")
-	tenantID := tenantIDFromCtx(c)
 	if id == "" {
 		utils.Logger(c).Warn("invalid link id")
 		return c.Status(400).JSON(fiber.Map{"error": "invalid link id"})
 	}
-	if err := services.RevokeSecureLink(c.Context(), h.db, tenantID, id); err != nil {
+	if err := (&services.SharingService{DB: h.db}).RevokeLink(c.Context(), middleware.AccessRequest(c, "", "", services.AccessShare), id); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return c.Status(404).JSON(fiber.Map{"error": "Link not found"})
 		}
@@ -412,6 +432,17 @@ func (h *LinkHandler) DeleteSecureLink(c fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
 	return c.SendStatus(204)
+}
+
+func (h *LinkHandler) requireClientSharing(c fiber.Ctx, clientID string, read bool) (services.AccessDecision, error) {
+	d, err := (&services.AccessService{DB: h.db}).Resolve(c.Context(), middleware.AccessRequest(c, clientID, "", services.AccessShare))
+	if err != nil {
+		return d, sharingError(err)
+	}
+	if !d.Allowed || (read && !d.Capabilities.CanRead) {
+		return d, fiber.ErrNotFound
+	}
+	return d, nil
 }
 
 // ViewLink handles GET /api/link/:token

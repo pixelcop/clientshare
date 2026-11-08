@@ -49,3 +49,21 @@ func TestSharedWithMeHTTPDoesNotGrantClientOrAncestryAccess(t *testing.T) {
 	require.Zero(t, page.Pagination.TotalItems)
 	require.Empty(t, page.Items)
 }
+
+func TestScopedCreationRemainsUnregisteredInApplication(t *testing.T) {
+	env := setupFileTestEnv(t)
+	file := createFileRecord(t, env, env.rootFolder, "not-shared.txt", "content")
+	for _, suffix := range []string{"grants", "invitations", "links"} {
+		req := jsonAuthRequest(http.MethodPost, "/api/files/"+file.ID+"/"+suffix, env.adminToken, map[string]any{"user_id": env.otherClientUser.ID, "email": "recipient@example.test", "capabilities": models.AccessCapabilities{CanRead: true}, "access_type": "read"})
+		req.Header.Set("Idempotency-Key", "release-gate-test")
+		resp, err := env.app.Test(req)
+		require.NoError(t, err)
+		require.GreaterOrEqual(t, resp.StatusCode, 400, "creation is gated on the server, not only hidden in the UI")
+		resp.Body.Close()
+	}
+	for _, model := range []any{&models.ItemGrant{}, &models.AccessInvitation{}} {
+		var count int64
+		require.NoError(t, env.db.Model(model).Count(&count).Error)
+		require.Zero(t, count)
+	}
+}

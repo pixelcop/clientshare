@@ -18,9 +18,10 @@ var (
 )
 
 type SharingService struct {
-	DB          *gorm.DB
-	TokenSecret string
-	Now         func() time.Time
+	DB             *gorm.DB
+	TokenSecret    string
+	LinkSigningKey string
+	Now            func() time.Time
 }
 
 type GrantInput struct {

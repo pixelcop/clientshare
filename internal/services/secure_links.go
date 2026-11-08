@@ -6,12 +6,36 @@ import (
 	"time"
 
 	"github.com/pixelcop/clientshare/internal/models"
+	"github.com/pixelcop/clientshare/pkg/utils/ids"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
 var ErrLinkRequestConflict = errors.New("request key was already used with different link settings")
 var ErrScopedSharingUnavailable = errors.New("item sharing is not available until scoped enforcement is complete")
+
+// PersistClientLinkForActor preserves legacy request keys/fingerprints while
+// applying the same transactional permission ceiling as scoped creation.
+func (s *SharingService) PersistClientLinkForActor(ctx context.Context, req AccessRequest, link *models.SecureLink) error {
+	if req.FileID != "" || link.FileID != nil {
+		return ErrScopedSharingUnavailable
+	}
+	caps, valid := linkCapabilities(link.AccessType)
+	if !valid {
+		return ErrSharingInput
+	}
+	return s.withAuthority(ctx, req, caps, func(tx *gorm.DB, _ *models.File) error {
+		candidateID := ids.NewULID()
+		link.ID, link.TenantID, link.ClientID, link.CreatedBy = candidateID, req.TenantID, req.ClientID, req.Actor.UserID
+		if err := PersistSecureLink(ctx, tx, link); err != nil {
+			return err
+		}
+		if link.ID != candidateID {
+			return nil
+		}
+		return sharingAudit(tx, req, "link.create", link.Email, nil, linkAudit(*link))
+	})
+}
 
 // PersistSecureLink deduplicates a retried creation without ever reviving an
 // expired/revoked link. Tokens and existing expiry timestamps are preserved.

@@ -107,7 +107,7 @@ func NewWebApp(cfg *Config, db *gorm.DB, logger *zap.Logger, emailQueue emailpkg
 	// For now, protect all with AuthRequired (already applied via group)
 	handlers.RegisterClientRoutes(api, db, store)
 	handlers.RegisterFeedRoutes(api, db)
-	handlers.RegisterSharingReadRoutes(api, db)
+	handlers.RegisterSharingReadRoutes(api, db, cfg.Server.BaseURL)
 
 	// File endpoints (protected)
 	handlers.RegisterFileRoutes(api, db, store, emailQueue, cfg.Server.BaseURL, tenantSettingsService)

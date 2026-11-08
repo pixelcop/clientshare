@@ -1,6 +1,7 @@
 package services
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -43,6 +44,40 @@ func TestItemInvitationAcceptanceDoesNotCreateMembershipOrRestoreRevokedAccess(t
 	_, err = service.AcceptInvitation(t.Context(), "tenant", "recipient", token)
 	require.NoError(t, err, "duplicate acceptance is a no-op, never reactivation")
 	f.check(t, f.req("recipient", "file", AccessRead), false)
+}
+
+func TestConcurrentInvitationAcceptanceAndRemovalCannotRestoreRecipientAccess(t *testing.T) {
+	for i := 0; i < 10; i++ {
+		t.Run(fmt.Sprint(i), func(t *testing.T) {
+			f, service := sharingFixture(t)
+			require.NoError(t, f.db.Create(&models.UserClient{TenantID: "tenant", ClientID: "client", UserID: "recipient"}).Error)
+			invite, err := service.CreateInvitation(t.Context(), f.req("admin", "file", AccessShare), InvitationInput{Email: "recipient@example.test", Capabilities: models.AccessCapabilities{CanRead: true}}, "accept-removal-race")
+			require.NoError(t, err)
+			start := make(chan struct{})
+			accept := make(chan error, 1)
+			remove := make(chan error, 1)
+			go func() {
+				<-start
+				_, err := service.AcceptInvitation(t.Context(), "tenant", "recipient", service.invitationToken(invite.ID))
+				accept <- err
+			}()
+			go func() {
+				<-start
+				remove <- service.RemoveMember(t.Context(), f.req("admin", "", AccessInviteClient), "recipient", false)
+			}()
+			close(start)
+			require.NoError(t, <-remove)
+			if err := <-accept; err != nil {
+				require.ErrorIs(t, err, gorm.ErrRecordNotFound)
+			}
+			f.check(t, f.req("recipient", "file", AccessRead), false)
+			_, err = service.AcceptInvitation(t.Context(), "tenant", "recipient", service.invitationToken(invite.ID))
+			if err != nil {
+				require.ErrorIs(t, err, gorm.ErrRecordNotFound)
+			}
+			f.check(t, f.req("recipient", "file", AccessRead), false)
+		})
+	}
 }
 
 func TestInvitationIdentityTenantLifetimeAndTargetChecks(t *testing.T) {

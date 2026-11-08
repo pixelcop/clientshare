@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"strings"
 
 	"github.com/gofiber/fiber/v3"
@@ -52,10 +53,25 @@ func (h *emailQueueHandler) visiblePending(c fiber.Ctx, clientID string) ([]*mod
 		if item.TenantID != tenantID || item.CanceledAt != nil || item.SentAt != nil {
 			continue
 		}
+		// Target-aware invitations are email-possession credentials. Even an
+		// administrator who sent the invitation must not recover its setup or
+		// acceptance URL through the generic queue inspection surface.
+		if item.AccessInvitationID != nil || item.IdentityInviteID != nil {
+			continue
+		}
 		// Account invitation/reset messages contain identity credentials, not
 		// client sharing authority. Only admins can inspect those queue jobs.
 		if actor.Role != "admin" && (item.ClientID == nil || !allowed[*item.ClientID] || (item.FileIDsCSV == "" && item.SecureLinkID == nil)) {
 			continue
+		}
+		if item.SecureLinkID != nil {
+			_, err := (&services.SharingService{DB: h.db}).LinkForDelivery(c.Context(), middleware.AccessRequest(c, "", "", services.AccessShare), *item.SecureLinkID)
+			if errors.Is(err, gorm.ErrRecordNotFound) || errors.Is(err, services.ErrSharingCapabilities) {
+				continue
+			}
+			if err != nil {
+				return nil, err
+			}
 		}
 		visible = append(visible, item)
 	}
