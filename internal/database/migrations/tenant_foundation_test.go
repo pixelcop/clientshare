@@ -175,7 +175,12 @@ func openPostgresMigrationTestDB(t *testing.T) (*sql.DB, dbpkg.DatabaseConfig) {
 	port := availableTCPPort(t)
 	runtimeDir := filepath.Join(t.TempDir(), "runtime")
 	dataDir := filepath.Join(t.TempDir(), "data")
-	cacheDir := filepath.Join(t.TempDir(), "cache")
+	// Cache only the downloaded binary archive between cases/runs. Runtime and
+	// database directories remain isolated. Re-downloading for every migration
+	// fixture makes a complete release check vulnerable to Maven throttling.
+	cacheBase, err := os.UserCacheDir()
+	require.NoError(t, err)
+	cacheDir := filepath.Join(cacheBase, "clientshare", "test-postgres")
 
 	postgres := embeddedpostgres.NewDatabase(
 		embeddedpostgres.DefaultConfig().
@@ -186,6 +191,7 @@ func openPostgresMigrationTestDB(t *testing.T) (*sql.DB, dbpkg.DatabaseConfig) {
 			RuntimePath(runtimeDir).
 			DataPath(dataDir).
 			CachePath(cacheDir).
+			BinaryRepositoryURL("https://repo.maven.apache.org/maven2").
 			StartTimeout(45 * time.Second).
 			Logger(io.Discard),
 	)
