@@ -428,7 +428,7 @@ func (h *UsersHandler) CreateUserHandler(c fiber.Ctx) error {
 		if err := tx.Create(&user).Error; err != nil {
 			return err
 		}
-		if err := h.replaceClientAssignments(tx, tenantID, user.ID, normalizedClientIDs); err != nil {
+		if err := h.replaceClientAssignments(tx, tenantID, user.ID, createdBy, normalizedClientIDs); err != nil {
 			return err
 		}
 		if resolvedRole == "client" {
@@ -766,43 +766,25 @@ func (h *UsersHandler) UpdateUserHandler(c fiber.Ctx) error {
 	if req.ClientIDs != nil {
 		normalizedClientIDs = normalizeClientIDs(*req.ClientIDs)
 	}
-	if resolvedRole == "client" {
-		if req.ClientIDs != nil {
-			if len(normalizedClientIDs) == 0 {
-				return c.Status(400).JSON(fiber.Map{"error": "client_ids is required for client users"})
-			}
-		} else {
-			existingClientIDs, err := h.listClientIDsForUser(c.Context(), tenantID, user.ID)
-			if err != nil {
-				utils.Logger(c).Error("error loading existing client assignments", zap.Error(err))
-				return c.Status(500).JSON(fiber.Map{"error": err.Error()})
-			}
-			if len(existingClientIDs) == 0 {
-				return c.Status(400).JSON(fiber.Map{"error": "client_ids is required for client users"})
-			}
-		}
-	}
+	// Item-only and removed client members legitimately have zero memberships.
 	user.UpdatedAt = time.Now()
 	if err := h.db.WithContext(c.Context()).Transaction(func(tx *gorm.DB) error {
 		if err := services.CheckStaffQuota(tx, &user); err != nil {
 			return err
 		}
-		if err := tx.Save(&user).Error; err != nil {
-			return err
-		}
 		if req.ClientIDs != nil {
-			if err := h.replaceClientAssignments(tx, tenantID, user.ID, normalizedClientIDs); err != nil {
+			if err := h.replaceClientAssignments(tx, tenantID, user.ID, fiber.Locals[string](c, "user_id"), normalizedClientIDs); err != nil {
 				return err
 			}
 			user.ClientIDs = normalizedClientIDs
-			return nil
+		} else {
+			ids := []string{}
+			if err := tx.Model(&models.UserClient{}).Where("tenant_id = ? AND user_id = ?", tenantID, user.ID).Order("client_id ASC").Pluck("client_id", &ids).Error; err != nil {
+				return err
+			}
+			user.ClientIDs = ids
 		}
-		existingClientIDs, err := h.listClientIDsForUser(c.Context(), tenantID, user.ID)
-		if err != nil {
-			return err
-		}
-		user.ClientIDs = existingClientIDs
-		return nil
+		return tx.Save(&user).Error
 	}); err != nil {
 		utils.Logger(c).Error("error saving user", zap.Error(err))
 		if respondQuotaError(c, err) {
@@ -837,6 +819,13 @@ func (h *UsersHandler) DeleteUserHandler(c fiber.Ctx) error {
 		}
 		// Only recipient access is removed. Onward grants/links created by this
 		// identity survive; creator IDs are audit provenance, not dependencies.
+		var recipient models.User
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id = ? AND id = ?", tenantID, id).First(&recipient).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&models.AccessInvitation{}).Where("tenant_id = ? AND accepted_at IS NULL AND revoked_at IS NULL AND (recipient_user_id = ? OR LOWER(email) = LOWER(?))", tenantID, id, recipient.Email).Update("revoked_at", time.Now()).Error; err != nil {
+			return err
+		}
 		for _, model := range []any{&models.ItemGrant{}, &models.UserClient{}, &models.InviteToken{}} {
 			if err := tx.Where("tenant_id = ? AND user_id = ?", tenantID, id).Delete(model).Error; err != nil {
 				return err
@@ -992,7 +981,7 @@ func (h *UsersHandler) listClientIDsForUser(ctx context.Context, tenantID, userI
 	return result[userID], nil
 }
 
-func (h *UsersHandler) replaceClientAssignments(tx *gorm.DB, tenantID, userID string, clientIDs []string) error {
+func (h *UsersHandler) replaceClientAssignments(tx *gorm.DB, tenantID, userID, actorID string, clientIDs []string) error {
 	var existing []models.UserClient
 	if err := tx.Where("tenant_id = ? AND user_id = ?", tenantID, userID).Find(&existing).Error; err != nil {
 		return err
@@ -1005,10 +994,8 @@ func (h *UsersHandler) replaceClientAssignments(tx *gorm.DB, tenantID, userID st
 		if wanted[membership.ClientID] {
 			continue // never reset existing capabilities or invitation provenance
 		}
-		if err := tx.Model(&models.ItemGrant{}).Where("tenant_id = ? AND client_id = ? AND user_id = ? AND revoked_at IS NULL", tenantID, membership.ClientID, userID).Update("revoked_at", time.Now()).Error; err != nil {
-			return err
-		}
-		if err := tx.Where("tenant_id = ? AND client_id = ? AND user_id = ?", tenantID, membership.ClientID, userID).Delete(&models.UserClient{}).Error; err != nil {
+		req := services.AccessRequest{TenantID: tenantID, ClientID: membership.ClientID, Actor: services.AccessActor{UserID: actorID}}
+		if err := (&services.SharingService{DB: tx}).RemoveMember(tx.Statement.Context, req, userID, false); err != nil {
 			return err
 		}
 	}

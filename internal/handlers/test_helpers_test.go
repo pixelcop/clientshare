@@ -209,6 +209,7 @@ func setupSharedHandlersEnvWithOptions(t *testing.T, options handlersTestOptions
 		&models.User{},
 		&models.UserClient{},
 		&models.ItemGrant{},
+		&models.AccessInvitation{},
 		&models.AuditEvent{},
 		&models.Client{},
 		&models.File{},

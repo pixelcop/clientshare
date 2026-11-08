@@ -223,16 +223,26 @@ func (h *FileHandler) getDefaultFolder(c fiber.Ctx) (*models.File, *fiber.Error)
 	role := fiber.Locals[string](c, "role")
 	tenantID := tenantIDFromCtx(c)
 	folderID := c.Params("id")
-	if folderID == "" && !(role == "admin" || role == "manager") {
+	if folderID == "" && role == "link" {
+		var link models.SecureLink
+		if err := h.db.WithContext(c.Context()).Where("tenant_id = ? AND id = ?", tenantID, fiber.Locals[string](c, "link_id")).First(&link).Error; err != nil {
+			return nil, fiber.ErrNotFound
+		}
+		if link.FileID != nil {
+			folderID = *link.FileID
+		}
+	}
+	if folderID == "" && role != "admin" {
 		// for customer/link users, pick a default client root folder they can access
 		clientID := fiber.Locals[string](c, "client_id")
 		if clientID == "" && role != "link" {
 			userID := fiber.Locals[string](c, "user_id")
 			var client models.Client
-			if err := h.db.WithContext(c.Context()).
-				Table("clients").
-				Joins("JOIN user_clients uc ON uc.tenant_id = clients.tenant_id AND uc.client_id = clients.id").
-				Where("clients.tenant_id = ? AND uc.tenant_id = ? AND uc.user_id = ?", tenantID, tenantID, userID).
+			q, scopeErr := (&services.AccessService{DB: h.db}).ClientScope(c.Context(), tenantID, userID, services.AccessContext)
+			if scopeErr != nil {
+				return nil, fiber.ErrServiceUnavailable
+			}
+			if err := q.
 				Order("clients.created_at ASC").
 				First(&client).Error; err != nil {
 				// Item-only recipients land on an actual granted folder, never

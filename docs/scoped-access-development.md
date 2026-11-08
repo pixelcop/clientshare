@@ -102,6 +102,24 @@ Item-only context omits client/actor roster metadata. Read and read-all mutation
 are restricted to currently visible events, and assigned-only managers are not
 automatically subscribed to unrelated clients' uploads.
 
+Migration 053 adds target-aware access invitations and optimistic versions for
+current item grants. Grant creation is retry-safe but never silently changes or
+reactivates an existing row; updates/revocation require its current version.
+Invitations bind recipient email and tenant-local identity, are single-use, and
+cannot create client membership for an item target. Independent membership is
+never taken over or reduced by reinvitation. Account setup reuses existing
+identities without changing their role, credentials or unrelated memberships.
+New item-only identities start with no client assignments. Identity credentials
+are mail-only and are not returned to the inviter when mail is unavailable.
+
+Identity invitation acceptance claims the token, establishes credentials and
+redeems any bound access intent transactionally. Revoked/expired/deleted targets
+roll the transaction back. Old identity setup tokens cannot reset an account
+that already has a password/passkey. Recipient removal revokes their direct
+grants and pending access invitations within the client; onward shares survive.
+Revoking known bearer links is a separate explicit option. These lifecycle
+services are implemented behind the still-incomplete scoped-creation gate.
+
 `ResolveItems` batches up to 500 exact items in one client, with parent/grant SQL
 batches of 200. Parent traversal is limited to 128 nodes per chain, rejects
 cycles, non-folder parents, foreign/missing/deleted ancestors and never uses

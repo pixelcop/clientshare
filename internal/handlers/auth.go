@@ -305,8 +305,8 @@ func (h *AuthHandler) AcceptInviteHandler(c fiber.Ctx) error {
 	if !hmac.Equal([]byte(invite.TokenHash), []byte(inviteHash)) {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid or expired invite"})
 	}
-	now := time.Now()
-	if invite.UsedAt != nil || now.After(invite.ExpiresAt) {
+	now := time.Now().UTC()
+	if invite.UsedAt != nil || !invite.ExpiresAt.After(now) {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid or expired invite"})
 	}
 
@@ -316,21 +316,64 @@ func (h *AuthHandler) AcceptInviteHandler(c fiber.Ctx) error {
 	}
 
 	var authenticatedUser models.User
+	var acceptedAccess *models.AccessInvitation
+	invalidInvite := errors.New("invalid or expired invite")
 	err = h.db.WithContext(c.Context()).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("tenant_id = ? AND id = ?", tenantID, invite.UserID).First(&authenticatedUser).Error; err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid or expired invite"})
+		// Serialize all identity-setup tokens for this principal before locking
+		// a particular token, so concurrent resends cannot deadlock each other.
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id = ? AND id = ?", tenantID, invite.UserID).First(&authenticatedUser).Error; err != nil {
+			return err
 		}
-
+		var current models.InviteToken
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id = ? AND id = ? AND token_hash = ?", tenantID, invite.ID, inviteHash).First(&current).Error; err != nil {
+			return err
+		}
+		if current.UsedAt != nil || !current.ExpiresAt.After(time.Now()) {
+			return invalidInvite
+		}
+		if current.UserID != authenticatedUser.ID {
+			return invalidInvite
+		}
+		if (current.Email != "" && !strings.EqualFold(strings.TrimSpace(current.Email), strings.TrimSpace(authenticatedUser.Email))) || (current.AccessInvitationID != nil && current.Email == "") {
+			return invalidInvite
+		}
+		if strings.TrimSpace(authenticatedUser.PasswordHash) != "" {
+			return invalidInvite
+		}
+		var credentialCount int64
+		if err := tx.Model(&models.PasskeyCredential{}).Where("tenant_id = ? AND user_id = ?", tenantID, authenticatedUser.ID).Count(&credentialCount).Error; err != nil {
+			return err
+		}
+		if credentialCount != 0 {
+			return invalidInvite
+		}
+		claim := tx.Model(&models.InviteToken{}).Where("tenant_id = ? AND id = ? AND used_at IS NULL", tenantID, current.ID).Update("used_at", now)
+		if claim.Error != nil {
+			return claim.Error
+		}
+		if claim.RowsAffected != 1 {
+			return invalidInvite
+		}
+		if current.AccessInvitationID != nil {
+			var err error
+			acceptedAccess, err = (&services.SharingService{DB: tx, TokenSecret: h.inviteTokenSecret}).AcceptIdentityInvitation(c.Context(), tenantID, authenticatedUser.ID, current.ID)
+			if err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return invalidInvite
+				}
+				return err
+			}
+		}
 		if err := tx.Model(&models.User{}).
 			Where("tenant_id = ? AND id = ?", tenantID, authenticatedUser.ID).
 			Updates(map[string]interface{}{"password_hash": hash, "updated_at": now}).Error; err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update password"})
+			return err
 		}
 
 		if err := tx.Model(&models.InviteToken{}).
-			Where("tenant_id = ? AND id = ? AND used_at IS NULL", tenantID, invite.ID).
+			Where("tenant_id = ? AND user_id = ? AND used_at IS NULL", tenantID, authenticatedUser.ID).
 			Update("used_at", now).Error; err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update invite"})
+			return err
 		}
 
 		authenticatedUser.PasswordHash = hash
@@ -338,7 +381,10 @@ func (h *AuthHandler) AcceptInviteHandler(c fiber.Ctx) error {
 		return nil
 	})
 	if err != nil {
-		return err
+		if errors.Is(err, invalidInvite) || errors.Is(err, gorm.ErrRecordNotFound) {
+			return c.Status(400).JSON(fiber.Map{"error": "Invalid or expired invite"})
+		}
+		return c.Status(500).JSON(fiber.Map{"error": "Could not accept the invitation"})
 	}
 	if err := h.feedService.RecordInviteAccepted(c.Context(), tenantID, invite.ID, authenticatedUser.ID, now); err != nil {
 		utils.Logger(c).Warn("failed to record invite accepted feed event", zap.Error(err))
@@ -349,10 +395,27 @@ func (h *AuthHandler) AcceptInviteHandler(c fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to generate token"})
 	}
 	setAuthSessionCookie(c, token)
-
+	redirect := ""
+	if acceptedAccess != nil {
+		if acceptedAccess.FileID != nil {
+			var target models.File
+			if err := h.db.WithContext(c.Context()).Where("tenant_id = ? AND id = ?", tenantID, *acceptedAccess.FileID).First(&target).Error; err == nil {
+				redirect = "/folder/" + url.PathEscape(target.ID)
+				if target.Type == "file" {
+					redirect = "/files/" + url.PathEscape(target.ID)
+				}
+			}
+		} else {
+			var client models.Client
+			if err := h.db.WithContext(c.Context()).Where("tenant_id = ? AND id = ?", tenantID, acceptedAccess.ClientID).First(&client).Error; err == nil && client.RootFolderID != nil {
+				redirect = "/folder/" + url.PathEscape(*client.RootFolderID)
+			}
+		}
+	}
 	return c.JSON(fiber.Map{
 		"user":               authenticatedUser,
 		"passkey_enrollment": h.shouldOfferPasskeyEnrollment(c, authenticatedUser),
+		"redirect_to":        redirect,
 	})
 }
 
