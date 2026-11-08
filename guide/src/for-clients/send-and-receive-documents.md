@@ -29,7 +29,7 @@ If a file cannot be previewed, download it and open it in the appropriate applic
 
 ## Correct an upload
 
-Client users and link recipients do not have staff deletion controls. Contact the sender with the folder and filename if you uploaded the wrong document. If sending a replacement, use a clear name such as `Project brief - corrected.pdf` and tell the sender which version to use.
+Uploading does not grant deletion; named users need explicit delete permission, and link recipients never have it. Contact the sender if you uploaded the wrong document and cannot remove it. If sending a replacement, use a clear name such as `Project brief - corrected.pdf` and tell the sender which version to use.
 
 ## When you are finished
 

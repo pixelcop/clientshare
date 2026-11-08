@@ -2,12 +2,12 @@
 
 **Who:** Recipients of a document-sharing or upload-request link.
 
-You can use a secure link without creating an account. The sender chooses the client workspace, what you can do, and how long the link works.
+You can use a secure link without creating an account. The sender chooses the client, folder or file, what you can do, and how long the link works.
 
 ## Open the workspace
 
 1. Follow the complete link provided by the sender.
-2. Check the client name at the top of the page.
+2. Check the target name. A file link opens that file directly; a folder link stays within its subtree.
 3. Read the access label and expiry.
 4. Use the file list or upload area to complete the exchange.
 
@@ -19,11 +19,13 @@ You can use a secure link without creating an account. The sender chooses the cl
 
 The portal may offer account creation for continued access. That offer is separate from using the current link; you do not need to accept it to perform the actions allowed by the link.
 
+Upload-only links do not browse existing files or folders. File links never allow uploads. Item links do not offer whole-client registration; request a named invitation for account access.
+
 ![Recipient workspace showing the client name, Read & upload permission, expiry, upload area, and available folders.](/screenshots/recipient-workspace.png)
 
 ## Use the correct access session
 
-Opening a secure link establishes a link-access session for that client. If you also have a staff or client account, sign in again when you need your account's normal navigation. A separate browser profile can help keep staff and recipient sessions separate.
+Opening a secure link establishes a session bounded to that target. If already signed in, review the confirmation before switching to recipient view. The link session does not combine your account's permissions. Sign in again for normal account navigation; a separate browser profile can keep recipient and staff sessions separate.
 
 ## If the link fails
 

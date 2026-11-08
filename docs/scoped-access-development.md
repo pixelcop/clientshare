@@ -1,15 +1,14 @@
 # Scoped access implementation boundary
 
-Migration 050 adds the storage foundation for item sharing. This does **not**
-enable item sharing in the application. Until the protected-surface inventory in
-[the access contract](sharing-access-contract.md) is fully enforced, item-link
-creation is rejected and legacy bootstrap, session, inspection, registration and
-email paths reject item-targeted links instead of treating them as client-wide.
-There are no item-grant creation routes or item Share controls yet.
+Migrations 050–054 introduce additive item sharing, scoped bearer links and
+identity-bound invitations. The application registers scoped lifecycle routes
+alongside the exact-resource checks in [the access contract](sharing-access-contract.md).
+Item Share controls and Shared with me use server-provided capabilities; hiding
+controls is never the authorization boundary.
 
-File/folder routes now use exact-resource, operation-specific resolver checks,
-including uploads, downloads, deletion, breadcrumbs and ZIP entries. This is
-only part of the enforcement inventory, not permission to enable scoped links.
+File/folder operations, client/user management, current sessions, feed discovery
+and resource-bound email all enforce current scope. Item grants never create
+client membership, and scoped link registration cannot create whole-client access.
 
 ## Storage
 
@@ -27,7 +26,7 @@ only part of the enforcement inventory, not permission to enable scoped links.
   meaningful only for invitation-owned membership, not independent membership.
 - `users.manager_full_access` defaults to false. Migration 050 sets it true only
   for managers already present at upgrade, preserving access to future clients.
-  Endpoint integration of this policy is a separate release gate.
+  Client lists, management, files, feeds and notifications enforce this policy.
 - Migration 051 adds nullable `files.upload_session_id`. Private-collection
   recipients can address their explicit upload destination and newly created
   directory trees in the same authenticated session, not enumerate or reuse
@@ -117,8 +116,15 @@ redeems any bound access intent transactionally. Revoked/expired/deleted targets
 roll the transaction back. Old identity setup tokens cannot reset an account
 that already has a password/passkey. Recipient removal revokes their direct
 grants and pending access invitations within the client; onward shares survive.
-Revoking known bearer links is a separate explicit option. These lifecycle
-services are implemented behind the still-incomplete scoped-creation gate.
+Revoking known bearer links is a separate explicit option. Lifecycle routes
+revalidate the actor's current scope and capability ceiling on every request.
+
+Migration 054 binds queued access/setup invitations to current intent and
+identity witnesses. Dispatch cancels expired, revoked, accepted or stale intent,
+changed recipient addresses, deleted ancestry and obsolete setup credentials.
+Generic queue inspection never returns these identity or acceptance credentials.
+Resource-bound mail requires the database-backed queue; the in-memory fallback
+refuses it rather than dispatching content without current authorization.
 
 `ResolveItems` batches up to 500 exact items in one client, with parent/grant SQL
 batches of 200. Parent traversal is limited to 128 nodes per chain, rejects
@@ -140,3 +146,4 @@ Do not run an older binary once scoped links or assigned-only managers are in
 use: it may treat an item link as client-wide or bypass manager assignments.
 Prefer a forward corrective build. A schema rollback is not an access-safe
 application rollback and discards grant storage; preserve a database backup.
+See [the upgrade and recovery checklist](sharing-upgrade.md) before upgrading.

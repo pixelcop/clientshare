@@ -1,23 +1,23 @@
 # Create and send a secure link
 
-**Who:** Administrators.
+**Who:** Named users with sharing authority on the intended scope.
 
-A secure link lets a recipient exchange documents without first creating a user account. Decide which client workspace to share and what the recipient should be able to do before generating it.
+A secure link lets a recipient exchange documents without first creating a user account. Decide whether to share a whole client, folder or file before generating it. For item scope, use [the item's Share dialog](./share-items.md).
 
 ## Create the link
 
 1. Open **Clients**.
-2. Open the client workspace, select **Manage client access**, then **Manage links**. The directory's **Links** action remains a shortcut.
-3. Select **New link**.
-4. Choose **Send documents** or **Collect uploads** as a starting preset, then review **Permissions**: **View & download**, **Upload only**, or **View, download & upload**. Selecting Collect always resets to Upload only.
-5. Select or enter **Expires in (days)**, from 1 to 120. Review the absolute timestamp and timezone before confirming.
+2. Open the client workspace and select **Manage client access**. Its **Links** section is explicitly whole-client scope.
+3. Choose permissions and expiry in **Create a link**. The staff directory's **Links → New link** shortcut also remains available.
+4. Choose **View & download**, **Upload only**, or **View, download & upload**, limited to your own rights. The directory shortcut also offers **Send documents** and **Collect uploads** presets; Collect resets to Upload only.
+5. Review the absolute expiry timestamp and timezone. In the directory shortcut, **Expires in (days)** accepts 1 to 120.
 6. Confirm the client name, entire-workspace scope, audience, permissions and expiry in the access summary.
 7. Select **Create link**. Creating it does not email it.
 
-The result stays open with the created address, **Copy link**, **Open recipient view**, and a separate email action. You can also generate a link while creating a new client; its result opens on the client's links page.
+The result stays open with the created address, **Copy link**, **Open recipient view**, and a separate email action. Authorized staff can also generate a link while creating a new client; its result opens on the client's links page.
 
 ::: important Review the entire workspace
-The link applies to the client, including its folders. It is not restricted to the file or folder you last opened. Check that the workspace is appropriate for the recipient.
+A link created in **Manage client access** applies to the entire client. Opening a folder first does not narrow it. Use the item's **Share** control when only that file or folder should be shared.
 :::
 
 ## Copy and share
@@ -26,7 +26,7 @@ Select **Copy link** in the result, or **Copy** on a usable link's row. When the
 
 Include the purpose of the exchange, the documents you need, and the deadline. For example: “Please upload your project brief and supporting images using this link by Friday.”
 
-If copying fails, select and copy the address in the result. Reopen the same result with **Details & email**. **Open recipient view** uses the existing confirmation before replacing a signed-in portal session; opening it does not silently use staff privileges.
+If copying fails, select and copy the address in the result. Reopen it with **Use link** in the access dialog, or **Details & email** in the directory shortcut. **Open recipient view** asks before replacing a signed-in portal session; it does not silently use staff privileges.
 
 ## Email the existing link
 

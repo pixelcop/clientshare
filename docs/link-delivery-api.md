@@ -1,15 +1,22 @@
 # Secure link creation and email retries
 
-These endpoints currently retain the administrator-only management gate. A
+Management requires a current named-user sharing decision on the exact scope,
+with a capability ceiling for creating or disclosing a bearer credential. A
 bearer-link visitor cannot create, email, inspect management history or revoke
-links. Each operation is tenant-scoped. These are client-wide links, not item
-sharing endpoints.
+links. Each operation is tenant-scoped. Client endpoints remain whole-client;
+item endpoints below never imply membership or parent access.
 
 ## Create
 
 `POST /api/clients/:id/links` accepts the existing `access_type`, `expiry_days`
 and optional legacy `email` fields. `read`, legacy `view`, `write` and
 `readwrite` retain their stored meanings. Upload does not imply deletion.
+
+`POST /api/files/:id/links` creates an exact file/folder link and requires an
+idempotency key. File links accept read/view only; folders also accept write and
+readwrite. Creation, listing, email, bootstrap, current sessions and downloads
+validate the target's current ancestry, tenant and client. Parent/sibling content
+is never granted. The low-level legacy persistence helper rejects item targets.
 
 New callers should send a random, printable 8–128-character `Idempotency-Key`
 and may include an exact RFC 3339 `expires_at` within the supported maximum
@@ -64,10 +71,13 @@ reconstructed.
 
 Current sessions, bootstrap, inspection and registration reject revoked links.
 Revocation cancels unsent associated queue records; dispatch also rechecks link
-and client validity. Email already handed to SMTP cannot be recalled. Other
+and exact target validity. The in-memory queue refuses resource-bound email
+because it cannot revalidate access at dispatch. Email already handed to SMTP cannot be recalled. Other
 links and account memberships remain unchanged.
 
 Back up the database before upgrading. Do not run an older binary that ignores
 `revoked_at`: retained revoked rows could become usable again. Use a forward
 corrective build, or explicitly neutralize incompatible access paths before
 any downgrade. Do not remove retry records while clients may still retry them.
+See [sharing upgrade and recovery](sharing-upgrade.md) for scoped-link and
+assigned-only-manager downgrade risks.

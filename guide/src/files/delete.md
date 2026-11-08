@@ -1,6 +1,6 @@
 # Delete files and folders
 
-**Who:** Administrators and managers.
+**Who:** Named accounts with explicit delete authority on the item.
 
 Use deletion to remove documents that should no longer be stored in the client's workspace. To stop sharing while retaining the documents, [revoke the relevant link](../sharing/manage-links.md) or change a user's assignment instead.
 
@@ -22,4 +22,4 @@ Deleting a document does not remove copies that recipients have already download
 
 ## If Delete is missing
 
-Client users and secure-link recipients do not get the staff deletion controls, even when they can upload. Ask the portal staff to remove an incorrect upload and tell them the client, folder, and filename.
+Upload alone does not grant deletion. Named users need explicit delete permission; bearer links never have it. If the action is unavailable, ask an authorized person to remove the incorrect upload and identify the folder and filename. Deleted targets and descendants become inaccessible immediately, even while storage cleanup is pending.

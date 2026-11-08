@@ -1,6 +1,6 @@
 # Request documents from a client
 
-**Who:** Administrators. Managers can ask an administrator to create a link or invite a client user for ongoing exchanges.
+**Who:** Named users with upload and sharing authority for the intended client or folder.
 
 Use an **Upload only** secure link when you want a recipient to send documents without downloading material from the workspace.
 
@@ -14,8 +14,8 @@ For example, ask for a project brief, an asset inventory, and supporting images.
 
 ## Send an upload link
 
-1. Open **Manage client access → Manage links** and choose **New link**.
-2. Choose **Collect uploads** and review **Upload only** permissions.
+1. Open **Manage client access → Links** for the entire client, or a folder's **Share → Links** for just that subtree. The staff **Links → New link** shortcut also remains available.
+2. Select **Upload only**, or use the shortcut's **Collect uploads** preset and review the permissions.
 3. Set the expiry to cover the requested submission period.
 4. Create the link, then use **Copy link** or **Email this existing link**. A queued email is not proof of delivery.
 

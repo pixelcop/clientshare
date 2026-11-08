@@ -7,11 +7,14 @@
 | **User** | A person with an account that can sign in to the portal. |
 | **Admin** | A staff role with portal settings and secure-link management access. |
 | **Manager** | A staff role that works with clients, users, and documents. |
-| **Customer / client user** | An account restricted to its assigned client workspaces. |
+| **Customer / client user** | A named account with assigned clients, direct item shares, or both. |
 | **Client assignment** | The connection allowing a client user to access a particular workspace. |
 | **Root folder** | The top-level folder in a client's workspace. |
 | **Breadcrumb** | The navigation path showing the current folder and its parents. |
-| **Secure link** | A client-wide access URL with specified permissions and an expiry. |
+| **Secure link** | A bearer URL for a client, folder or file with specified permissions and expiry. |
+| **Direct share** | Identity-bound access to one file or a folder and its descendants, without client membership. |
+| **Inherited access** | Permissions from client membership or an ancestor-folder share; direct grants cannot reduce them. |
+| **Shared with me** | Discovery of currently accessible direct named shares. |
 | **Read** | Link permission to view and download documents. |
 | **Write** | Link permission to upload documents; downloads are disabled. |
 | **Read & Write** | Link permission to view, download, and upload documents. |

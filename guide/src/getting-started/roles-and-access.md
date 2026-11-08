@@ -1,42 +1,56 @@
 # Roles and access explained
 
-**Who:** Anyone choosing how to share access or trying to understand the actions they see.
+**Who:** Anyone choosing how to share access or interpreting the actions they see.
 
-## The four kinds of access
+## Accounts and scope
 
-- **Admin:** manages the portal, its clients and users, secure links, and settings.
-- **Manager:** works with clients, users, and documents. Secure-link management and portal settings are administrator actions.
-- **Client:** signs in and works with the client workspaces assigned to that account. The user-creation form calls this role **Customer**; the directory may display **client**.
-- **Secure-link recipient:** uses the permissions granted by a link, without needing a permanent account.
+- **Admin:** has tenant-wide authority over clients, users, sharing and settings.
+- **Manager:** works with assigned clients. An administrator can explicitly grant
+  full access to all current and future clients. Managers present before the
+  scoped-sharing upgrade retain full access; new managers default to assigned-only.
+- **Client / Customer:** a named account with client memberships, direct item
+  shares, or both. An item invitation does not assign the whole client.
+- **Link recipient:** uses only that link's scope and permissions, without an
+  account. A bearer link never grants sharing or staff-management authority.
 
-## Permissions at a glance
+## Permissions and inheritance
 
-This table describes the standard app interface.
+View/download, upload, deletion and resharing are separate permissions. Upload
+does not mean editing or deletion. You can invite others or create links only
+where you have sharing authority, and cannot give more access than you hold.
 
-| Task | Admin | Manager | Client user | Link recipient |
-| --- | --- | --- | --- | --- |
-| Create a client | Yes | Yes | No | No |
-| Edit/delete a client from the directory | Yes | Not shown | No | No |
-| Manage users | Yes | Yes | No | No |
-| Read/download client files | All clients | All clients | Assigned clients | Read or Read & Write |
-| Upload files | All clients | All clients | Assigned clients | Write or Read & Write |
-| Delete files/folders | Yes | Yes | No | No |
-| Manage secure links | Yes | No | No | No |
-| Change portal settings | Yes | No | No | No |
-| Manage own passkeys | Yes | Yes | Yes | Requires an account |
+Client membership applies throughout that client. Folder shares include current
+and future descendants. Direct shares add permissions: a narrower file share
+cannot hide it from an existing client member or reduce inherited access.
+Restricted folders that break inheritance are not supported.
 
-Managers have broad portal access. Use the client/Customer role for an external recipient who should only see selected client workspaces.
+| Task | Who can do it |
+| --- | --- |
+| Read/download | Named accounts with read access; read-capable link recipients within scope |
+| Upload/create folders | Accounts or links with upload access to the destination |
+| Delete | Named accounts with explicit delete authority; never bearer links |
+| Share files/folders | Named accounts with resharing authority on that item |
+| Invite to the whole client | Accounts with client-level sharing authority |
+| Remove client members | Authorized staff, or a client inviter managing their own invitees |
+| Change tenant identities, staff roles or full manager access | Administrators |
+| Change portal settings | Administrators |
 
 ## Account or link?
 
-**Invite a user** when someone needs regular access using their own sign-in. Assign a client user only to the relevant clients. See [Invite and manage users](../clients/manage-users.md).
+Use **Invite by email** in an item's **Share** dialog for identity-bound access
+to one file or folder. Accepted direct shares appear in **Shared with me**.
+Use **Manage client access** to invite someone to the entire workspace. Client
+users cannot take ownership of independently authorized members or manage staff.
 
-**Send a secure link** for a time-limited exchange. Choose Read to deliver documents, Write to collect uploads, or Read & Write for both. See [Permissions and expiry](../sharing/permissions-and-expiry.md).
-
-::: important Link scope
-Secure links grant access to a client workspace, not an individual file. Write links disable downloads, but should not be treated as a guarantee that filenames or folder structure are hidden.
-:::
+A secure link is a separate bearer credential. Choose a client, folder or file
+scope deliberately. File links are view/download only; folder and client links
+can also collect uploads. **Upload only** is private collection with no browsing
+of existing content. See [Share a file or folder](../sharing/share-items.md).
 
 ## Change or remove access
 
-Edit a user's client assignments to change their workspace access. Revoke a secure link to stop that link being used. These are separate access paths: revoking a link does not remove a user's assigned access, and deleting a user does not automatically replace a review of outstanding links.
+Removing a direct grant can leave inherited access. Removing client membership
+also removes that person's direct grants and pending invitations within that
+client. Their onward shares remain until independently revoked or expired.
+Known bearer links still work unless explicitly revoked; the removal dialog
+offers an authorized revoke-all-links option. Copies already downloaded remain.

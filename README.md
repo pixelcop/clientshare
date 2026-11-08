@@ -17,6 +17,7 @@ ClientShare prioritizes self-hosted deployments, with sensible defaults for smal
 
 - Secure client portal for sending files and collecting uploads
 - Expiring secure links for controlled external access
+- Identity-bound file/folder shares, inherited permissions, and Shared with me
 - User and role-based access control
 - Client, folder, and file organization
 - Email-driven workflows for invites and password resets
@@ -120,6 +121,11 @@ for example `--config` and `--apply`.
 
 When upgrading, update binary launchers (such as systemd `ExecStart`) to append
 `serve`. The Docker entrypoint and `make run` already do this.
+
+Before enabling scoped sharing, follow the [sharing upgrade and recovery
+checklist](./docs/sharing-upgrade.md). Back up the database, configuration and
+storage together. Do not downgrade to code that treats item links as client-wide
+or ignores assigned-only manager scope.
 
 ## Development
 

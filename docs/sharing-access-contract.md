@@ -90,6 +90,9 @@ do not trust `path`. No long-lived authorization cache.
 - Link creation and email delivery are separate, retry-safe operations. Return
   unavailable/failed/queued truthfully; queued is not delivered. Do not log
   bearer tokens or return recipient/provenance data outside management views.
+- HTTP access logs redact bearer-token paths and omit query/fragment values,
+  including redirects. SQL traces keep placeholders instead of bound values.
+  Reverse-proxy and third-party logs need equivalent operator-side protection.
 
 ## Protected-surface inventory
 

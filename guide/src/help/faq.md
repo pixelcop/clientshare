@@ -14,11 +14,11 @@ A client is a document workspace. A user is a person who signs in. One client ca
 
 ## Can I share only one folder with a secure link?
 
-Secure links are client-wide. Opening a folder before creating a link does not restrict the link to that folder. Arrange material into an appropriate client workspace before sharing.
+Yes. Select the folder's **Share** action and create a link there. It includes that folder and descendants, not parents or siblings. **Manage client access** still creates client-wide links.
 
 ## Can upload-only recipients download or delete files?
 
-Write links disable downloads and do not provide staff deletion controls. They should not be treated as a guarantee that all filenames or folder structure are hidden.
+No. Upload-only is private collection: it hides existing names, folders and files, and does not grant download, deletion or sharing authority.
 
 ## Can I extend a link or change its permissions?
 

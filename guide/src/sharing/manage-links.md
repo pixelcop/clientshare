@@ -1,10 +1,12 @@
 # Review and revoke secure links
 
-**Who:** Administrators.
+**Who:** Named users with sharing authority for the link's scope.
 
 ## Find a client's links
 
-Open the client workspace, then **Manage client access → Manage links**. The client's directory dropdown also retains **Links**.
+Open the client workspace, then **Manage client access → Links**. For an individual file or folder, use its **Share → Links** section. The staff directory dropdown also retains the whole-client **Links** table described below.
+
+In an access dialog, use **Use link** to reopen a usable result or **Revoke** to end it. Toggle **Show expired, accepted and revoked history** for retained records. A person whose sharing authority is lower than a link's permissions cannot copy or email that broader credential.
 
 The default **Usable links** view excludes expired and revoked links. Select **Expired & revoked history** to inspect retained records. History cannot reconstruct links that were permanently deleted by an older release.
 

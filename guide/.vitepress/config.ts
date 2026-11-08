@@ -56,6 +56,7 @@ export default defineConfig({
       {
         text: 'Sharing and collecting documents', collapsed: false,
         items: [
+          { text: 'Share a file or folder', link: '/sharing/share-items' },
           { text: 'Create a secure link', link: '/sharing/create-link' },
           { text: 'Permissions and expiry', link: '/sharing/permissions-and-expiry' },
           { text: 'Request documents', link: '/sharing/request-documents' },
