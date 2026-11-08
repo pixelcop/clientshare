@@ -95,6 +95,13 @@ hand. Schema rollback does not reactivate canceled jobs. SMTP delivery cannot
 be undone after a message has left the server; dispatch authorization is a
 current check, not a promise of recalling previously sent mail.
 
+Feed responses also resolve current exact-item access before pagination and
+read/unread summaries. Grouped uploads include only authorized active files;
+stored full paths, stale batch counts and inaccessible events are not returned.
+Item-only context omits client/actor roster metadata. Read and read-all mutations
+are restricted to currently visible events, and assigned-only managers are not
+automatically subscribed to unrelated clients' uploads.
+
 `ResolveItems` batches up to 500 exact items in one client, with parent/grant SQL
 batches of 200. Parent traversal is limited to 128 nodes per chain, rejects
 cycles, non-folder parents, foreign/missing/deleted ancestors and never uses

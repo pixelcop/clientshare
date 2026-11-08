@@ -171,33 +171,23 @@ func (s *FeedService) ListFeedByState(ctx context.Context, tenantID, userID, rol
 	page = normalizePage(page)
 	pageSize = normalizePageSize(pageSize)
 	state = normalizeFeedState(state)
-	summary, err := s.feedSummary(ctx, tenantID, userID, role)
+	visible, err := s.visibleFeedEvents(ctx, tenantID, userID, "")
 	if err != nil {
 		return nil, err
 	}
-
-	q := s.feedQuery(ctx, tenantID, userID, role)
-	if q == nil {
-		return &models.FeedListResponse{
-			Pagination: models.PaginationResponse{
-				TotalItems:   0,
-				TotalPages:   0,
-				Page:         page,
-				PageSize:     pageSize,
-				HasMore:      false,
-				ItemsPerPage: 0,
-			},
-			Items:   []models.FeedEvent{},
-			Summary: summary,
-		}, nil
+	summary := models.FeedSummary{}
+	matching := []models.FeedEvent{}
+	for _, event := range visible {
+		if event.IsRead {
+			summary.ReadCount++
+		} else {
+			summary.UnreadCount++
+		}
+		if state == models.FeedStateAll || (state == models.FeedStateRead && event.IsRead) || (state == models.FeedStateUnread && !event.IsRead) {
+			matching = append(matching, event)
+		}
 	}
-	q = applyFeedState(q, state)
-
-	var totalItems int64
-	if err := q.Count(&totalItems).Error; err != nil {
-		return nil, err
-	}
-
+	totalItems := int64(len(matching))
 	totalPages := 0
 	if totalItems > 0 {
 		totalPages = int(math.Ceil(float64(totalItems) / float64(pageSize)))
@@ -206,14 +196,8 @@ func (s *FeedService) ListFeedByState(ctx context.Context, tenantID, userID, rol
 		}
 	}
 
-	items := []models.FeedEvent{}
-	offset := (page - 1) * pageSize
-	if err := q.Order("fe.created_at DESC, fe.id DESC").Limit(pageSize).Offset(offset).Scan(&items).Error; err != nil {
-		return nil, err
-	}
-	if err := s.hydrateGroupedUploadFiles(ctx, tenantID, items); err != nil {
-		return nil, err
-	}
+	offset := min((page-1)*pageSize, len(matching))
+	items := matching[offset:min(offset+pageSize, len(matching))]
 
 	return &models.FeedListResponse{
 		Pagination: models.PaginationResponse{
@@ -247,8 +231,11 @@ func (s *FeedService) MarkRead(ctx context.Context, tenantID, userID, role, even
 		return gorm.ErrRecordNotFound
 	}
 
-	q := s.feedQuery(ctx, tenantID, userID, role)
-	if q == nil {
+	visible, err := s.visibleFeedEvents(ctx, tenantID, userID, eventID)
+	if err != nil {
+		return err
+	}
+	if len(visible) != 1 {
 		return gorm.ErrRecordNotFound
 	}
 
@@ -280,14 +267,22 @@ func (s *FeedService) MarkAllRead(ctx context.Context, tenantID, userID, role st
 		return gorm.ErrRecordNotFound
 	}
 
-	readAt := time.Now().UTC()
-	return s.DB.WithContext(ctx).Model(&models.FeedEvent{}).
-		Where("tenant_id = ? AND user_id = ? AND is_read = ?", tenantID, userID, false).
-		Where("actor_user_id IS NULL OR actor_user_id <> user_id").
-		Updates(map[string]any{
-			"is_read": true,
-			"read_at": readAt,
-		}).Error
+	visible, err := s.visibleFeedEvents(ctx, tenantID, userID, "")
+	if err != nil {
+		return err
+	}
+	ids := []string{}
+	for _, event := range visible {
+		if !event.IsRead {
+			ids = append(ids, event.ID)
+		}
+	}
+	for start := 0; start < len(ids); start += maxAccessItems {
+		if err := s.DB.WithContext(ctx).Model(&models.FeedEvent{}).Where("tenant_id = ? AND user_id = ? AND id IN ?", tenantID, userID, ids[start:min(start+maxAccessItems, len(ids))]).Updates(map[string]any{"is_read": true, "read_at": time.Now().UTC()}).Error; err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *FeedService) createEventWithDB(ctx context.Context, db *gorm.DB, event *models.FeedEvent) error {
@@ -405,42 +400,11 @@ func (s *FeedService) usersForFileUpload(ctx context.Context, tenantID, clientID
 	if clientID == "" {
 		return nil, errors.New("client id is required")
 	}
-
-	ids := make([]string, 0)
-	seen := make(map[string]struct{})
-	appendUnique := func(values []string) {
-		for _, id := range values {
-			id = strings.TrimSpace(id)
-			if id == "" {
-				continue
-			}
-			if _, ok := seen[id]; ok {
-				continue
-			}
-			seen[id] = struct{}{}
-			ids = append(ids, id)
-		}
-	}
-
-	adminIDs, err := s.userIDsByRole(ctx, tenantID, "admin")
-	if err != nil {
-		return nil, err
-	}
-	appendUnique(adminIDs)
-
-	managerIDs, err := s.userIDsByRole(ctx, tenantID, "manager")
-	if err != nil {
-		return nil, err
-	}
-	appendUnique(managerIDs)
-
-	clientIDs, err := s.assignedUserIDs(ctx, tenantID, clientID)
-	if err != nil {
-		return nil, err
-	}
-	appendUnique(clientIDs)
-
-	return ids, nil
+	ids := []string{}
+	err := s.DB.WithContext(ctx).Model(&models.User{}).Where(`users.tenant_id = ? AND (
+		users.role = 'admin' OR (users.role = 'manager' AND users.manager_full_access) OR
+		(users.role IN ? AND EXISTS (SELECT 1 FROM user_clients uc WHERE uc.tenant_id = users.tenant_id AND uc.user_id = users.id AND uc.client_id = ? AND (NOT uc.capabilities_set OR uc.can_read))))`, tenantID, []string{"manager", "client", "customer"}, clientID).Order("users.id ASC").Pluck("users.id", &ids).Error
+	return ids, err
 }
 
 func (s *FeedService) usersForInviteAccepted(ctx context.Context, tenantID string) ([]string, error) {
