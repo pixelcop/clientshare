@@ -4,8 +4,10 @@ import (
 	"net/http"
 	"testing"
 
+	"encoding/json"
 	"github.com/pixelcop/clientshare/internal/models"
 	"github.com/pixelcop/clientshare/internal/services/email"
+	"github.com/stretchr/testify/require"
 )
 
 func TestEmailQueueHandlers_RouteCoverage(t *testing.T) {
@@ -69,4 +71,48 @@ func TestEmailQueueHandlers_RouteCoverage(t *testing.T) {
 	if processResp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", processResp.StatusCode)
 	}
+}
+
+func TestEmailQueueManagerScopeAndTenantBoundProcessing(t *testing.T) {
+	env := setupOtherHandlersEnv(t)
+	assigned, err := env.queue.Queue(email.Email{TenantID: env.client.TenantID, To: "assigned@example.test", Subject: "Assigned", Body: "visible", ClientID: &env.client.ID, FileIDsCSV: "uploaded-file"}, nil)
+	require.NoError(t, err)
+	private, err := env.queue.Queue(email.Email{TenantID: env.client.TenantID, To: "private@example.test", Subject: "Private", Body: "private-client-content", ClientID: &env.otherClient.ID, FileIDsCSV: "private-file"}, nil)
+	require.NoError(t, err)
+	credential, err := env.queue.Queue(email.Email{TenantID: env.client.TenantID, To: "identity@example.test", Subject: "Set password", Body: "private-identity-token", ClientID: &env.client.ID}, nil)
+	require.NoError(t, err)
+	foreign, err := env.queue.Queue(email.Email{TenantID: "foreign", To: "foreign@example.test", Subject: "Foreign", Body: "foreign-content"}, nil)
+	require.NoError(t, err)
+	resp, err := env.app.Test(jsonAuthRequest(http.MethodGet, "/api/email/queue", env.managerToken, nil))
+	require.NoError(t, err)
+	require.Equal(t, 200, resp.StatusCode)
+	var result struct {
+		Count   int                  `json:"count"`
+		Pending []models.QueuedEmail `json:"pending"`
+	}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
+	resp.Body.Close()
+	require.Equal(t, 1, result.Count)
+	require.Equal(t, assigned.ID, result.Pending[0].ID)
+	for _, item := range []*models.QueuedEmail{private, credential, foreign} {
+		resp, err := env.app.Test(jsonAuthRequest(http.MethodPost, "/api/email/queue/"+item.ID+"/send", env.managerToken, nil))
+		require.NoError(t, err)
+		require.Equal(t, 404, resp.StatusCode)
+		resp.Body.Close()
+	}
+	resp, err = env.app.Test(jsonAuthRequest(http.MethodPost, "/api/email/queue/process", env.managerToken, nil))
+	require.NoError(t, err)
+	require.Equal(t, 200, resp.StatusCode)
+	resp.Body.Close()
+	require.NotNil(t, assigned.SentAt)
+	require.Nil(t, private.SentAt)
+	require.Nil(t, credential.SentAt)
+	require.Nil(t, foreign.SentAt)
+	resp, err = env.app.Test(jsonAuthRequest(http.MethodPost, "/api/email/queue/process", env.adminToken, nil))
+	require.NoError(t, err)
+	require.Equal(t, 200, resp.StatusCode)
+	resp.Body.Close()
+	require.NotNil(t, private.SentAt)
+	require.NotNil(t, credential.SentAt)
+	require.Nil(t, foreign.SentAt)
 }

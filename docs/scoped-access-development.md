@@ -71,6 +71,13 @@ Legacy client-wide bearer registration, where supported, creates bounded
 read/upload membership without named sharing authority. It never accepts an
 item-targeted link as client membership.
 
+Queue management also uses current assigned/full client scope. Identity setup
+and password-reset jobs are administrator-only, even when their first client
+matches a manager's assignment. Force processing is tenant-bound and visits only
+jobs the caller can manage; it never invokes a global cross-tenant processor.
+Its result means the jobs were processed/revalidated, not that every message was
+delivered to an inbox.
+
 `ResolveItems` batches up to 500 exact items in one client, with parent/grant SQL
 batches of 200. Parent traversal is limited to 128 nodes per chain, rejects
 cycles, non-folder parents, foreign/missing/deleted ancestors and never uses

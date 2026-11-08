@@ -5,9 +5,12 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/pixelcop/clientshare/internal/middleware"
+	"github.com/pixelcop/clientshare/internal/models"
+	"github.com/pixelcop/clientshare/internal/services"
 	emailpkg "github.com/pixelcop/clientshare/internal/services/email"
 	"github.com/pixelcop/clientshare/pkg/utils"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 )
 
 type updateRequest struct {
@@ -18,15 +21,56 @@ type updateRequest struct {
 
 type emailQueueHandler struct {
 	EmailQueue emailpkg.EmailQueue
+	db         *gorm.DB
+}
+
+func (h *emailQueueHandler) visiblePending(c fiber.Ctx, clientID string) ([]*models.QueuedEmail, error) {
+	tenantID := tenantIDFromCtx(c)
+	var actor models.User
+	if err := h.db.WithContext(c.Context()).Where("tenant_id = ? AND id = ?", tenantID, fiber.Locals[string](c, "user_id")).First(&actor).Error; err != nil {
+		return nil, err
+	}
+	if actor.Role != "admin" && actor.Role != "manager" {
+		return nil, fiber.ErrForbidden
+	}
+	allowed := map[string]bool{}
+	if actor.Role != "admin" {
+		q, err := (&services.AccessService{DB: h.db}).ClientScope(c.Context(), tenantID, actor.ID, services.AccessManageQueue)
+		if err != nil {
+			return nil, err
+		}
+		var ids []string
+		if err := q.Pluck("clients.id", &ids).Error; err != nil {
+			return nil, err
+		}
+		for _, id := range ids {
+			allowed[id] = true
+		}
+	}
+	visible := []*models.QueuedEmail{}
+	for _, item := range h.EmailQueue.Pending(tenantID, clientID) {
+		if item.TenantID != tenantID || item.CanceledAt != nil || item.SentAt != nil {
+			continue
+		}
+		// Account invitation/reset messages contain identity credentials, not
+		// client sharing authority. Only admins can inspect those queue jobs.
+		if actor.Role != "admin" && (item.ClientID == nil || !allowed[*item.ClientID] || (item.FileIDsCSV == "" && item.SecureLinkID == nil)) {
+			continue
+		}
+		visible = append(visible, item)
+	}
+	return visible, nil
 }
 
 func (h *emailQueueHandler) list(c fiber.Ctx) error {
 	if h.EmailQueue == nil {
 		return c.Status(503).JSON(fiber.Map{"error": "email queue not available"})
 	}
-	tenantID := tenantIDFromCtx(c)
 	clientID := strings.TrimSpace(fiber.Query[string](c, "client_id"))
-	pending := h.EmailQueue.Pending(tenantID, clientID)
+	pending, err := h.visiblePending(c, clientID)
+	if err != nil {
+		return c.Status(503).JSON(fiber.Map{"error": "Access validation is temporarily unavailable"})
+	}
 	return c.JSON(fiber.Map{"count": len(pending), "pending": pending})
 }
 
@@ -68,6 +112,20 @@ func (h *emailQueueHandler) sendNow(c fiber.Ctx) error {
 	if !isLikelyULID(id) {
 		return c.Status(400).JSON(fiber.Map{"error": "invalid email id"})
 	}
+	items, err := h.visiblePending(c, "")
+	if err != nil {
+		return c.Status(503).JSON(fiber.Map{"error": "Access validation is temporarily unavailable"})
+	}
+	found := false
+	for _, item := range items {
+		if item.ID == id {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return c.Status(404).JSON(fiber.Map{"error": "queued email not found"})
+	}
 
 	if err := h.EmailQueue.SendNow(tenantIDFromCtx(c), id); err != nil {
 		utils.Logger(c).Error("failed to send queued email", zap.String("id", id), zap.Error(err))
@@ -77,21 +135,27 @@ func (h *emailQueueHandler) sendNow(c fiber.Ctx) error {
 		}
 		return c.Status(status).JSON(fiber.Map{"error": err.Error()})
 	}
-	return c.JSON(fiber.Map{"status": "sent"})
+	return c.JSON(fiber.Map{"status": "processed"})
 }
 
 func (h *emailQueueHandler) forceProcess(c fiber.Ctx) error {
 	if h.EmailQueue == nil {
 		return c.Status(503).JSON(fiber.Map{"error": "email queue not available"})
 	}
-	if err := h.EmailQueue.ProcessAll(); err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+	items, err := h.visiblePending(c, "")
+	if err != nil {
+		return c.Status(503).JSON(fiber.Map{"error": "Access validation is temporarily unavailable"})
+	}
+	for _, item := range items {
+		if err := h.EmailQueue.SendNow(tenantIDFromCtx(c), item.ID); err != nil {
+			return c.Status(500).JSON(fiber.Map{"error": "Could not process queued email"})
+		}
 	}
 	return c.JSON(fiber.Map{"status": "processed"})
 }
 
-func RegisterEmailQueueRoutes(router fiber.Router, emailQueue emailpkg.EmailQueue) {
-	handler := &emailQueueHandler{EmailQueue: emailQueue}
+func RegisterEmailQueueRoutes(router fiber.Router, db *gorm.DB, emailQueue emailpkg.EmailQueue) {
+	handler := &emailQueueHandler{EmailQueue: emailQueue, db: db}
 	q := router.Group("/email/queue", middleware.RoleRequired("manager"))
 	q.Get("", handler.list)
 	q.Post("/:id/send", handler.sendNow)

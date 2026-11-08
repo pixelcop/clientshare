@@ -119,7 +119,7 @@ func NewWebApp(cfg *Config, db *gorm.DB, logger *zap.Logger, emailQueue emailpkg
 	handlers.RegisterSettingsRoutes(insecure, api, tenantSettingsService, publicDir, cfg.Server.BaseURL, cfg.Tenancy.Mode, cfg.Server.AccountDashboardURL, cfg.DocsURL())
 
 	// Email queue controls (manager/admin)
-	handlers.RegisterEmailQueueRoutes(api, emailQueue)
+	handlers.RegisterEmailQueueRoutes(api, db, emailQueue)
 
 	// Internal control-plane API (disabled by default)
 	if cfg.InternalAPI.Enabled {
