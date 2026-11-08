@@ -511,7 +511,7 @@ func (h *AuthHandler) RegisterHandler(c fiber.Ctx) error {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Invalid or expired link"})
 	}
 	_, valid := links.ValidateSecureToken(req.Token, h.signingKey)
-	if !valid || links.IsExpired(link.ExpiresAt) {
+	if !valid || link.RevokedAt != nil || links.IsExpired(link.ExpiresAt) {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Invalid or expired link"})
 	}
 	// Client accounts have read/write access. Restricted links must not be
@@ -544,8 +544,12 @@ func (h *AuthHandler) RegisterHandler(c fiber.Ctx) error {
 		if err := tx.Create(&rel).Error; err != nil {
 			return err
 		}
-		if err := tx.Where("tenant_id = ? AND id = ?", tenantID, link.ID).Delete(&models.SecureLink{}).Error; err != nil {
+		result := tx.Model(&models.SecureLink{}).Where("tenant_id = ? AND id = ? AND revoked_at IS NULL AND expires_at > ?", tenantID, link.ID, time.Now()).Update("revoked_at", time.Now())
+		if err := result.Error; err != nil {
 			return err
+		}
+		if result.RowsAffected != 1 {
+			return errors.New("link no longer available")
 		}
 		return nil
 	}); err != nil {

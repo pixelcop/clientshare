@@ -19,6 +19,9 @@ type SecureLink struct {
 	CreatedBy    string     `gorm:"not null;index" json:"created_by"`
 	CreatedAt    time.Time  `json:"created_at"`
 	LastAccessed *time.Time `json:"last_accessed"`
+	RevokedAt    *time.Time `gorm:"index" json:"revoked_at,omitempty"`
+	CreationKey  *string    `gorm:"uniqueIndex:idx_secure_links_creation_key" json:"-"`
+	CreationHash string     `gorm:"not null;default:''" json:"-"`
 }
 
 func (s *SecureLink) BeforeCreate(_ *gorm.DB) error {

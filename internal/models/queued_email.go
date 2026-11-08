@@ -22,6 +22,11 @@ type QueuedEmail struct {
 	ScheduledFor   time.Time  `gorm:"not null" json:"scheduled_for"`
 	SentAt         *time.Time `json:"sent_at"`
 	CreatedAt      time.Time  `json:"created_at"`
+	// Nullable keys leave legacy/batched messages unchanged. Request keys are
+	// scoped hashes, never bearer credentials.
+	DeduplicationKey *string    `gorm:"uniqueIndex:idx_email_queue_deduplication_key" json:"-"`
+	SecureLinkID     *string    `gorm:"index" json:"-"`
+	CanceledAt       *time.Time `json:"canceled_at,omitempty"`
 }
 
 func (e *QueuedEmail) BeforeCreate(_ *gorm.DB) error {

@@ -78,7 +78,7 @@ func (h *FileHandler) enforceLinkFileAccess(c fiber.Ctx) error {
 		return c.Next()
 	}
 	var link models.SecureLink
-	if err := h.db.WithContext(c.Context()).Where("tenant_id = ? AND id = ? AND client_id = ?", tenantIDFromCtx(c), fiber.Locals[string](c, "link_id"), fiber.Locals[string](c, "client_id")).First(&link).Error; err != nil || !link.ExpiresAt.After(time.Now()) {
+	if err := h.db.WithContext(c.Context()).Where("tenant_id = ? AND id = ? AND client_id = ?", tenantIDFromCtx(c), fiber.Locals[string](c, "link_id"), fiber.Locals[string](c, "client_id")).First(&link).Error; err != nil || link.RevokedAt != nil || !link.ExpiresAt.After(time.Now()) {
 		return c.Status(403).JSON(fiber.Map{"error": "This secure link is no longer available"})
 	}
 	c.Locals("access_type", link.AccessType)
@@ -234,7 +234,7 @@ func notificationRecipients(ctx context.Context, db *gorm.DB, tenantID, role str
 			return nil, err
 		}
 		var secureLinks []models.SecureLink
-		if err := db.WithContext(ctx).Where("tenant_id = ? AND client_id = ? AND email <> ''", tenantID, clientID).Find(&secureLinks).Error; err != nil {
+		if err := db.WithContext(ctx).Where("tenant_id = ? AND client_id = ? AND email <> '' AND revoked_at IS NULL AND expires_at > ?", tenantID, clientID, time.Now()).Find(&secureLinks).Error; err != nil {
 			return nil, err
 		}
 		for _, link := range secureLinks {

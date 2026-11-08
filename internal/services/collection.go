@@ -29,7 +29,7 @@ func CollectionStatus(ctx context.Context, db *gorm.DB, tenantID, clientID strin
 		EXISTS (SELECT 1 FROM file_activity a WHERE a.tenant_id = secure_links.tenant_id
 		AND a.client_id = secure_links.client_id AND a.secure_link_id = secure_links.id
 		AND a.action = 'upload' AND `+dateFilter+`) AS received`, since).
-		Where("tenant_id = ? AND client_id = ?", tenantID, clientID).
+		Where("tenant_id = ? AND client_id = ? AND revoked_at IS NULL", tenantID, clientID).
 		Order("created_at DESC").Scan(&items).Error
 	return items, err
 }

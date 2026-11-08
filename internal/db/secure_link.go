@@ -18,6 +18,9 @@ var SecureLink = struct {
 	CreatedBy    field.String
 	CreatedAt    field.Time
 	LastAccessed field.Time
+	RevokedAt    field.Time
+	CreationKey  field.String
+	CreationHash field.String
 }{
 	ID:           field.String{}.WithColumn("id"),
 	TenantID:     field.String{}.WithColumn("tenant_id"),
@@ -30,4 +33,7 @@ var SecureLink = struct {
 	CreatedBy:    field.String{}.WithColumn("created_by"),
 	CreatedAt:    field.Time{}.WithColumn("created_at"),
 	LastAccessed: field.Time{}.WithColumn("last_accessed"),
+	RevokedAt:    field.Time{}.WithColumn("revoked_at"),
+	CreationKey:  field.String{}.WithColumn("creation_key"),
+	CreationHash: field.String{}.WithColumn("creation_hash"),
 }

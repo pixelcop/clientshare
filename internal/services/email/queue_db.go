@@ -8,6 +8,7 @@ import (
 	"github.com/pixelcop/clientshare/internal/models"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type DBEmailQueue struct {
@@ -32,9 +33,9 @@ func (q *DBEmailQueue) Queue(email Email, sendAt *time.Time) (*models.QueuedEmai
 	}
 
 	// look for existing queued email for the same client
-	if email.ClientID != nil && email.HideRecipients {
+	if email.DeduplicationKey == "" && email.ClientID != nil && email.HideRecipients {
 		var existing models.QueuedEmail
-		query := q.DB.Where("client_id = ? AND sent_at IS NULL AND hide_recipients = ? AND reply_to = ?", *email.ClientID, true, email.ReplyTo)
+		query := q.DB.Where("client_id = ? AND sent_at IS NULL AND canceled_at IS NULL AND hide_recipients = ? AND reply_to = ?", *email.ClientID, true, email.ReplyTo)
 		if strings.TrimSpace(email.TenantID) != "" {
 			query = query.Where("tenant_id = ?", strings.TrimSpace(email.TenantID))
 		}
@@ -83,12 +84,35 @@ func (q *DBEmailQueue) Queue(email Email, sendAt *time.Time) (*models.QueuedEmai
 		ClientID:       email.ClientID,
 		EventType:      "generic",
 		ScheduledFor:   *sendAt,
+		SecureLinkID:   email.SecureLinkID,
 	}
-	if item.ScheduledFor.Before(time.Now().Add(time.Second)) {
-		go q.send(item) // send immediately
-		item.SentAt = models.Now()
+	if email.DeduplicationKey != "" {
+		key := email.DeduplicationKey
+		item.DeduplicationKey = &key
+		result := q.DB.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "deduplication_key"}}, DoNothing: true}).Create(&item)
+		if result.Error != nil {
+			return nil, result.Error
+		}
+		if result.RowsAffected == 0 {
+			item = models.QueuedEmail{}
+			if err := q.DB.Where("tenant_id = ? AND deduplication_key = ?", email.TenantID, key).First(&item).Error; err != nil {
+				return nil, err
+			}
+			if !strings.EqualFold(item.Recipient, email.To) || !sameLink(item.SecureLinkID, email.SecureLinkID) {
+				return nil, ErrIdempotencyConflict
+			}
+		}
+		// Durable acceptance only. The regular worker sends this record; retries
+		// cannot launch another immediate goroutine or claim SMTP delivery.
+		return &item, nil
 	}
-	return &item, q.DB.Create(&item).Error
+	if err := q.DB.Create(&item).Error; err != nil {
+		return nil, err
+	}
+	if item.ScheduledFor.Before(time.Now().Add(time.Second)) && q.Sender != nil {
+		go q.send(item)
+	}
+	return &item, nil
 }
 
 func (q *DBEmailQueue) Pending(tenantID, clientID string) []*models.QueuedEmail {
@@ -96,7 +120,7 @@ func (q *DBEmailQueue) Pending(tenantID, clientID string) []*models.QueuedEmail 
 		return []*models.QueuedEmail{}
 	}
 	var items []*models.QueuedEmail
-	w := q.DB.Where("sent_at IS NULL")
+	w := q.DB.Where("sent_at IS NULL AND canceled_at IS NULL")
 	if strings.TrimSpace(tenantID) != "" {
 		w = w.Where("tenant_id = ?", strings.TrimSpace(tenantID))
 	}
@@ -119,7 +143,7 @@ func (q *DBEmailQueue) Update(tenantID, id, recipient, subject, body string) err
 		"subject":   subject,
 		"body":      body,
 	}
-	query := q.DB.Model(&models.QueuedEmail{}).Where("id = ? AND sent_at IS NULL", id)
+	query := q.DB.Model(&models.QueuedEmail{}).Where("id = ? AND sent_at IS NULL AND canceled_at IS NULL", id)
 	if strings.TrimSpace(tenantID) != "" {
 		query = query.Where("tenant_id = ?", strings.TrimSpace(tenantID))
 	}
@@ -134,6 +158,22 @@ func (q *DBEmailQueue) Update(tenantID, id, recipient, subject, body string) err
 }
 
 func (q *DBEmailQueue) send(item models.QueuedEmail) error {
+	if item.CanceledAt != nil {
+		return nil
+	}
+	if item.SecureLinkID != nil {
+		var count int64
+		if err := q.DB.Model(&models.SecureLink{}).Where(`tenant_id = ? AND id = ? AND revoked_at IS NULL AND expires_at > ?
+			AND EXISTS (SELECT 1 FROM clients WHERE clients.tenant_id = secure_links.tenant_id AND clients.id = secure_links.client_id)`, item.TenantID, *item.SecureLinkID, q.now()).Count(&count).Error; err != nil {
+			return err
+		}
+		if count == 0 {
+			return q.DB.Model(&models.QueuedEmail{}).Where("id = ? AND sent_at IS NULL", item.ID).Update("canceled_at", q.now()).Error
+		}
+	}
+	if q.Sender == nil {
+		return errors.New("email sender not configured")
+	}
 	if err := q.Sender.Send(ToEmail(&item)); err != nil {
 		// TODO: store err w/ item so we dont' retry? or retry max 3 times or something?
 		return err
@@ -152,7 +192,7 @@ func (q *DBEmailQueue) SendNow(tenantID, id string) error {
 		return errors.New("email sender not configured")
 	}
 	var item models.QueuedEmail
-	query := q.DB.Where("id = ? AND sent_at IS NULL", id)
+	query := q.DB.Where("id = ? AND sent_at IS NULL AND canceled_at IS NULL", id)
 	if strings.TrimSpace(tenantID) != "" {
 		query = query.Where("tenant_id = ?", strings.TrimSpace(tenantID))
 	}
@@ -174,7 +214,7 @@ func (q *DBEmailQueue) ProcessTenant(tenantID string) error {
 	}
 	now := q.now()
 	var items []models.QueuedEmail
-	if err := q.DB.Where("tenant_id = ? AND sent_at IS NULL", strings.TrimSpace(tenantID)).Order("scheduled_for ASC").Find(&items).Error; err != nil {
+	if err := q.DB.Where("tenant_id = ? AND sent_at IS NULL AND canceled_at IS NULL", strings.TrimSpace(tenantID)).Order("scheduled_for ASC").Find(&items).Error; err != nil {
 		return err
 	}
 	return q.process(items, now)
@@ -189,7 +229,7 @@ func (q *DBEmailQueue) ProcessBatch() error {
 	}
 	now := q.now()
 	var items []models.QueuedEmail
-	if err := q.DB.Where("sent_at IS NULL AND scheduled_for <= ?", now).Order("scheduled_for ASC").Find(&items).Error; err != nil {
+	if err := q.DB.Where("sent_at IS NULL AND canceled_at IS NULL AND scheduled_for <= ?", now).Order("scheduled_for ASC").Find(&items).Error; err != nil {
 		return err
 	}
 	return q.process(items, now)
@@ -204,25 +244,24 @@ func (q *DBEmailQueue) ProcessAll() error {
 	}
 	now := q.now()
 	var items []models.QueuedEmail
-	if err := q.DB.Where("sent_at IS NULL").Order("scheduled_for ASC").Find(&items).Error; err != nil {
+	if err := q.DB.Where("sent_at IS NULL AND canceled_at IS NULL").Order("scheduled_for ASC").Find(&items).Error; err != nil {
 		return err
 	}
 	return q.process(items, now)
 }
 
-func (q *DBEmailQueue) process(items []models.QueuedEmail, sentAt time.Time) error {
+func (q *DBEmailQueue) process(items []models.QueuedEmail, _ time.Time) error {
 	for _, item := range items {
-		if err := q.Sender.Send(ToEmail(&item)); err != nil {
+		if err := q.send(item); err != nil {
 			zap.L().Warn("failed to send queued email", zap.String("id", item.ID), zap.Error(err))
 			continue
 		}
-		if err := q.DB.Model(&models.QueuedEmail{}).
-			Where("id = ? AND sent_at IS NULL", item.ID).
-			Update("sent_at", sentAt).Error; err != nil {
-			return err
-		}
 	}
 	return nil
+}
+
+func sameLink(a, b *string) bool {
+	return (a == nil && b == nil) || (a != nil && b != nil && *a == *b)
 }
 
 func (q *DBEmailQueue) now() time.Time {

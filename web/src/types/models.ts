@@ -230,6 +230,7 @@ export interface QueuedEmail {
   scheduled_for: string;
   sent_at?: string;
   created_at: string;
+  canceled_at?: string;
 }
 
 //////////
@@ -262,6 +263,7 @@ export interface SecureLink {
   created_by: string;
   created_at: string;
   last_accessed?: string;
+  revoked_at?: string;
 }
 
 //////////

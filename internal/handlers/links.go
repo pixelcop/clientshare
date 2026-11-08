@@ -1,6 +1,9 @@
 package handlers
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"html"
@@ -54,6 +57,7 @@ func RegisterLinkRoutes(router fiber.Router, db *gorm.DB, signingKey string, sto
 	router.Get("/api/clients/:id/links", middleware.RoleRequired("admin"), handler.ListSecureLinks)
 	router.Get("/api/clients/:id/collection", middleware.RoleRequired("admin"), handler.CollectionStatus)
 	router.Delete("/api/links/:id", middleware.RoleRequired("admin"), handler.DeleteSecureLink)
+	router.Post("/api/links/:id/email", middleware.RoleRequired("admin"), handler.EmailSecureLink)
 	router.Get("/api/link/:token", handler.ViewLink)
 }
 
@@ -106,7 +110,7 @@ func (h *LinkHandler) BootstrapLinkSession(c fiber.Ctx) error {
 		return c.Status(404).JSON(fiber.Map{"error": "link not found"})
 	}
 	_, valid := links.ValidateSecureToken(token, h.signingKey)
-	if !valid || links.IsExpired(link.ExpiresAt) {
+	if !valid || link.RevokedAt != nil || links.IsExpired(link.ExpiresAt) {
 		utils.Logger(c).Warn("link expired or invalid")
 		return c.Status(403).JSON(fiber.Map{"error": "link expired or invalid"})
 	}
@@ -158,14 +162,19 @@ func (h *LinkHandler) CreateSecureLink(c fiber.Ctx) error {
 		return c.Status(404).JSON(fiber.Map{"error": "client not found"})
 	}
 	type req struct {
-		AccessType string `json:"access_type"`
-		ExpiryDays int    `json:"expiry_days"`
-		Email      string `json:"email"`
+		AccessType string     `json:"access_type"`
+		ExpiryDays int        `json:"expiry_days"`
+		Email      string     `json:"email"`
+		ExpiresAt  *time.Time `json:"expires_at"`
 	}
 	var body req
 	if err := c.Bind().Body(&body); err != nil {
 		utils.Logger(c).Warn("invalid request body", zap.Error(err))
 		return c.Status(400).JSON(fiber.Map{"error": "invalid request"})
+	}
+	creationKey, err := requestIdempotencyKey(c, "create-link:"+id, false)
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": err.Error()})
 	}
 	switch body.AccessType {
 	case "read", "view", "write", "readwrite":
@@ -195,24 +204,42 @@ func (h *LinkHandler) CreateSecureLink(c fiber.Ctx) error {
 	}
 	createdBy := fiber.Locals[string](c, "user_id")
 	expiry := time.Now().Add(time.Duration(body.ExpiryDays) * 24 * time.Hour)
-	link := models.SecureLink{
-		TenantID:   tenantID,
-		ClientID:   id,
-		Token:      token,
-		Email:      emailAddress,
-		ExpiresAt:  expiry,
-		AccessType: body.AccessType,
-		CreatedBy:  createdBy,
-		CreatedAt:  time.Now(),
+	if body.ExpiresAt != nil {
+		expiry = body.ExpiresAt.UTC()
+		if !expiry.After(time.Now()) || expiry.After(time.Now().Add(time.Duration(services.MaxSecureLinkDefaultExpiryDays)*24*time.Hour)) {
+			return c.Status(400).JSON(fiber.Map{"error": "expires_at must be in the future and within the maximum link lifetime"})
+		}
 	}
-	if err := h.db.WithContext(c.Context()).Create(&link).Error; err != nil {
+	fingerprint, _ := json.Marshal(struct {
+		AccessType string
+		ExpiryDays int
+		Email      string
+		ExpiresAt  *time.Time
+	}{body.AccessType, body.ExpiryDays, emailAddress, body.ExpiresAt})
+	link := models.SecureLink{
+		TenantID:     tenantID,
+		ClientID:     id,
+		Token:        token,
+		Email:        emailAddress,
+		ExpiresAt:    expiry,
+		AccessType:   body.AccessType,
+		CreatedBy:    createdBy,
+		CreatedAt:    time.Now(),
+		CreationKey:  creationKey,
+		CreationHash: requestDigest(string(fingerprint)),
+	}
+	if err := services.PersistSecureLink(c.Context(), h.db, &link); err != nil {
+		if errors.Is(err, services.ErrLinkRequestConflict) {
+			return c.Status(409).JSON(fiber.Map{"error": err.Error()})
+		}
 		utils.Logger(c).Error("error creating secure link", zap.Error(err))
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
 	link.LinkURL = buildSecureLinkURL(tenantBaseURLFromCtx(c, h.baseURL), link.Token)
 	queued := false
 	if emailAddress != "" {
-		queued = h.sendSecureLinkEmail(c, link, siteTitle)
+		status, _ := h.queueSecureLinkEmail(c, link, emailAddress, requestDigest("create-link-email", link.ID), siteTitle)
+		queued = status == "queued" || status == "sent"
 	}
 	return c.Status(201).JSON(struct {
 		models.SecureLink
@@ -220,27 +247,102 @@ func (h *LinkHandler) CreateSecureLink(c fiber.Ctx) error {
 	}{link, queued})
 }
 
-func (h *LinkHandler) sendSecureLinkEmail(c fiber.Ctx, link models.SecureLink, siteTitle string) bool {
+func (h *LinkHandler) queueSecureLinkEmail(c fiber.Ctx, link models.SecureLink, recipient, key, siteTitle string) (string, error) {
+	if link.RevokedAt != nil || !link.ExpiresAt.After(time.Now()) {
+		return "unavailable", errors.New("This link is expired or revoked")
+	}
 	if h.emailQueue == nil {
-		utils.Logger(c).Warn("email queue unavailable for secure link")
-		return false
+		return "unavailable", errors.New("Email is unavailable. Copy the existing link instead, or retry after email is configured.")
 	}
 	client, err := h.clientService.GetClient(c.Context(), link.TenantID, link.ClientID)
 	if err != nil {
 		utils.Logger(c).Error("error fetching client for secure link email", zap.Error(err))
-		return false
+		return "failed", errors.New("Could not load the link destination")
 	}
 	linkURL := buildSecureLinkURL(tenantBaseURLFromCtx(c, h.baseURL), link.Token)
 	if linkURL == "" {
 		utils.Logger(c).Warn("secure link base url missing")
-		return false
+		return "unavailable", errors.New("Secure link URL is unavailable")
 	}
 	subject, body, htmlBody := emailpkg.RenderSecureLinkEmail(client.Name, link.AccessType, linkURL, siteTitle, link.ExpiresAt)
-	if _, err := h.emailQueue.Queue(emailpkg.Email{TenantID: link.TenantID, To: link.Email, Subject: subject, Body: body, HTMLBody: htmlBody}, models.Now()); err != nil {
+	item, err := h.emailQueue.Queue(emailpkg.Email{TenantID: link.TenantID, To: recipient, Subject: subject, Body: body, HTMLBody: htmlBody, DeduplicationKey: key, SecureLinkID: &link.ID}, models.Now())
+	if err != nil {
 		utils.Logger(c).Error("failed to queue secure link email", zap.Error(err))
-		return false
+		return "failed", err
 	}
-	return true
+	if item == nil {
+		return "failed", errors.New("Email queue did not accept the message")
+	}
+	if item.CanceledAt != nil {
+		return "unavailable", errors.New("This email request was canceled")
+	}
+	if item.SentAt != nil {
+		return "sent", nil
+	}
+	return "queued", nil
+}
+
+// EmailSecureLink sends the already-created link. A retry key identifies one
+// enqueue operation; changing recipient with that key is a conflict, not a new send.
+func (h *LinkHandler) EmailSecureLink(c fiber.Ctx) error {
+	key, err := requestIdempotencyKey(c, "email-link:"+c.Params("id"), true)
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": err.Error()})
+	}
+	var body struct {
+		Email string `json:"email"`
+	}
+	if err := c.Bind().Body(&body); err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid email request"})
+	}
+	address, err := mail.ParseAddress(strings.TrimSpace(body.Email))
+	if err != nil || strings.ContainsAny(body.Email, "\r\n") {
+		return c.Status(400).JSON(fiber.Map{"error": "A valid recipient email is required"})
+	}
+	var link models.SecureLink
+	if err := h.db.WithContext(c.Context()).Where("tenant_id = ? AND id = ?", tenantIDFromCtx(c), c.Params("id")).First(&link).Error; err != nil {
+		return c.Status(404).JSON(fiber.Map{"error": "Link not found"})
+	}
+	if link.RevokedAt != nil || !link.ExpiresAt.After(time.Now()) {
+		return c.Status(410).JSON(fiber.Map{"status": "unavailable", "error": "This link is expired or revoked"})
+	}
+	siteTitle, _ := h.tenantEmailSettings(c, link.TenantID)
+	status, queueErr := h.queueSecureLinkEmail(c, link, address.Address, *key, siteTitle)
+	if queueErr != nil {
+		code := 503
+		message := "Could not queue the email. Retry sends this same link, not a new one."
+		if errors.Is(queueErr, emailpkg.ErrIdempotencyConflict) {
+			code, message = 409, queueErr.Error()
+		}
+		if status == "unavailable" {
+			message = queueErr.Error()
+		}
+		return c.Status(code).JSON(fiber.Map{"status": status, "error": message})
+	}
+	return c.Status(202).JSON(fiber.Map{"status": status, "email_queued": true, "link_id": link.ID})
+}
+
+func requestDigest(parts ...string) string {
+	value, _ := json.Marshal(parts)
+	sum := sha256.Sum256(value)
+	return hex.EncodeToString(sum[:])
+}
+
+func requestIdempotencyKey(c fiber.Ctx, operation string, required bool) (*string, error) {
+	key := c.Get("Idempotency-Key")
+	if key == "" && !required {
+		return nil, nil
+	}
+	if len(key) < 8 || len(key) > 128 {
+		return nil, errors.New("Idempotency-Key must contain 8 to 128 printable characters")
+	}
+	for _, r := range key {
+		if r < 33 || r > 126 {
+			return nil, errors.New("Invalid Idempotency-Key")
+		}
+	}
+	digest := requestDigest(tenantIDFromCtx(c), fiber.Locals[string](c, "user_id"), operation, key)
+	return &digest, nil
 }
 
 func (h *LinkHandler) CollectionStatus(c fiber.Ctx) error {
@@ -275,14 +377,21 @@ func (h *LinkHandler) ListSecureLinks(c fiber.Ctx) error {
 		utils.Logger(c).Warn("invalid client id")
 		return c.Status(400).JSON(fiber.Map{"error": "invalid client id"})
 	}
+	if _, err := h.clientService.GetClient(c.Context(), tenantID, id); err != nil {
+		return c.Status(404).JSON(fiber.Map{"error": "client not found"})
+	}
 	var linksList []models.SecureLink
-	if err := h.db.WithContext(c.Context()).Where("tenant_id = ? AND client_id = ?", tenantID, id).Find(&linksList).Error; err != nil {
+	if err := h.db.WithContext(c.Context()).Where("tenant_id = ? AND client_id = ?", tenantID, id).Order("created_at DESC, id DESC").Find(&linksList).Error; err != nil {
 		utils.Logger(c).Error("error listing secure links", zap.Error(err))
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
 	baseURL := tenantBaseURLFromCtx(c, h.baseURL)
 	for index := range linksList {
-		linksList[index].LinkURL = buildSecureLinkURL(baseURL, linksList[index].Token)
+		if linksList[index].RevokedAt == nil && linksList[index].ExpiresAt.After(time.Now()) {
+			linksList[index].LinkURL = buildSecureLinkURL(baseURL, linksList[index].Token)
+		} else {
+			linksList[index].Token = ""
+		}
 	}
 	return c.JSON(linksList)
 }
@@ -295,7 +404,10 @@ func (h *LinkHandler) DeleteSecureLink(c fiber.Ctx) error {
 		utils.Logger(c).Warn("invalid link id")
 		return c.Status(400).JSON(fiber.Map{"error": "invalid link id"})
 	}
-	if err := h.db.WithContext(c.Context()).Where("tenant_id = ? AND id = ?", tenantID, id).Delete(&models.SecureLink{}).Error; err != nil {
+	if err := services.RevokeSecureLink(c.Context(), h.db, tenantID, id); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return c.Status(404).JSON(fiber.Map{"error": "Link not found"})
+		}
 		utils.Logger(c).Error("error deleting secure link", zap.Error(err))
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -312,7 +424,7 @@ func (h *LinkHandler) ViewLink(c fiber.Ctx) error {
 		return c.Status(404).JSON(fiber.Map{"error": "link not found"})
 	}
 	_, valid := links.ValidateSecureToken(token, h.signingKey)
-	if !valid || links.IsExpired(link.ExpiresAt) {
+	if !valid || link.RevokedAt != nil || links.IsExpired(link.ExpiresAt) {
 		utils.Logger(c).Warn("link expired or invalid")
 		return c.Status(403).JSON(fiber.Map{"error": "link expired or invalid"})
 	}

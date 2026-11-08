@@ -28,12 +28,23 @@ func (q *InMemoryEmailQueue) Queue(email Email, sendAt *time.Time) (*models.Queu
 	}
 	q.mu.Lock()
 	defer q.mu.Unlock()
+	if email.DeduplicationKey != "" {
+		for i := range q.Emails {
+			item := &q.Emails[i]
+			if item.DeduplicationKey != nil && *item.DeduplicationKey == email.DeduplicationKey {
+				if item.TenantID != strings.TrimSpace(email.TenantID) || !strings.EqualFold(item.Recipient, email.To) || !sameLink(item.SecureLinkID, email.SecureLinkID) {
+					return nil, ErrIdempotencyConflict
+				}
+				return item, nil
+			}
+		}
+	}
 
 	// look for existing queued email for the same client
-	if email.ClientID != nil && email.HideRecipients {
+	if email.DeduplicationKey == "" && email.ClientID != nil && email.HideRecipients {
 		for i := range q.Emails {
 			existing := &q.Emails[i]
-			if existing.Sent() {
+			if existing.Sent() || existing.CanceledAt != nil {
 				continue
 			}
 			if existing.ClientID != nil && *existing.ClientID == *email.ClientID &&
@@ -66,8 +77,13 @@ func (q *InMemoryEmailQueue) Queue(email Email, sendAt *time.Time) (*models.Queu
 		ClientID:       email.ClientID,
 		ScheduledFor:   *sendAt,
 		CreatedAt:      time.Now(),
+		SecureLinkID:   email.SecureLinkID,
 	})
-	if sendAt.Before(time.Now().Add(time.Second)) {
+	if email.DeduplicationKey != "" {
+		key := email.DeduplicationKey
+		q.Emails[len(q.Emails)-1].DeduplicationKey = &key
+	}
+	if email.DeduplicationKey == "" && sendAt.Before(time.Now().Add(time.Second)) {
 		go q.SendNow(q.Emails[len(q.Emails)-1].TenantID, q.Emails[len(q.Emails)-1].ID)
 	}
 	return &q.Emails[len(q.Emails)-1], nil
@@ -81,7 +97,7 @@ func (q *InMemoryEmailQueue) Pending(tenantID, clientID string) []*models.Queued
 		if tenantID != "" && strings.TrimSpace(email.TenantID) != strings.TrimSpace(tenantID) {
 			continue
 		}
-		if !email.Sent() && (clientID == "" || (email.ClientID != nil && *email.ClientID == clientID)) {
+		if !email.Sent() && email.CanceledAt == nil && (clientID == "" || (email.ClientID != nil && *email.ClientID == clientID)) {
 			items = append(items, &email)
 		}
 	}
@@ -93,7 +109,7 @@ func (q *InMemoryEmailQueue) Update(tenantID, id, recipient, subject, body strin
 	defer q.mu.Unlock()
 	for i := range q.Emails {
 		item := &q.Emails[i]
-		if item.ID == id && !item.Sent() && (tenantID == "" || strings.TrimSpace(item.TenantID) == strings.TrimSpace(tenantID)) {
+		if item.ID == id && !item.Sent() && item.CanceledAt == nil && (tenantID == "" || strings.TrimSpace(item.TenantID) == strings.TrimSpace(tenantID)) {
 			item.Recipient = recipient
 			item.Subject = subject
 			item.Body = body
@@ -113,6 +129,7 @@ func ToEmail(e *models.QueuedEmail) Email {
 		Body:           e.Body,
 		HTMLBody:       e.HTMLBody,
 		ClientID:       e.ClientID,
+		SecureLinkID:   e.SecureLinkID,
 	}
 }
 
@@ -125,7 +142,7 @@ func (q *InMemoryEmailQueue) SendNow(tenantID, id string) error {
 	now := time.Now()
 	for i := range q.Emails {
 		item := &q.Emails[i]
-		if item.ID == id && !item.Sent() && (tenantID == "" || strings.TrimSpace(item.TenantID) == strings.TrimSpace(tenantID)) {
+		if item.ID == id && !item.Sent() && item.CanceledAt == nil && (tenantID == "" || strings.TrimSpace(item.TenantID) == strings.TrimSpace(tenantID)) {
 			if err := q.Sender.Send(ToEmail(item)); err != nil {
 				return err
 			}
@@ -145,7 +162,7 @@ func (q *InMemoryEmailQueue) ProcessTenant(tenantID string) error {
 	now := time.Now()
 	for i := range q.Emails {
 		e := &q.Emails[i]
-		if strings.TrimSpace(e.TenantID) != strings.TrimSpace(tenantID) || e.Sent() {
+		if strings.TrimSpace(e.TenantID) != strings.TrimSpace(tenantID) || e.Sent() || e.CanceledAt != nil {
 			continue
 		}
 		if err := q.Sender.Send(ToEmail(e)); err == nil {
@@ -161,7 +178,7 @@ func (q *InMemoryEmailQueue) ProcessBatch() error {
 	now := time.Now()
 	for i := range q.Emails {
 		e := &q.Emails[i]
-		if !e.Sent() && !now.Before(e.ScheduledFor) {
+		if !e.Sent() && e.CanceledAt == nil && !now.Before(e.ScheduledFor) {
 			if err := q.Sender.Send(ToEmail(e)); err == nil {
 				e.SentAt = &now
 			}
@@ -175,7 +192,7 @@ func (q *InMemoryEmailQueue) ProcessAll() error {
 	defer q.mu.Unlock()
 	for i := range q.Emails {
 		e := &q.Emails[i]
-		if !e.Sent() {
+		if !e.Sent() && e.CanceledAt == nil {
 			if err := q.Sender.Send(ToEmail(e)); err == nil {
 				e.SentAt = models.Now()
 			}
