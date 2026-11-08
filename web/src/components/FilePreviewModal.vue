@@ -87,7 +87,8 @@ async function onClickCopyLink(e: PointerEvent) {
     @unmaximize="() => (maximized = false)"
     @show="onShowDialog"
     modal
-    header="File Preview"
+    :header="`Preview ${file.filename}`"
+    :aria-label="`Preview ${file.filename}`"
     :maximizable
     closable
     dismissableMask
@@ -96,7 +97,7 @@ async function onClickCopyLink(e: PointerEvent) {
   >
     <template #header>
       <div class="flex flex-row items-stretch w-full @container">
-        <div class="p-dialog-title w-full">File Preview</div>
+        <div class="p-dialog-title w-full truncate" :title="file.filename">{{ file.filename }}</div>
         <div class="mr-2 flex gap-2">
           <!-- class="ml-auto [&_.p-button-label]:hidden @sm:[&_.p-button-label]:inline" -->
           <Button
@@ -107,7 +108,13 @@ async function onClickCopyLink(e: PointerEvent) {
             @click="$emit('download')"
           />
 
-          <Button class="copy" title="Copy link" severity="secondary" @click="onClickCopyLink">
+          <Button
+            class="copy"
+            title="Copy file address — access is still required"
+            aria-label="Copy file address — access is still required"
+            severity="secondary"
+            @click="onClickCopyLink"
+          >
             <Transition name="copy-icon-swap" mode="out-in">
               <i :key="copyIcon" :class="copyIcon" class="copy-icon" />
             </Transition>

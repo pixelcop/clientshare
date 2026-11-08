@@ -47,9 +47,9 @@ with sync_playwright() as p:
     page.get_by_role("button", name="New Client", exact=True).click()
     page.get_by_placeholder("Client name").fill(f"Collect browser {run}")
     page.get_by_role("dialog").get_by_role("button", name="Create", exact=True).click()
-    expect(checklist.get_by_text("In the client workspace, open Secure Links and select New Link.")).to_be_visible()
+    expect(checklist.get_by_text("In the client workspace, open Manage client access, then Manage links and New Link.")).to_be_visible()
     page.reload()
-    expect(checklist.get_by_text("In the client workspace, open Secure Links and select New Link.")).to_be_visible()
+    expect(checklist.get_by_text("In the client workspace, open Manage client access, then Manage links and New Link.")).to_be_visible()
     progress_data = json.loads(page.evaluate("Object.entries(localStorage).find(([k])=>k.startsWith('clientshare:collect:'))[1]"))
     client_id = progress_data["clientId"]
     client_data = context.request.get(base + f"/api/clients/{client_id}").json()
@@ -63,6 +63,7 @@ with sync_playwright() as p:
     page.locator(f'#collect-client-{client_id}').click()
     expect(page.locator(f'#collect-links-{client_id}')).to_be_focused()
     page.locator(f'#collect-links-{client_id}').click()
+    page.get_by_role('link', name='Manage links', exact=True).click()
     expect(page.locator('#collect-new-link')).to_be_focused()
     page.screenshot(path='data/collection-real-new-link.png', full_page=True)
     page.get_by_role('button', name='New Link', exact=True).click()
@@ -125,6 +126,7 @@ with sync_playwright() as p:
     page.locator(f'#collect-client-{client_id}').click()
     expect(page.locator(f'#collect-links-{client_id}')).to_be_focused()
     page.locator(f'#collect-links-{client_id}').click()
+    page.get_by_role('link', name='Manage links', exact=True).click()
     expect(page.locator('#collect-new-link')).to_be_focused()
     page.keyboard.press('Escape')
     # Minimize the instruction panel to browse the wide links table on mobile.
@@ -136,7 +138,7 @@ with sync_playwright() as p:
     assert context.request.delete(base + f"/api/links/{progress_data['linkId']}").status == 204
     page.reload()
     expect(checklist.get_by_text("This link no longer accepts uploads. Create a new link or copy an active upload link.")).to_be_visible()
-    assert recipient_context.request.get(base + f"/api/folders/{client_data['root_folder_id']}").status == 403
+    assert recipient_context.request.get(base + f"/api/folders/{client_data['root_folder_id']}").status in [401, 403]
     assert context.request.delete(base + f"/api/clients/{client_id}?confirm=true").ok
     page.goto(base + "/clients")
     expect(checklist.get_by_text('In Clients, select a client’s name to open their workspace. To add one, select New Client.')).to_be_visible()

@@ -2,6 +2,7 @@
 import { Button } from 'openvue';
 import { storeToRefs } from 'pinia';
 
+import ClientAccessDialog from '@/components/ClientAccessDialog.vue';
 import CollectionInvitation from '@/components/CollectionInvitation.vue';
 import FileList from '@/components/FileList.vue';
 import PendingEmail from '@/components/PendingEmail.vue';
@@ -18,6 +19,7 @@ const { clientId } = storeToRefs(useClientsStore());
 const { user } = storeToRefs(useAuthStore());
 
 const pending = ref<InstanceType<typeof PendingEmail> | null>(null);
+const showAccess = ref(false);
 
 const showLinks = computed(() => user.value?.role === 'admin');
 const showUsers = computed(() => ['admin', 'manager'].includes(user.value?.role ?? ''));
@@ -50,39 +52,19 @@ watch(
 
 <template>
   <div>
-    <div class="flex items-center justify-between mb-4">
-      <h1>{{ fileManager.context?.client_name || 'File Manager' }}</h1>
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+      <h1 class="text-2xl md:text-[28px] font-semibold min-w-0 break-words">
+        {{ fileManager.context?.client_name || 'File Manager' }}
+      </h1>
       <div class="flex items-center gap-2">
         <Button
-          v-if="showUsers && clientId"
-          asChild
-          v-slot="slotProps"
+          v-if="(showUsers || showLinks) && clientId"
+          :id="`collect-links-${clientId}`"
+          label="Manage client access"
+          icon="oi oi-users"
           severity="secondary"
-          class="border-slate-300"
-        >
-          <router-link
-            :class="slotProps.class"
-            :to="{ name: 'Users', query: { client_id: clientId } }"
-          >
-            Users
-          </router-link>
-        </Button>
-
-        <Button
-          v-if="showLinks && clientId"
-          asChild
-          v-slot="slotProps"
-          severity="secondary"
-          class="border-slate-300"
-        >
-          <router-link
-            :id="`collect-links-${clientId}`"
-            :class="slotProps.class"
-            :to="`/clients/${clientId}/links`"
-          >
-            Secure Links
-          </router-link>
-        </Button>
+          @click="showAccess = true"
+        />
       </div>
     </div>
 
@@ -94,6 +76,13 @@ watch(
         <CollectionInvitation v-if="clientId" :clientId="clientId" compact />
       </template>
     </FileList>
+    <ClientAccessDialog
+      v-if="clientId"
+      :visible="showAccess"
+      :clientId
+      :clientName="fileManager.context?.client_name || 'Client workspace'"
+      @close="showAccess = false"
+    />
   </div>
 </template>
 

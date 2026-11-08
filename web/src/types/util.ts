@@ -49,6 +49,11 @@ export function getFileType(item: FileItem) {
   return '';
 }
 
+export function canPreviewFile(item: FileItem) {
+  const type = getFileType(item);
+  return type === 'application/pdf' || /^(image|text|audio)\//.test(type);
+}
+
 export function formatSize(size: number) {
   if (!size) {
     return '-';

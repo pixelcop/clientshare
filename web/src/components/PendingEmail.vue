@@ -12,38 +12,16 @@ const { clientId } = defineProps<{ clientId: string }>();
 
 const { user } = storeToRefs(useAuthStore());
 
-// button effects
-const justLeft = ref(false);
-const showButton = ref(false);
-function onHoverBadge() {
-  if (justLeft.value) {
-    return;
-  }
-  showButton.value = true;
-}
-function onMouseLeave() {
-  justLeft.value = true;
-  showButton.value = false;
-  setTimeout(() => {
-    justLeft.value = false;
-  }, 300);
-}
-// end button effects
-
 const showPending = ref(false);
-const pendingCount = computed(() => {
-  if (!pendingEmails.value?.length) {
-    return 0;
-  }
-  return Array.from(pendingEmails.value[0]?.body.matchAll(/A new file/g) || []).length;
-});
 
 const canManageEmailQueue = computed(() => ['admin', 'manager'].includes(user.value?.role ?? ''));
 
 const pendingEmails = ref<QueuedEmail[]>([]);
+const pendingCount = computed(() => pendingEmails.value.length);
 const pendingLoading = ref(false);
 const pendingError = ref('');
 const pendingSuccess = ref('');
+let requestVersion = 0;
 
 const sendingEmailIds = ref<string[]>([]);
 
@@ -89,6 +67,8 @@ async function fetchPendingEmails() {
   if (!canManageEmailQueue.value || !clientId) {
     return;
   }
+  requestVersion += 1;
+  const version = requestVersion;
   pendingLoading.value = true;
   pendingError.value = '';
   pendingSuccess.value = '';
@@ -96,15 +76,16 @@ async function fetchPendingEmails() {
     const res = await axios.get('/api/email/queue', {
       params: { client_id: clientId },
     });
-    pendingEmails.value = res.data?.pending ?? [];
+    if (version === requestVersion) {pendingEmails.value = res.data?.pending ?? [];}
   } catch (err) {
+    if (version !== requestVersion) {return;}
     if (axios.isAxiosError(err)) {
       pendingError.value = err.response?.data?.error || 'Failed to load pending emails.';
     } else {
       pendingError.value = 'Failed to load pending emails.';
     }
   } finally {
-    pendingLoading.value = false;
+    if (version === requestVersion) {pendingLoading.value = false;}
   }
 }
 
@@ -116,44 +97,30 @@ const timeLeft = computed(() => {
   return formatDistance(scheduledFor, new Date(), { addSuffix: true });
 });
 
-onMounted(() => {
-  void fetchPendingEmails();
-});
+watch(
+  () => clientId,
+  () => {
+    requestVersion += 1;
+    pendingEmails.value = [];
+    showPending.value = false;
+    void fetchPendingEmails();
+  },
+  { immediate: true },
+);
 
 defineExpose({ fetchPendingEmails });
 </script>
 
 <template>
-  <i
-    v-if="pendingCount === 0"
-    class="oi oi-envelope text-2xl no-emails"
-    v-tooltip.left="'No pending email'"
+  <Button
+    v-if="canManageEmailQueue"
+    label="Pending email"
+    icon="oi oi-envelope"
+    severity="secondary"
+    variant="text"
+    :badge="pendingCount ? String(pendingCount) : undefined"
+    @click="showPending = true"
   />
-  <div v-else class="email-badge-container" @click="showPending = true">
-    <Transition name="badge-fade">
-      <OverlayBadge
-        v-if="!showButton"
-        :value="pendingCount"
-        size="small"
-        class="badge-icon"
-        @mouseenter="onHoverBadge"
-      >
-        <i class="oi oi-envelope" style="font-size: 2rem" />
-      </OverlayBadge>
-    </Transition>
-    <Transition name="button-fade">
-      <Button
-        v-if="showButton"
-        type="button"
-        label="View pending email"
-        icon="oi oi-envelope"
-        :badge="pendingCount.toString()"
-        size="large"
-        class="inbox-button"
-        @mouseleave="onMouseLeave"
-      />
-    </Transition>
-  </div>
 
   <Dialog
     v-model:visible="showPending"
@@ -161,13 +128,14 @@ defineExpose({ fetchPendingEmails });
     closable
     dismissableMask
     blockScroll
-    class="shadow w-3/4"
+    aria-label="Pending email for this client"
+    class="shadow w-[calc(100%-2rem)] max-w-4xl"
   >
     <template #header>
       <div class="flex flex-row items-stretch w-full">
         <div class="p-dialog-title w-full">
           Pending email for this client
-          <div class="text-sm text-gray-400">
+          <div v-if="pendingCount" class="text-sm text-gray-400">
             Will be sent in {{ timeLeft }} unless more files are added
           </div>
         </div>
@@ -236,64 +204,3 @@ defineExpose({ fetchPendingEmails });
     </div>
   </Dialog>
 </template>
-
-<style scoped>
-.no-emails {
-  color: var(--p-form-field-disabled-color);
-  opacity: var(--p-disabled-opacity);
-}
-.email-badge-container {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-end;
-  min-width: 120px;
-  min-height: 48px;
-}
-
-.badge-icon {
-  position: absolute;
-  right: 0;
-  opacity: 1;
-  transform: translateX(0) scale(1);
-  transition:
-    opacity 0.5s ease,
-    transform 0.5s ease;
-  cursor: pointer;
-}
-
-.inbox-button {
-  transform-origin: right center;
-  transition:
-    opacity 0.5s ease,
-    transform 0.5s ease;
-}
-
-.badge-fade-leave-active {
-  transform: translateX(-190px) scale(0.6);
-}
-
-.badge-fade-enter-from,
-.badge-fade-leave-to {
-  opacity: 0;
-}
-
-.button-fade-enter-active,
-.button-fade-leave-active {
-  transition:
-    opacity 0.45s ease,
-    transform 0.45s ease;
-}
-
-.button-fade-enter-from,
-.button-fade-leave-to {
-  opacity: 0;
-  transform: scaleX(0);
-}
-
-.button-fade-enter-to,
-.button-fade-leave-from {
-  opacity: 1;
-  transform: scaleX(1);
-}
-</style>

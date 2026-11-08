@@ -1,11 +1,13 @@
 <script setup lang="ts">
+import '@/assets/file-rows.css';
+
 import type { PageState } from 'openvue';
 import { storeToRefs } from 'pinia';
 
 import type { FileSortField } from '@/stores/fileManager';
 import { useFileManagerStore } from '@/stores/fileManager';
 import type { FileItem } from '@/types/models';
-import { getFileType, getFileURL } from '@/types/util';
+import { canPreviewFile, getFileType, getFileURL } from '@/types/util';
 
 import Breadcrumb from './Breadcrumb.vue';
 import Dropzone from './Dropzone.vue';
@@ -86,6 +88,13 @@ function handleDownload() {
 }
 
 function previewFile(item: FileItem) {
+  if (!fileManager.canRead) {
+    return;
+  }
+  if (!canPreviewFile(item)) {
+    void fileManager.downloadFile(item);
+    return;
+  }
   previewItem.value = item;
   showPreview.value = true;
 }
@@ -125,7 +134,7 @@ function closePreview() {
           <div class="flex items-center justify-between">
             <h3 class="text-sm font-semibold text-slate-700">Files</h3>
           </div>
-          <table v-if="files.length > 0" class="min-w-full">
+          <table v-if="files.length > 0" class="file-table">
             <thead>
               <tr>
                 <th
@@ -149,7 +158,7 @@ function closePreview() {
                 </th>
                 <!-- <th class="px-4 py-2 text-left hidden sm:table-cell whitespace-nowrap w-[1%]">Type</th> -->
                 <th
-                  class="px-4 py-2 text-left hidden sm:table-cell whitespace-nowrap w-[1%]"
+                  class="file-size hidden sm:table-cell"
                   :aria-sort="
                     sortField === 'size'
                       ? sortDirection === 'desc'
@@ -168,7 +177,7 @@ function closePreview() {
                   </button>
                 </th>
                 <th
-                  class="px-4 py-2 text-left hidden sm:table-cell whitespace-nowrap w-[1%]"
+                  class="file-added hidden sm:table-cell"
                   :aria-sort="
                     sortField === 'uploaded_at'
                       ? sortDirection === 'desc'

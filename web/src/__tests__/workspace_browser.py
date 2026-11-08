@@ -44,6 +44,15 @@ with sync_playwright() as p:
     upload = page.get_by_role("button", name="Upload", exact=True)
     before_y = upload.bounding_box()["y"]
     expect(page.get_by_role("button", name="New folder", exact=True)).to_be_visible()
+    page.get_by_role('button', name='Manage client access', exact=True).click()
+    access_dialog = page.get_by_role('dialog', name=f"Manage client access: {client['name']}")
+    expect(access_dialog.get_by_text('Scope: entire client workspace', exact=True)).to_be_visible()
+    expect(access_dialog.get_by_role('link', name='Manage people')).to_be_visible()
+    expect(access_dialog.get_by_role('link', name='Manage links')).to_be_visible()
+    page.keyboard.press('Escape')
+    page.get_by_role('button', name='Pending email', exact=True).click()
+    expect(page.get_by_role('dialog', name='Pending email for this client')).to_be_visible()
+    page.keyboard.press('Escape')
     page.screenshot(path=str(output / "workspace-empty-desktop.png"), full_page=True)
     page.locator('input[type="file"]:not([webkitdirectory])').set_input_files({"name": "report.txt", "mimeType": "text/plain", "buffer": b"Workspace browser fixture"})
     expect(page.get_by_text("report.txt", exact=True)).to_be_visible()
@@ -68,11 +77,64 @@ with sync_playwright() as p:
     expect(page.locator('.upload-highlight')).to_be_visible()
     page.keyboard.press('Escape')
     expect(page.locator('.upload-highlight')).to_have_count(0)
+    # Quick actions work from hover and keyboard; More/Escape returns focus.
+    row = page.get_by_role('row').filter(has=page.get_by_role('button', name='report.txt', exact=True))
+    row.hover()
+    preview = row.get_by_role('button', name='Preview report.txt', exact=True)
+    expect(preview).to_be_visible()
+    more = row.get_by_role('button', name='More actions for report.txt', exact=True)
+    more.click()
+    expect(page.get_by_role('menuitem', name='Preview', exact=True)).to_be_visible()
+    expect(page.get_by_role('menuitem', name='Preview', exact=True)).to_be_in_viewport()
+    print('Row menu bounds:', page.get_by_role('menuitem', name='Preview', exact=True).bounding_box())
+    expect(preview).to_be_visible()
+    page.screenshot(path=str(output / 'workspace-row-menu-desktop.png'), full_page=True)
+    page.keyboard.press('Escape')
+    expect(more).to_be_focused()
+    row.get_by_role('button', name='report.txt', exact=True).focus()
+    page.keyboard.press('Tab')
+    expect(preview).to_be_focused()
+    page.keyboard.press('Enter')
+    expect(page.get_by_role('dialog', name='Preview report.txt', exact=True)).to_have_count(1)
+    page.keyboard.press('Escape')
+    # Download does not accidentally activate the filename/preview action.
+    with page.expect_download() as download:
+        row.get_by_role('button', name='Download report.txt', exact=True).click()
+    assert download.value.suggested_filename == 'report.txt'
+    expect(page.get_by_role('dialog')).to_have_count(0)
+    # Folder picker keeps nested structure and ignores common junk files.
+    selected = output / f'Incoming-{run}'
+    (selected / '2026').mkdir(parents=True)
+    (selected / '2026' / 'notes.txt').write_text('Directory picker fixture')
+    (selected / '.DS_Store').write_text('ignored')
+    expect(upload).to_be_enabled()
+    with page.expect_response(lambda response: response.url.endswith('/upload')) as uploaded:
+        page.locator('input[webkitdirectory]').set_input_files(str(selected.resolve()))
+    assert uploaded.value.status == 201
+    expect(page.get_by_role('button', name=selected.name, exact=True)).to_be_visible()
+    incoming = next(item for item in admin.request.get(base + f'/api/folders/{root}?type=folder').json()['items'] if item['filename'] == selected.name)
+    assert admin.request.get(base + f"/api/folders/{incoming['id']}").json()['items'] == []
+    year = admin.request.get(base + f"/api/folders/{incoming['id']}?type=folder").json()['items'][0]
+    assert admin.request.get(base + f"/api/folders/{year['id']}").json()['items'][0]['filename'] == 'notes.txt'
+    # Coarse-pointer users do not depend on hover to discover the common action.
+    touch = browser.new_context(storage_state=admin.storage_state(), viewport={"width": 390, "height": 844}, has_touch=True, is_mobile=True)
+    touch_page = touch.new_page()
+    touch_page.goto(base + f'/folder/{root}')
+    touch_page.wait_for_load_state('networkidle')
+    expect(touch_page.get_by_role('button', name='Preview report.txt', exact=True)).to_be_visible()
+    touch_page.get_by_role('button', name='More actions for report.txt', exact=True).click()
+    expect(touch_page.get_by_role('menuitem', name='Download', exact=True)).to_be_visible()
+    touch_page.keyboard.press('Escape')
+    expect(touch_page.get_by_role('menu')).to_have_count(0)
+    touch_page.screenshot(path=str(output / 'workspace-touch-mobile.png'), full_page=True)
+    touch.close()
+    expect(upload).to_be_enabled()
     page.screenshot(path=str(output / "workspace-populated-desktop.png"), full_page=True)
     page.set_viewport_size({"width": 390, "height": 844})
     expect(upload).to_be_visible()
-    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), "Mobile overflow"
     page.screenshot(path=str(output / "workspace-populated-mobile.png"), full_page=True)
+    page.wait_for_function("document.documentElement.scrollWidth <= innerWidth")
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), page.evaluate("[...document.querySelectorAll('body *')].filter(el=>el.getBoundingClientRect().right>innerWidth+1).map(el=>({tag:el.tagName,cls:el.className,right:el.getBoundingClientRect().right})).slice(0,12)")
     # A failed folder query must never appear as an empty folder.
     page.route(f"**/api/folders/{root}?*", lambda route: route.fulfill(status=503, json={"error": "Fixture folder unavailable"}) if "type=folder" in route.request.url else route.continue_())
     page.reload(wait_until="networkidle")
@@ -113,4 +175,4 @@ with sync_playwright() as p:
     assert not errors, errors
     (output / "workspace-browser-fixture.json").write_text(json.dumps({"client_id": client["id"], "root_folder_id": root}))
     browser.close()
-print("PASS: empty/populated/folders-only/error states, stable toolbar, duplicate rename, drag/Escape, read/upload-only, desktop/mobile; no browser errors")
+print("PASS: empty/populated/folders-only/error states, stable toolbar, file/folder pickers, duplicate rename, drag/Escape, keyboard/More focus return, download isolation, touch actions, contextual access, read/upload-only, desktop/mobile; no browser errors")

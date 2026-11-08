@@ -18,11 +18,11 @@ const emit = defineEmits<{
       <h3 class="text-sm font-semibold text-slate-700">Folders</h3>
       <span v-if="items.length === 0" class="text-xs text-slate-400">No folders</span>
     </div>
-    <table v-if="items.length > 0" class="min-w-full">
+    <table v-if="items.length > 0" class="file-table">
       <thead>
         <tr>
           <th class="px-0 pr-4 py-2 sm:px-4 sm:py-2 text-left w-full">Name</th>
-          <th class="px-4 py-2 text-left hidden sm:table-cell whitespace-nowrap w-[1%]">Added</th>
+          <th class="file-added hidden sm:table-cell">Added</th>
           <th class="px-0 sm:px-4 py-2 w-[1%]"></th>
         </tr>
       </thead>

@@ -6,6 +6,8 @@ import type { MenuItem } from 'openvue/menuitem';
 import { useCollectionStore } from '@/stores/collection';
 import type { Client } from '@/types/models';
 
+import ClientAccessDialog from './ClientAccessDialog.vue';
+
 const { client, showLinks, showUsers } = defineProps<{
   client: Client;
   showLinks?: boolean;
@@ -17,6 +19,7 @@ const router = useRouter();
 const collection = useCollectionStore();
 const breakpoints = useBreakpoints(breakpointsTailwind);
 const xs = breakpoints.smaller('sm');
+const showAccess = ref(false);
 
 function onClickFiles() {
   if (client.root_folder_id) {
@@ -39,6 +42,14 @@ function onClickAddUser() {
 }
 
 const clientActions = computed<MenuItem[]>(() => [
+  {
+    label: 'Manage client access',
+    icon: 'oi oi-users',
+    command: () => {
+      showAccess.value = true;
+    },
+    visible: showUsers || showLinks,
+  },
   {
     label: 'View Files',
     icon: 'oi oi-folder',
@@ -104,6 +115,12 @@ const clientActions = computed<MenuItem[]>(() => [
       </div>
     </td>
   </tr>
+  <ClientAccessDialog
+    :visible="showAccess"
+    :clientId="client.id"
+    :clientName="client.name"
+    @close="showAccess = false"
+  />
 </template>
 
 <style scoped>

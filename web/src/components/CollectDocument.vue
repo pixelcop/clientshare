@@ -72,8 +72,8 @@ const nextAction = computed(() => {
   if (workspace && workflow.step < 3) {
     return {
       targets: [`collect-links-${clientId}`],
-      title: 'Open Secure Links',
-      body: 'Select Secure Links to manage this client’s upload links.',
+      title: 'Manage client access',
+      body: 'Select Manage client access, then Manage links to open this client’s secure links.',
     };
   }
   if (links && workflow.step === 1) {
@@ -401,7 +401,10 @@ onBeforeUnmount(() => {
                       >This link no longer accepts uploads. Create a new link or copy an active
                       upload link.</Message
                     >
-                    <p>In the client workspace, open Secure Links and select New Link.</p>
+                    <p>
+                      In the client workspace, open Manage client access, then Manage links and New
+                      Link.
+                    </p>
                     <div class="collection-permission">
                       <i class="oi oi-lock" aria-hidden="true" />
                       <div>

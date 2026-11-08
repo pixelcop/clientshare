@@ -1,0 +1,78 @@
+.file-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+.file-table th {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--p-text-muted-color);
+  padding: 8px;
+  text-align: left;
+}
+.file-table th:first-child {
+  width: auto;
+}
+.file-table th.file-size {
+  width: 80px;
+}
+.file-table th.file-added {
+  width: 104px;
+}
+.file-table th:last-child {
+  width: 132px;
+  padding: 0;
+}
+.file-row {
+  height: 52px;
+  border-bottom: 1px solid var(--p-content-border-color);
+}
+.file-row:hover,
+.file-row:focus-within,
+.file-row:has([data-menu-open='true']) {
+  background: var(--p-content-hover-background);
+}
+.file-name-cell {
+  padding: 4px 8px;
+  min-width: 0;
+}
+.file-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  cursor: pointer;
+  text-align: left;
+  font-size: 14px;
+  color: var(--p-text-color);
+  border-radius: 4px;
+}
+.file-name span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-name i {
+  flex-shrink: 0;
+  font-size: 20px;
+  color: var(--p-text-muted-color);
+}
+.file-name:focus-visible {
+  outline: 2px solid var(--p-primary-color);
+  outline-offset: -2px;
+}
+.file-metadata {
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--p-text-muted-color);
+  font-variant-numeric: tabular-nums;
+}
+.file-actions-cell {
+  padding: 0;
+}
+@media (max-width: 480px) {
+  .file-table th:last-child {
+    width: 88px;
+  }
+}
