@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia';
 
-import Dropzone from '@/components/Dropzone.vue';
 import FileList from '@/components/FileList.vue';
 import PublicLinkSignup from '@/components/PublicLinkSignup.vue';
 import { useFileManagerStore } from '@/stores/fileManager';
@@ -13,7 +12,7 @@ const publicLink = usePublicLinkStore();
 const fileManager = useFileManagerStore();
 
 const clientName = computed(() => publicLink.client?.name || 'Client Files');
-const { accessType, canWrite } = storeToRefs(publicLink);
+const { accessType } = storeToRefs(publicLink);
 
 const accessLabel = computed(() => {
   if (['read', 'view'].includes(accessType.value)) {
@@ -52,8 +51,6 @@ async function loadLink() {
     await fileManager.changeFolder(folderId);
   }
 }
-
-function handleUploaded() {}
 
 onMounted(() => {
   loadLink();
@@ -103,10 +100,6 @@ watch(
       <div v-if="publicLink.validating" class="text-sm text-slate-500">Validating link...</div>
 
       <div v-else>
-        <div v-if="canWrite" class="space-y-3 mb-6">
-          <Dropzone @uploaded="handleUploaded" notifyClient canNotify />
-        </div>
-
         <FileList />
       </div>
     </section>

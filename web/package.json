@@ -12,6 +12,7 @@
     "build:emails": "vite-node --config ./scripts/vite.config.emails.ts ./scripts/build-email-templates.ts",
     "preview": "vite preview",
     "test:unit": "vitest",
+    "test": "vitest run",
     "build-only": "vite build",
     "typecheck": "vue-tsc --noEmit -p tsconfig.app.json --composite false",
     "lint": "eslint . --fix --cache",

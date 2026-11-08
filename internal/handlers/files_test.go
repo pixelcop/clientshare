@@ -104,6 +104,31 @@ func TestImmutableDownloadsSurviveRenameButRespectDeletion(t *testing.T) {
 	require.FileExists(t, objectPath)
 }
 
+func TestEmptyFolderListingReturnsAuthorizedDestinationContext(t *testing.T) {
+	env := setupFileTestEnv(t)
+	for _, token := range []string{env.adminToken, env.linkToken} {
+		resp, err := env.app.Test(newAuthRequest(http.MethodGet, "/api/folders/"+env.rootFolder.ID, token, nil))
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		var result struct {
+			Items   []models.File `json:"items"`
+			Context struct {
+				Folder       models.File `json:"folder"`
+				ClientID     string      `json:"client_id"`
+				ClientName   string      `json:"client_name"`
+				RootFolderID string      `json:"root_folder_id"`
+			} `json:"context"`
+		}
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
+		resp.Body.Close()
+		require.Empty(t, result.Items)
+		require.Equal(t, env.rootFolder.ID, result.Context.Folder.ID)
+		require.Equal(t, env.client.ID, result.Context.ClientID)
+		require.Equal(t, env.client.Name, result.Context.ClientName)
+		require.Equal(t, env.rootFolder.ID, result.Context.RootFolderID)
+	}
+}
+
 func TestFileAuthorizationUsesOneQueryRegardlessOfDepth(t *testing.T) {
 	env := setupFileTestEnv(t)
 	shallow := createFileRecord(t, env, env.rootFolder, "shallow.txt", "hello")

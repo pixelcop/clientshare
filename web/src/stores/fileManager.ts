@@ -3,6 +3,7 @@ import { defineStore, storeToRefs } from 'pinia';
 
 import type { FileItem, PaginatedResult, PaginationResponse } from '@/types/models';
 import { defaultPagination } from '@/types/util';
+import type { WorkspaceContext, WorkspaceListing } from '@/types/workspace';
 
 import { useAuthStore } from './auth';
 import { useClientsStore } from './clients';
@@ -14,12 +15,14 @@ export const useFileManagerStore = defineStore('fileManager', () => {
   interface CreateFolderOptions {
     targetFolderId?: string | null;
     reuseExisting?: boolean;
+    signal?: AbortSignal;
   }
 
   interface UploadFilesOptions {
     targetFolderId?: string | null;
     targetNames?: string[];
     refreshCurrentFolder?: boolean;
+    signal?: AbortSignal;
   }
 
   const clientsStore = useClientsStore();
@@ -35,6 +38,17 @@ export const useFileManagerStore = defineStore('fileManager', () => {
 
   const loading = ref(false);
   const error = ref<string | null>(null);
+  const context = ref<WorkspaceContext | null>(null);
+  const loaded = ref(false);
+  const isEmpty = computed(
+    () =>
+      loaded.value &&
+      !loading.value &&
+      !error.value &&
+      files.value.length === 0 &&
+      folders.value.length === 0,
+  );
+  let requestVersion = 0;
 
   /**
    * Current folder ID
@@ -51,20 +65,6 @@ export const useFileManagerStore = defineStore('fileManager', () => {
 
   async function changeFolder(folderId?: string) {
     currentFolder.value = folderId || null;
-  }
-
-  async function fetchFolders() {
-    if (!currentFolder.value) {
-      return;
-    }
-    try {
-      const res = await axios.get<PaginatedResult<FileItem>>(
-        `/api/folders/${currentFolder.value}?type=folder`,
-      );
-      folders.value = res.data.items || [];
-    } catch (e: any) {
-      console.error('Failed to fetch folders', e);
-    }
   }
 
   async function listFoldersInFolder(
@@ -92,54 +92,69 @@ export const useFileManagerStore = defineStore('fileManager', () => {
   }
 
   async function fetchFiles(page = 1, pageSize = 20) {
-    if (!currentFolder.value) {
+    const folderId = currentFolder.value;
+    if (!folderId) {
       return;
     }
+    requestVersion += 1;
+    const version = requestVersion;
     loading.value = true;
     error.value = null;
+    loaded.value = false;
     try {
-      void fetchFolders();
-      const res = await axios.get<PaginatedResult<FileItem>>(
-        `/api/folders/${currentFolder.value}`,
-        {
+      const [res, childFolders, crumbs] = await Promise.all([
+        axios.get<WorkspaceListing>(`/api/folders/${folderId}`, {
           params: {
             page,
             page_size: pageSize,
             sort_by: sortField.value,
             sort_dir: sortDirection.value,
           },
-        },
-      );
-      files.value = res.data.items || [];
-      pagination.value = res.data.pagination || defaultPagination();
-      if (files.value?.length) {
-        clientId.value = files.value?.[0]?.client_id ?? null;
+        }),
+        listFoldersInFolder(folderId),
+        axios.get<FileItem[]>(`/api/folders/${folderId}/breadcrumbs`),
+      ]);
+      if (version !== requestVersion || folderId !== currentFolder.value) {
+        return;
       }
+      // Deleting the last item on the final page must not look like an empty
+      // workspace while earlier pages still contain files.
+      if (page > 1 && !res.data.items?.length && res.data.pagination?.total_items > 0) {
+        await fetchFiles(
+          Math.max(1, Math.min(page - 1, res.data.pagination.total_pages)),
+          pageSize,
+        );
+        return;
+      }
+      files.value = res.data.items || [];
+      folders.value = childFolders;
+      breadcrumbs.value = crumbs.data || [];
+      pagination.value = res.data.pagination || defaultPagination();
+      context.value = res.data.context;
+      clientId.value = res.data.context?.client_id ?? null;
+      loaded.value = true;
     } catch (e: any) {
+      if (version !== requestVersion || folderId !== currentFolder.value) {
+        return;
+      }
       error.value = e.response?.data?.error || 'Failed to fetch files';
+      files.value = [];
+      folders.value = [];
+      breadcrumbs.value = [];
+      context.value = null;
+      clientId.value = null;
     } finally {
-      loading.value = false;
+      if (version === requestVersion) {
+        loading.value = false;
+      }
     }
   }
 
-  /**
-   * Fetch a single file by ID.
-   *
-   * If current folder not set, updates it to the parent folder of the file. This is used when
-   * accessing a file directly via URL, where we may not have the folder context loaded.
-   *
-   * First checks if the file is already in the current list of files/folders, and if not, makes an
-   * API call to fetch it. This is useful for the file view page, which may be accessed directly via
-   * URL.
-   *
-   * @param fileId
-   * @returns
-   */
+  /** Fetching one file does not establish authority to list its parent. */
   async function fetchFile(fileId: string): Promise<FileItem> {
     if (currentFolder.value && files.value.length) {
       const existing = files.value.find((f) => f.id === fileId);
       if (existing) {
-        currentFolder.value = existing.folder_id!;
         return existing;
       }
     }
@@ -149,30 +164,10 @@ export const useFileManagerStore = defineStore('fileManager', () => {
       const res = await axios.get<FileItem>(`/api/files/${fileId}`);
       const file = res.data;
 
-      if (file.folder_id) {
-        currentFolder.value = file.folder_id;
-        clientId.value = file.client_id;
-      }
-
       return file;
     } catch (e: any) {
       console.error('Failed to fetch file', e);
       throw new Error(e.response?.data?.error || 'Failed to fetch file', { cause: e });
-    }
-  }
-
-  async function fetchBreadcrumbs() {
-    if (!currentFolder.value) {
-      breadcrumbs.value = [];
-      return;
-    }
-
-    try {
-      await axios.get<FileItem[]>(`/api/folders/${currentFolder.value}/breadcrumbs`).then((res) => {
-        breadcrumbs.value = res.data || [];
-      });
-    } catch (e: any) {
-      console.error('Failed to fetch breadcrumbs', e);
     }
   }
 
@@ -185,8 +180,6 @@ export const useFileManagerStore = defineStore('fileManager', () => {
     if (!targetFolderId) {
       return null;
     }
-    loading.value = true;
-    error.value = null;
     try {
       if (options.reuseExisting) {
         const existingFolders = await listFoldersInFolder(targetFolderId);
@@ -198,12 +191,14 @@ export const useFileManagerStore = defineStore('fileManager', () => {
         }
       }
 
-      const res = await axios.post<FileItem>(`/api/folders/${targetFolderId}`, { name });
+      const res = await axios.post<FileItem>(
+        `/api/folders/${targetFolderId}`,
+        { name },
+        { signal: options.signal },
+      );
       return res.data;
     } catch (e: any) {
       error.value = e.response?.data?.error || 'Failed to create folder';
-    } finally {
-      loading.value = false;
     }
     return null;
   }
@@ -216,15 +211,12 @@ export const useFileManagerStore = defineStore('fileManager', () => {
     if (!item.id) {
       return;
     }
-    loading.value = true;
     error.value = null;
     try {
       await axios.delete(`/api/files/${item.id}`);
       await fetchFiles(pagination.value.page, pagination.value.page_size);
     } catch (e: any) {
       error.value = e.response?.data?.error || 'Failed to delete item';
-    } finally {
-      loading.value = false;
     }
   }
 
@@ -244,8 +236,6 @@ export const useFileManagerStore = defineStore('fileManager', () => {
       return { ok: false as const, error: 'No folder selected' };
     }
 
-    loading.value = true;
-    error.value = null;
     try {
       const formData = new FormData();
       filesToUpload.forEach((f, index) => {
@@ -254,6 +244,7 @@ export const useFileManagerStore = defineStore('fileManager', () => {
       });
       formData.append('notify', notifyClient ? 'true' : 'false');
       await axios.post(`/api/folders/${targetFolderId}/upload`, formData, {
+        signal: options.signal,
         headers: { 'Content-Type': 'multipart/form-data' },
         onUploadProgress: (e) => {
           if (onProgress && e.total) {
@@ -267,14 +258,13 @@ export const useFileManagerStore = defineStore('fileManager', () => {
       return { ok: true as const };
     } catch (e: any) {
       const response = e.response?.data;
-      const message = response?.error || 'Failed to upload files';
-      error.value = message;
+      const message = axios.isCancel(e)
+        ? 'Upload stopped. Completed files and folders were kept.'
+        : response?.error || 'Failed to upload files';
       if (response?.code) {
         return { ok: false as const, error: message, code: response.code, name: response.name };
       }
       return { ok: false as const, error: message };
-    } finally {
-      loading.value = false;
     }
   }
 
@@ -323,13 +313,21 @@ export const useFileManagerStore = defineStore('fileManager', () => {
   watch(
     currentFolder,
     async () => {
-      await Promise.all([fetchFiles(1, pagination.value.page_size), fetchBreadcrumbs()]);
-      if (!clientId.value && breadcrumbs.value.length) {
-        clientId.value = breadcrumbs.value[0].client_id;
-      }
+      requestVersion += 1;
+      files.value = [];
+      folders.value = [];
+      breadcrumbs.value = [];
+      context.value = null;
+      clientId.value = null;
+      loaded.value = false;
+      loading.value = false;
+      error.value = null;
+      pagination.value = { ...defaultPagination(), page_size: pagination.value.page_size };
+      await fetchFiles(1, pagination.value.page_size);
     },
     {
       immediate: true,
+      flush: 'sync',
     },
   );
 
@@ -339,6 +337,9 @@ export const useFileManagerStore = defineStore('fileManager', () => {
     breadcrumbs,
     loading,
     error,
+    context,
+    loaded,
+    isEmpty,
     currentFolder,
     clientId,
     pagination,

@@ -7,17 +7,15 @@ import FileList from '@/components/FileList.vue';
 import PendingEmail from '@/components/PendingEmail.vue';
 import { useClientsStore } from '@/stores/clients';
 
-import Dropzone from '../components/Dropzone.vue';
 import { useAuthStore } from '../stores/auth';
 import { useFileManagerStore } from '../stores/fileManager';
 
 const { folderId } = defineProps<{ folderId: string }>();
 
 const fileManager = useFileManagerStore();
-const { currentClient, clientId } = storeToRefs(useClientsStore());
+const { clientId } = storeToRefs(useClientsStore());
 
 const { user } = storeToRefs(useAuthStore());
-const notifyClient = ref(true);
 
 const pending = ref<InstanceType<typeof PendingEmail> | null>(null);
 
@@ -53,7 +51,7 @@ watch(
 <template>
   <div>
     <div class="flex items-center justify-between mb-4">
-      <h1>{{ currentClient?.name || 'File Manager' }}</h1>
+      <h1>{{ fileManager.context?.client_name || 'File Manager' }}</h1>
       <div class="flex items-center gap-2">
         <Button
           v-if="showUsers && clientId"
@@ -88,22 +86,14 @@ watch(
       </div>
     </div>
 
-    <Dropzone @uploaded="handleUploaded" :notifyClient :canNotify />
-    <CollectionInvitation
-      v-if="!fileManager.loading && !fileManager.files.length && clientId"
-      :clientId="clientId"
-    />
-
-    <div v-if="canNotify" class="flex flex-row justify-between mt-4">
-      <div class="flex items-center gap-2 text-sm">
-        <input id="notify-client" v-model="notifyClient" type="checkbox" class="h-4 w-4" />
-        <label for="notify-client">Notify client by email after upload</label>
-      </div>
-
-      <PendingEmail v-if="canManageEmailQueue && clientId" :clientId ref="pending" />
-    </div>
-
-    <FileList />
+    <FileList :canNotify @uploaded="handleUploaded">
+      <template #actions>
+        <PendingEmail v-if="canManageEmailQueue && clientId" :clientId ref="pending" />
+      </template>
+      <template #empty>
+        <CollectionInvitation v-if="clientId" :clientId="clientId" compact />
+      </template>
+    </FileList>
   </div>
 </template>
 

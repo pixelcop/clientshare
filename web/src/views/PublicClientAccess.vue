@@ -2,7 +2,6 @@
 import { FloatLabel, type SelectChangeEvent } from 'openvue';
 import { storeToRefs } from 'pinia';
 
-import Dropzone from '@/components/Dropzone.vue';
 import FileList from '@/components/FileList.vue';
 import { useClientsStore } from '@/stores/clients';
 import { useFileManagerStore } from '@/stores/fileManager';
@@ -16,8 +15,6 @@ const { currentClient, clients, clientId } = storeToRefs(clientsStore);
 const { currentFolder } = storeToRefs(fileManager);
 
 const clientName = computed(() => currentClient.value?.name || 'Client Files');
-
-function handleUploaded() {}
 
 async function handleClientChange(event: SelectChangeEvent) {
   const selectedId = event.value;
@@ -93,10 +90,6 @@ watch(
     </section>
 
     <section class="space-y-4">
-      <div class="space-y-3 mb-6">
-        <Dropzone @uploaded="handleUploaded" notifyClient canNotify />
-      </div>
-
       <FileList />
     </section>
   </div>

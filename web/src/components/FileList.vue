@@ -2,30 +2,49 @@
 import type { PageState } from 'openvue';
 import { storeToRefs } from 'pinia';
 
-import { useAuthStore } from '@/stores/auth';
 import type { FileSortField } from '@/stores/fileManager';
 import { useFileManagerStore } from '@/stores/fileManager';
 import type { FileItem } from '@/types/models';
 import { getFileType, getFileURL } from '@/types/util';
 
 import Breadcrumb from './Breadcrumb.vue';
+import Dropzone from './Dropzone.vue';
 import FileListItem from './FileListItem.vue';
 import FilePreviewModal from './FilePreviewModal.vue';
 import FolderList from './FolderList.vue';
-import NewFolderModal from './NewFolderModal.vue';
+
+withDefaults(defineProps<{ canNotify?: boolean }>(), { canNotify: true });
+const emit = defineEmits<{ uploaded: [] }>();
 
 const router = useRouter();
 const fileManager = useFileManagerStore();
-const { files, folders, breadcrumbs, pagination, sortField, sortDirection, canWrite } =
-  storeToRefs(fileManager);
-const { user } = storeToRefs(useAuthStore());
-
-const showNewFolder = ref(false);
-const showHeader = computed(() => ['client', 'customer'].includes(user.value?.role ?? ''));
+const {
+  files,
+  folders,
+  breadcrumbs,
+  pagination,
+  sortField,
+  sortDirection,
+  canWrite,
+  canRead,
+  context,
+  isEmpty,
+} = storeToRefs(fileManager);
 const showPreview = ref(false);
 const previewItem = ref<FileItem | null>(null);
 const pageSizeOptions = [10, 20, 50];
 const first = computed(() => Math.max(0, (pagination.value.page - 1) * pagination.value.page_size));
+const emptyHeading = computed(() => {
+  if (!canRead.value && canWrite.value) {
+    return `Upload documents to ${context.value?.client_name || 'this workspace'}`;
+  }
+  if (!canWrite.value) {
+    return 'No files shared here yet';
+  }
+  return context.value?.folder.id === context.value?.root_folder_id
+    ? 'No files yet'
+    : 'This folder is empty';
+});
 
 const defaultDirectionByField: Record<FileSortField, 'asc' | 'desc'> = {
   filename: 'asc',
@@ -78,34 +97,33 @@ function closePreview() {
 </script>
 
 <template>
-  <Card class="mt-4 shadow border border-slate-200">
-    <template v-if="showHeader" #header>
-      <div class="px-4 pt-3 border-b border-slate-200 flex items-center justify-between">
-        <h2 id="collect-files" tabindex="-1" class="font-semibold text-slate-900">Files</h2>
-      </div>
+  <Dropzone :canNotify @uploaded="emit('uploaded')">
+    <template #context>
+      <Breadcrumb v-if="breadcrumbs.length > 1" />
+      <h2 v-else id="collect-files" tabindex="-1" class="text-base font-semibold">Files</h2>
     </template>
-    <template #content>
+    <template #actions><slot name="actions" /></template>
+    <p v-if="fileManager.loading" role="status" class="py-12 text-center">Loading files…</p>
+    <div v-else-if="fileManager.error" role="alert" class="py-8 space-y-3">
+      <p>{{ fileManager.error }}</p>
+      <Button label="Try again" severity="secondary" @click="fileManager.fetchFiles()" />
+    </div>
+    <div
+      v-else-if="isEmpty || (fileManager.loaded && !canRead && canWrite)"
+      class="workspace-empty"
+    >
+      <i class="oi oi-folder" aria-hidden="true" />
+      <h3>{{ emptyHeading }}</h3>
+      <p v-if="canWrite">Use Upload or drag files here to get started.</p>
+      <p v-else>Files will appear here when they’re added.</p>
+      <slot v-if="canRead && isEmpty" name="empty" />
+    </div>
+    <template v-else-if="fileManager.loaded">
       <div class="space-y-6">
-        <div class="flex items-center justify-between mb-4">
-          <Breadcrumb v-if="breadcrumbs.length > 1" />
-          <div v-else>&nbsp;</div>
-          <div class="flex items-center gap-2">
-            <Button
-              v-if="canWrite"
-              @click="showNewFolder = true"
-              icon="oi oi-plus"
-              label="New Folder"
-              severity="info"
-              size="small"
-            />
-          </div>
-        </div>
-
         <FolderList v-if="folders.length > 0" :items="folders" @open="enterFolder" />
-        <div class="space-y-2 overflow-x-auto">
+        <div v-if="files.length" class="space-y-2 overflow-x-auto">
           <div class="flex items-center justify-between">
             <h3 class="text-sm font-semibold text-slate-700">Files</h3>
-            <span v-if="files.length === 0" class="text-xs text-slate-400">No files</span>
           </div>
           <table v-if="files.length > 0" class="min-w-full">
             <thead>
@@ -175,13 +193,10 @@ function closePreview() {
               <FileListItem v-for="item in files" :key="item.id" :item @open="previewFile(item)" />
             </tbody>
           </table>
-          <div v-if="!fileManager.loading && files.length === 0" class="text-sm text-slate-500">
-            No files available.
-          </div>
         </div>
       </div>
     </template>
-    <template v-if="pagination.total_items > 0" #footer>
+    <template v-if="!fileManager.loading && !fileManager.error && pagination.total_items > 0">
       <div class="flex items-center justify-between pt-3 border-t border-slate-200">
         <div class="text-sm text-slate-600">
           Showing {{ (pagination.page - 1) * pagination.page_size + 1 }} to
@@ -198,7 +213,7 @@ function closePreview() {
         />
       </div>
     </template>
-  </Card>
+  </Dropzone>
 
   <!-- Preview Modal (simple text/image/pdf) -->
   <FilePreviewModal
@@ -211,10 +226,24 @@ function closePreview() {
     @close="closePreview"
     @download="handleDownload"
   />
-
-  <NewFolderModal
-    v-if="showNewFolder && canWrite"
-    :show="showNewFolder"
-    @close="showNewFolder = false"
-  />
 </template>
+
+<style scoped>
+.workspace-empty {
+  padding: 48px 16px;
+  text-align: center;
+}
+.workspace-empty > .oi {
+  font-size: 48px;
+  color: var(--p-text-muted-color);
+}
+.workspace-empty h3 {
+  margin: 16px 0 8px;
+  font-size: 22px;
+  font-weight: 600;
+}
+.workspace-empty p {
+  font-size: 14px;
+  color: var(--p-text-muted-color);
+}
+</style>

@@ -4,14 +4,22 @@ import { Button, Card } from 'openvue';
 import { useBrandingStore } from '@/stores/branding';
 import { guideTopic, useCollectionStore } from '@/stores/collection';
 
-defineProps<{ clientId?: string }>();
+defineProps<{ clientId?: string; compact?: boolean }>();
 const workflow = useCollectionStore();
 const branding = useBrandingStore();
 </script>
 
 <template>
+  <Button
+    v-if="compact && workflow.allowed && !workflow.progress"
+    class="mt-4"
+    label="Collect documents with a client-wide link"
+    severity="secondary"
+    variant="text"
+    @click="workflow.start(clientId)"
+  />
   <Card
-    v-if="workflow.allowed && !workflow.progress"
+    v-else-if="!compact && workflow.allowed && !workflow.progress"
     class="collection-invitation collection-theme"
   >
     <template #content>

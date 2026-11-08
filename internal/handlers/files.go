@@ -338,8 +338,18 @@ func (h *FileHandler) ListFolderFiles(c fiber.Ctx) error {
 	}
 
 	fileType := fiber.Query[string](c, "type", "file")
+	// Context belongs to the authorized destination, not the first child. Empty
+	// folders must be just as navigable as populated folders.
+	client, err := h.clientService.GetClient(c.Context(), tenantID, folder.ClientID)
+	if err != nil {
+		return c.Status(404).JSON(fiber.Map{"error": "folder not found"})
+	}
+	context := fiber.Map{
+		"folder": folder, "client_id": client.ID, "client_name": client.Name,
+		"root_folder_id": client.RootFolderID,
+	}
 	if fiber.Locals[string](c, "role") == "link" && fiber.Locals[string](c, "access_type") == "write" && fileType != "folder" {
-		return c.JSON(fiber.Map{"pagination": models.PaginationResponse{Page: 1, PageSize: 20}, "items": []models.File{}})
+		return c.JSON(fiber.Map{"context": context, "pagination": models.PaginationResponse{Page: 1, PageSize: 20}, "items": []models.File{}})
 	}
 	page, pageSize := getPageParams(c)
 	sortBy := getSortBy(c)
@@ -353,6 +363,7 @@ func (h *FileHandler) ListFolderFiles(c fiber.Ctx) error {
 	userID := fiber.Locals[string](c, "user_id")
 	logFileActivity(c.Context(), h.db, tenantID, folder.ClientID, nil, &userID, nil, "list_files", "")
 	return c.JSON(fiber.Map{
+		"context":    context,
 		"pagination": pagination,
 		"items":      dbFiles,
 	})

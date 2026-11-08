@@ -94,8 +94,8 @@ enabling item sharing:
 | Surface | Source | Enforcement integration |
 | --- | --- | --- |
 | `/api/folders`, `/:id`, `/exists`, `/breadcrumbs`, `/upload`, `/download-zip` | `handlers/files.go`, `middleware/auth.go` | Resolve exact target/default shared root, operation, redacted context and upload-only behavior |
-| `/api/files/:id`, `/download`, DELETE | same; `services/file.go`, `file_zip.go` | Exact-item resolver, safe subtree traversal, no inferred parent access |
-| `/links/:token` GET/POST, `/api/link/:token` | `handlers/links.go`, `auth/session.go` | Current link and target validity; exact landing; preserve explicit session-switch confirmation |
+| `/api/files/:id`, `/download`, DELETE | same; `services/file.go`, storage helpers | Exact-item resolver, safe subtree traversal, no inferred parent access |
+| `/links/:token` GET/POST, `/api/link/:token` | `handlers/links.go`, `auth/sessions.go` | Current link and target validity; exact landing; preserve explicit session-switch confirmation |
 | `/api/clients`, `/:id` GET/PUT/DELETE/POST | `handlers/clients.go`, `services/client.go` | Assigned/full manager scope and no item-grant membership promotion |
 | `/api/users` and user assignment/invite/access-link endpoints | `handlers/users.go`, invitation/auth services | Scope, permission ceiling, provenance, no role escalation |
 | `/api/clients/:id/links`, `/collection`; `/api/links/:id` | `handlers/links.go`, `services/collection.go` | Scope-aware creation/list/revocation/history and collection counts |
