@@ -7,23 +7,25 @@ import (
 )
 
 var InviteToken = struct {
-	ID        field.String
-	TenantID  field.String
-	UserID    field.String
-	Email     field.String
-	TokenHash field.String
-	ExpiresAt field.Time
-	UsedAt    field.Time
-	InvitedBy field.String
-	CreatedAt field.Time
+	AccessInvitationID field.String
+	ID                 field.String
+	TenantID           field.String
+	UserID             field.String
+	Email              field.String
+	TokenHash          field.String
+	ExpiresAt          field.Time
+	UsedAt             field.Time
+	InvitedBy          field.String
+	CreatedAt          field.Time
 }{
-	ID:        field.String{}.WithColumn("id"),
-	TenantID:  field.String{}.WithColumn("tenant_id"),
-	UserID:    field.String{}.WithColumn("user_id"),
-	Email:     field.String{}.WithColumn("email"),
-	TokenHash: field.String{}.WithColumn("token_hash"),
-	ExpiresAt: field.Time{}.WithColumn("expires_at"),
-	UsedAt:    field.Time{}.WithColumn("used_at"),
-	InvitedBy: field.String{}.WithColumn("invited_by"),
-	CreatedAt: field.Time{}.WithColumn("created_at"),
+	AccessInvitationID: field.String{}.WithColumn("access_invitation_id"),
+	ID:                 field.String{}.WithColumn("id"),
+	TenantID:           field.String{}.WithColumn("tenant_id"),
+	UserID:             field.String{}.WithColumn("user_id"),
+	Email:              field.String{}.WithColumn("email"),
+	TokenHash:          field.String{}.WithColumn("token_hash"),
+	ExpiresAt:          field.Time{}.WithColumn("expires_at"),
+	UsedAt:             field.Time{}.WithColumn("used_at"),
+	InvitedBy:          field.String{}.WithColumn("invited_by"),
+	CreatedAt:          field.Time{}.WithColumn("created_at"),
 }

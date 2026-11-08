@@ -15,6 +15,31 @@ export interface AccessCapabilities {
 }
 
 //////////
+// source: access_invitation.go
+
+/**
+ * AccessInvitation is target-aware access intent, not an identity credential.
+ * Acceptance binds a verified tenant-local identity without changing its role.
+ */
+export interface AccessInvitation {
+  id: string;
+  tenant_id: string;
+  client_id: string;
+  file_id?: string;
+  email: string;
+  recipient_user_id?: string;
+  created_by: string;
+  AccessCapabilities: AccessCapabilities;
+  grant_expires_at?: string;
+  expires_at: string;
+  revoked_at?: string;
+  accepted_at?: string;
+  accepted_by?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+//////////
 // source: audit_event.go
 
 export interface AuditEvent {
@@ -194,6 +219,7 @@ export interface ItemGrant {
   created_by: string;
   created_at: string;
   updated_at: string;
+  version: number /* uint64 */;
   expires_at?: string;
   revoked_at?: string;
 }

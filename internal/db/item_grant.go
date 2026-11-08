@@ -15,6 +15,7 @@ var ItemGrant = struct {
 	CreatedBy field.String
 	CreatedAt field.Time
 	UpdatedAt field.Time
+	Version   field.Number[uint64]
 	ExpiresAt field.Time
 	RevokedAt field.Time
 }{
@@ -26,6 +27,7 @@ var ItemGrant = struct {
 	CreatedBy: field.String{}.WithColumn("created_by"),
 	CreatedAt: field.Time{}.WithColumn("created_at"),
 	UpdatedAt: field.Time{}.WithColumn("updated_at"),
+	Version:   field.Number[uint64]{}.WithColumn("version"),
 	ExpiresAt: field.Time{}.WithColumn("expires_at"),
 	RevokedAt: field.Time{}.WithColumn("revoked_at"),
 }

@@ -20,6 +20,7 @@ type ItemGrant struct {
 	CreatedBy          string     `gorm:"not null" json:"created_by"`
 	CreatedAt          time.Time  `json:"created_at"`
 	UpdatedAt          time.Time  `json:"updated_at"`
+	Version            uint64     `gorm:"not null;default:1" json:"version"`
 	ExpiresAt          *time.Time `json:"expires_at,omitempty"`
 	RevokedAt          *time.Time `gorm:"index" json:"revoked_at,omitempty"`
 }
