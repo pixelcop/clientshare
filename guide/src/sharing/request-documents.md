@@ -2,7 +2,7 @@
 
 **Who:** Administrators. Managers can ask an administrator to create a link or invite a client user for ongoing exchanges.
 
-Use a **Write** secure link when you want a recipient to send documents without downloading material from the workspace.
+Use an **Upload only** secure link when you want a recipient to send documents without downloading material from the workspace.
 
 ## Prepare the request
 
@@ -14,18 +14,16 @@ For example, ask for a project brief, an asset inventory, and supporting images.
 
 ## Send an upload link
 
-1. Open the client's **Links** action and choose **New Link**.
-2. Set **Access Type** to **Write**.
+1. Open **Manage client access → Manage links** and choose **New link**.
+2. Choose **Collect uploads** and review **Upload only** permissions.
 3. Set the expiry to cover the requested submission period.
-4. Email the link or clear **Send link by email** and copy it into your own message.
+4. Create the link, then use **Copy link** or **Email this existing link**. A queued email is not proof of delivery.
 
 You can include the [recipient instructions](../for-clients/send-and-receive-documents.md) in your message.
 
 ## What the recipient sees
 
-The secure-link page identifies the client and shows **Upload-only** access with an expiry. The recipient uploads through the drop area. Downloads are disabled, and creating a permanent account is not required to use the link.
-
-![Upload-only secure-link header showing its expiry and an upload area with Choose Folder.](/screenshots/upload-only-link.png)
+The secure-link page identifies the client and shows **Upload-only** access with an expiry. The recipient uses **Upload**, the **Upload folder** menu action, or drags files into the file surface. Downloads are disabled, and a permanent account is not required.
 
 ## Confirm receipt
 

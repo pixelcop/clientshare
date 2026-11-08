@@ -4,32 +4,30 @@
 
 ## Find a client's links
 
-Open **Clients**, then choose **Links** from the client's action dropdown.
+Open the client workspace, then **Manage client access → Manage links**. The client's directory dropdown also retains **Links**.
 
-![Secure Links list for Willow Creek Holdings showing an active Read & Write link with Copy and Revoke actions.](/screenshots/secure-links.png)
+The default **Usable links** view excludes expired and revoked links. Select **Expired & revoked history** to inspect retained records. History cannot reconstruct links that were permanently deleted by an older release.
 
 The table shows:
 
 | Column | Meaning |
 | --- | --- |
-| **Link** | When the link was generated; selecting the text copies it. |
-| **Access** | Read, Write, or Read & Write. |
-| **Email** | Recipient address supplied when creating the link, if any. |
-| **Expires** | The expiry date and time. |
-| **Status** | Active or Expired. |
-| **Last Accessed** | Last recorded link access, when available. |
-| **Actions** | Copy or revoke the link. |
+| **Created** | When the link was generated. This is not a copy action. |
+| **Permissions** | View & download, Upload only, or View, download & upload. |
+| **Expires** | The expiry timestamp with timezone. |
+| **Status** | Usable, Expired or Revoked; revoked history includes its revocation time. |
+| **Actions** | Copy, open Details & email, or revoke a usable link. Unavailable links have no copy/email action. |
 
-Last Accessed indicates link use; it is not proof that a person read or approved every document.
+**Details & email → Link history** retains the creation time, last-access information when recorded, and any previously configured contact email. A contact email does not restrict bearer-link access. Link use or a queued email is not proof that a particular person read or approved a document.
 
 ## Revoke a link
 
-1. Identify the link by its creation time, access type, recipient, and expiry.
+1. Identify the link by its creation time, permissions and expiry.
 2. Select **Revoke**.
-3. Confirm the browser prompt: “Revoke this link? This action cannot be undone.”
-4. Check the refreshed list.
+3. Confirm the prompt explaining that this client-wide link will stop working while other links and account access remain unchanged.
+4. Check **Expired & revoked history** for the retained revocation record.
 
-Revocation removes that link's access. If you revoke the wrong link, create a new one and send the replacement; the old link cannot be reactivated through the UI.
+Revocation removes that link's access on the next protected request, including already-open sessions. Unsent queued mail for it is canceled, and the queue rechecks link validity before sending. Mail already handed to SMTP cannot be recalled. If you revoke the wrong link, create a replacement; the old link cannot be reactivated through the UI.
 
 ## Replace an expired or unsuitable link
 

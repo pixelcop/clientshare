@@ -6,15 +6,15 @@
 
 | Link option | Recipient label | Allows | Typical use |
 | --- | --- | --- | --- |
-| **Read** | Read-only | View and download | Deliver completed documents |
-| **Write** | Upload-only | Upload; downloads are disabled | Collect supporting documents |
-| **Read & Write** | Read & upload | View, download, and upload | Exchange drafts and responses |
+| **View & download** | Read-only | View and download | Deliver completed documents |
+| **Upload only** | Upload-only | Upload; downloads are disabled | Collect supporting documents |
+| **View, download & upload** | Read & upload | View, download, and upload | Exchange drafts and responses |
 
 These options do not give recipients staff administration or deletion controls. An upload-only link should not be used as a promise that filenames or the workspace structure are invisible.
 
 Read-only recipients can browse folders, preview files, download files, and download folders as ZIP archives. They cannot upload or replace files, create folders, or delete anything.
 
-Only **Read & Write** links offer optional account registration. Read-only and upload-only recipients need an administrator's invitation to create an account; registering must not bypass the link's restrictions.
+The stored API modes remain `read`, `write`, and `readwrite`; legacy `view` is interpreted as `read`. Only **View, download & upload** links offer optional account registration. Read-only and upload-only recipients need an administrator's invitation to create an account; registering must not bypass the link's restrictions.
 
 ## Understand the scope
 
@@ -24,9 +24,9 @@ Someone who also has a user account may have separate access through that accoun
 
 ## Set an expiry
 
-In **New Secure Link**, choose a suggested number of days or type a value from **1 to 120**. The link becomes unusable after its expiry. Check the exact timestamp in the **Expires** column after creation.
+In **New link**, choose a suggested number of days or type a value from **1 to 120**. The confirmation displays an exact expiry timestamp and timezone; the created result preserves that timestamp. The link becomes unusable after expiry, including in already-open sessions.
 
-Portal settings provide a default expiry, while the creation form may remember your previous choices in the browser. Always review the value for the current exchange.
+Portal settings provide the default expiry. New dialogs do not restore permissions from another client or sharing scope. **Send documents** and **Collect uploads** are presets, not additional permissions; always review the selected capability and timestamp.
 
 ## Expiry versus revocation
 
