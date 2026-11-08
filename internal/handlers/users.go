@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"math"
 	"sort"
 	"strings"
@@ -44,11 +45,11 @@ func RegisterUserRoutes(router fiber.Router, db *gorm.DB, emailQueue emailpkg.Em
 	router.Get("/users", middleware.RoleRequired("manager"), h.ListUsersHandler)
 	router.Post("/users", middleware.RoleRequired("manager"), h.CreateUserHandler)
 	router.Post("/users/resend-invites", middleware.RoleRequired("manager"), h.ResendAllInvitesHandler)
-	router.Put("/users/:id", middleware.RoleRequired("manager"), h.UpdateUserHandler)
-	router.Delete("/users/:id", middleware.RoleRequired("manager"), h.DeleteUserHandler)
-	router.Post("/users/:id/generate-access-link", middleware.RoleRequired("manager"), h.GenerateAccessLinkHandler)
+	router.Put("/users/:id", middleware.RoleRequired("admin"), h.UpdateUserHandler)
+	router.Delete("/users/:id", middleware.RoleRequired("admin"), h.DeleteUserHandler)
+	router.Post("/users/:id/generate-access-link", middleware.RoleRequired("admin"), h.GenerateAccessLinkHandler)
 	router.Post("/users/:id/resend-invite", middleware.RoleRequired("manager"), h.ResendInviteHandler)
-	router.Post("/users/:id/assign-client", middleware.RoleRequired("manager"), h.AssignManagerToClientHandler)
+	router.Post("/users/:id/assign-client", middleware.RoleRequired("admin"), h.AssignManagerToClientHandler)
 }
 
 func (h *UsersHandler) inviteEmailSettings(c fiber.Ctx, tenantID string) (string, string) {
@@ -90,15 +91,22 @@ func (h *UsersHandler) ListUsersHandler(c fiber.Ctx) error {
 	if c.Query("page") != "" || c.Query("page_size") != "" || search != "" || roleFilter != "" || inviteStatusFilter != "" || clientIDFilter != "" {
 		page := fiber.Query[int](c, "page", 1)
 		pageSize := fiber.Query[int](c, "page_size", 20)
-		result, err := h.listUsersPaginated(c.Context(), tenantID, search, roleFilter, inviteStatusFilter, clientIDFilter, page, pageSize)
+		result, err := h.listUsersPaginated(c.Context(), tenantID, fiber.Locals[string](c, "user_id"), search, roleFilter, inviteStatusFilter, clientIDFilter, page, pageSize)
 		if err != nil {
 			utils.Logger(c).Error("error listing users", zap.Error(err))
 			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 		}
+		if err := h.redactUserClients(c, result.Items); err != nil {
+			return c.Status(503).JSON(fiber.Map{"error": "Access validation is temporarily unavailable"})
+		}
 		return c.JSON(result)
 	}
 	var users []models.User
-	if err := h.db.WithContext(c.Context()).Where("tenant_id = ?", tenantID).Find(&users).Error; err != nil {
+	q, err := h.userListQuery(c.Context(), tenantID, fiber.Locals[string](c, "user_id"), "", "", "", "")
+	if err != nil {
+		return c.Status(503).JSON(fiber.Map{"error": "Access validation is temporarily unavailable"})
+	}
+	if err := q.Find(&users).Error; err != nil {
 		utils.Logger(c).Error("error listing users", zap.Error(err))
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -107,14 +115,20 @@ func (h *UsersHandler) ListUsersHandler(c fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
 	h.attachInviteStatus(users)
+	if err := h.redactUserClients(c, users); err != nil {
+		return c.Status(503).JSON(fiber.Map{"error": "Access validation is temporarily unavailable"})
+	}
 	return c.JSON(users)
 }
 
-func (h *UsersHandler) listUsersPaginated(ctx context.Context, tenantID, search, roleFilter, inviteStatusFilter, clientIDFilter string, page, pageSize int) (*models.PaginatedResult[models.User], error) {
+func (h *UsersHandler) listUsersPaginated(ctx context.Context, tenantID, actorID, search, roleFilter, inviteStatusFilter, clientIDFilter string, page, pageSize int) (*models.PaginatedResult[models.User], error) {
 	page = normalizeUserListPage(page)
 	pageSize = normalizeUserListPageSize(pageSize)
 
-	q := h.userListQuery(ctx, tenantID, search, roleFilter, inviteStatusFilter, clientIDFilter)
+	q, err := h.userListQuery(ctx, tenantID, actorID, search, roleFilter, inviteStatusFilter, clientIDFilter)
+	if err != nil {
+		return nil, err
+	}
 
 	var totalItems int64
 	if err := q.Count(&totalItems).Error; err != nil {
@@ -152,8 +166,24 @@ func (h *UsersHandler) listUsersPaginated(ctx context.Context, tenantID, search,
 	}, nil
 }
 
-func (h *UsersHandler) userListQuery(ctx context.Context, tenantID, search, roleFilter, inviteStatusFilter, clientIDFilter string) *gorm.DB {
+func (h *UsersHandler) userListQuery(ctx context.Context, tenantID, actorID, search, roleFilter, inviteStatusFilter, clientIDFilter string) (*gorm.DB, error) {
 	q := h.db.WithContext(ctx).Model(&models.User{}).Where("users.tenant_id = ?", tenantID)
+	var actor models.User
+	if err := h.db.WithContext(ctx).Where("tenant_id = ? AND id = ?", tenantID, actorID).First(&actor).Error; err != nil {
+		return nil, err
+	}
+	var clientScope *gorm.DB
+	if actor.Role != "admin" {
+		if actor.Role != "manager" {
+			return q.Where("1 = 0"), nil
+		}
+		var err error
+		clientScope, err = (&services.AccessService{DB: h.db}).ClientScope(ctx, tenantID, actorID, services.AccessManageClient)
+		if err != nil {
+			return nil, err
+		}
+		q = q.Where("users.role IN ?", []string{"client", "customer"}).Where(`EXISTS (SELECT 1 FROM user_clients roster_uc WHERE roster_uc.tenant_id = users.tenant_id AND roster_uc.user_id = users.id AND roster_uc.client_id IN (?))`, clientScope.Select("clients.id"))
+	}
 
 	search = strings.TrimSpace(search)
 	if search != "" {
@@ -171,6 +201,10 @@ func (h *UsersHandler) userListQuery(ctx context.Context, tenantID, search, role
 				like,
 				like,
 			)
+		if clientScope != nil {
+			// Searches must not match the name of a private, unassigned client.
+			matchingUserIDs = matchingUserIDs.Where("uc.client_id IN (?)", clientScope.Select("clients.id"))
+		}
 		q = q.Where("id IN (?)", matchingUserIDs)
 	}
 	if roleFilter != "" {
@@ -187,7 +221,41 @@ func (h *UsersHandler) userListQuery(ctx context.Context, tenantID, search, role
 		q = q.Where("users.id IN (?)", assignedUserIDs)
 	}
 
-	return q
+	return q, nil
+}
+
+func (h *UsersHandler) currentAdmin(c fiber.Ctx) bool {
+	var count int64
+	err := h.db.WithContext(c.Context()).Model(&models.User{}).Where("tenant_id = ? AND id = ? AND role = 'admin'", tenantIDFromCtx(c), fiber.Locals[string](c, "user_id")).Count(&count).Error
+	return err == nil && count == 1
+}
+
+func (h *UsersHandler) redactUserClients(c fiber.Ctx, users []models.User) error {
+	if h.currentAdmin(c) {
+		return nil
+	}
+	q, err := (&services.AccessService{DB: h.db}).ClientScope(c.Context(), tenantIDFromCtx(c), fiber.Locals[string](c, "user_id"), services.AccessManageClient)
+	if err != nil {
+		return err
+	}
+	var ids []string
+	if err := q.Pluck("clients.id", &ids).Error; err != nil {
+		return err
+	}
+	allowed := map[string]bool{}
+	for _, id := range ids {
+		allowed[id] = true
+	}
+	for i := range users {
+		visible := []string{}
+		for _, id := range users[i].ClientIDs {
+			if allowed[id] {
+				visible = append(visible, id)
+			}
+		}
+		users[i].ClientIDs = visible
+	}
+	return nil
 }
 
 func normalizeUserListPage(page int) int {
@@ -295,10 +363,12 @@ func (h *UsersHandler) CreateUserHandler(c fiber.Ctx) error {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "forbidden"})
 	}
 	var req struct {
-		Email     string   `json:"email"`
-		Role      string   `json:"role"`
-		Name      string   `json:"name"`
-		ClientIDs []string `json:"client_ids"`
+		Email             string                     `json:"email"`
+		Role              string                     `json:"role"`
+		Name              string                     `json:"name"`
+		ClientIDs         []string                   `json:"client_ids"`
+		Capabilities      *models.AccessCapabilities `json:"capabilities"`
+		ManagerFullAccess bool                       `json:"manager_full_access"`
 	}
 	if err := c.Bind().Body(&req); err != nil {
 		utils.Logger(c).Debug("invalid request body", zap.Error(err))
@@ -314,6 +384,9 @@ func (h *UsersHandler) CreateUserHandler(c fiber.Ctx) error {
 		utils.Logger(c).Debug("invalid role", zap.String("role", req.Role))
 		return c.Status(400).JSON(fiber.Map{"error": "invalid role"})
 	}
+	if !h.currentAdmin(c) && (resolvedRole != "client" || req.ManagerFullAccess) {
+		return c.Status(403).JSON(fiber.Map{"error": "Only administrators may manage staff roles or full access"})
+	}
 	normalizedClientIDs := normalizeClientIDs(req.ClientIDs)
 	if resolvedRole == "client" && len(normalizedClientIDs) == 0 {
 		utils.Logger(c).Debug("client role requires client id")
@@ -322,19 +395,33 @@ func (h *UsersHandler) CreateUserHandler(c fiber.Ctx) error {
 	now := time.Now()
 	userName := strings.TrimSpace(req.Name)
 	user := models.User{
-		TenantID:     tenantID,
-		Email:        strings.TrimSpace(req.Email),
-		PasswordHash: "",
-		Role:         resolvedRole,
-		Name:         userName,
-		ClientIDs:    normalizedClientIDs,
-		CreatedAt:    now,
-		UpdatedAt:    now,
+		TenantID:          tenantID,
+		Email:             strings.TrimSpace(req.Email),
+		PasswordHash:      "",
+		Role:              resolvedRole,
+		Name:              userName,
+		ClientIDs:         normalizedClientIDs,
+		CreatedAt:         now,
+		UpdatedAt:         now,
+		ManagerFullAccess: resolvedRole == "manager" && req.ManagerFullAccess,
 	}
 	inviteRecord := models.InviteToken{}
 	inviteRawToken := ""
 	createdBy := strings.TrimSpace(fiber.Locals[string](c, "user_id"))
 	if err := h.db.WithContext(c.Context()).Transaction(func(tx *gorm.DB) error {
+		caps := models.AccessCapabilities{CanRead: true, CanUpload: true, CanShare: true}
+		if req.Capabilities != nil {
+			caps = *req.Capabilities
+		}
+		for _, clientID := range normalizedClientIDs {
+			d, err := (&services.AccessService{DB: tx}).Resolve(c.Context(), middleware.AccessRequest(c, clientID, "", services.AccessInviteClient))
+			if err != nil {
+				return err
+			}
+			if !d.Allowed || !d.CanGrant(caps) {
+				return fiber.ErrNotFound
+			}
+		}
 		if err := services.CheckStaffQuota(tx, &user); err != nil {
 			return err
 		}
@@ -344,11 +431,22 @@ func (h *UsersHandler) CreateUserHandler(c fiber.Ctx) error {
 		if err := h.replaceClientAssignments(tx, tenantID, user.ID, normalizedClientIDs); err != nil {
 			return err
 		}
+		if resolvedRole == "client" {
+			if err := tx.Model(&models.UserClient{}).Where("tenant_id = ? AND user_id = ?", tenantID, user.ID).Updates(map[string]any{
+				"capabilities_set": true, "can_read": caps.CanRead, "can_upload": caps.CanUpload, "can_delete": caps.CanDelete, "can_share": caps.CanShare,
+				"access_source": "invitation", "invited_by": createdBy,
+			}).Error; err != nil {
+				return err
+			}
+		}
 		var err error
 		inviteRecord, inviteRawToken, err = h.issueInviteForUser(tx, tenantID, user, createdBy, now)
 		return err
 	}); err != nil {
 		utils.Logger(c).Error("error creating invited user", zap.Error(err))
+		if accessErr, ok := err.(*fiber.Error); ok {
+			return c.Status(accessErr.Code).JSON(fiber.Map{"error": accessErr.Message})
+		}
 		if respondQuotaError(c, err) {
 			return nil
 		}
@@ -362,6 +460,9 @@ func (h *UsersHandler) CreateUserHandler(c fiber.Ctx) error {
 
 // POST /api/users/:id/generate-access-link - issue a fresh invite or password reset link without sending email
 func (h *UsersHandler) GenerateAccessLinkHandler(c fiber.Ctx) error {
+	if !h.currentAdmin(c) {
+		return c.Status(403).JSON(fiber.Map{"error": "Only administrators may issue account access links"})
+	}
 	role, _ := c.Locals("role").(string)
 	tenantID := tenantIDFromCtx(c)
 	if !canManageUsers(role) {
@@ -443,7 +544,11 @@ func (h *UsersHandler) ResendInviteHandler(c fiber.Ctx) error {
 	}
 
 	var user models.User
-	if err := h.db.WithContext(c.Context()).Where("tenant_id = ? AND id = ?", tenantID, id).First(&user).Error; err != nil {
+	q, err := h.userListQuery(c.Context(), tenantID, fiber.Locals[string](c, "user_id"), "", "", "", "")
+	if err != nil {
+		return c.Status(503).JSON(fiber.Map{"error": "Access validation is temporarily unavailable"})
+	}
+	if err := q.Where("users.id = ?", id).First(&user).Error; err != nil {
 		utils.Logger(c).Debug("user not found", zap.Error(err))
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "user not found"})
 	}
@@ -486,7 +591,11 @@ func (h *UsersHandler) ResendAllInvitesHandler(c fiber.Ctx) error {
 	}
 
 	users := make([]models.User, 0)
-	if err := h.db.WithContext(c.Context()).Where("tenant_id = ?", tenantID).Where("NOT " + userHasSignInCredentialSQL).Order("created_at DESC").Find(&users).Error; err != nil {
+	q, err := h.userListQuery(c.Context(), tenantID, fiber.Locals[string](c, "user_id"), "", "", "pending", "")
+	if err != nil {
+		return c.Status(503).JSON(fiber.Map{"error": "Access validation is temporarily unavailable"})
+	}
+	if err := q.Order("users.created_at DESC").Find(&users).Error; err != nil {
 		utils.Logger(c).Error("error loading pending invite users", zap.Error(err))
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -496,6 +605,9 @@ func (h *UsersHandler) ResendAllInvitesHandler(c fiber.Ctx) error {
 	if err := h.attachClientIDs(c.Context(), tenantID, users); err != nil {
 		utils.Logger(c).Error("error loading pending invite client assignments", zap.Error(err))
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+	if err := h.redactUserClients(c, users); err != nil {
+		return c.Status(503).JSON(fiber.Map{"error": "Access validation is temporarily unavailable"})
 	}
 
 	type inviteSend struct {
@@ -591,6 +703,9 @@ func hashInviteToken(secret, token string) string {
 
 // PUT /api/users/:id - update user
 func (h *UsersHandler) UpdateUserHandler(c fiber.Ctx) error {
+	if !h.currentAdmin(c) {
+		return c.Status(403).JSON(fiber.Map{"error": "Only administrators may change tenant-wide identity or staff settings"})
+	}
 	role, _ := c.Locals("role").(string)
 	tenantID := tenantIDFromCtx(c)
 	if !canManageUsers(role) {
@@ -603,11 +718,12 @@ func (h *UsersHandler) UpdateUserHandler(c fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "invalid id"})
 	}
 	var req struct {
-		Email     *string   `json:"email"`
-		Password  *string   `json:"password"`
-		Role      *string   `json:"role"`
-		Name      *string   `json:"name"`
-		ClientIDs *[]string `json:"client_ids"`
+		Email             *string   `json:"email"`
+		Password          *string   `json:"password"`
+		Role              *string   `json:"role"`
+		Name              *string   `json:"name"`
+		ClientIDs         *[]string `json:"client_ids"`
+		ManagerFullAccess *bool     `json:"manager_full_access"`
 	}
 	if err := c.Bind().Body(&req); err != nil {
 		utils.Logger(c).Debug("invalid request body", zap.Error(err))
@@ -626,6 +742,11 @@ func (h *UsersHandler) UpdateUserHandler(c fiber.Ctx) error {
 			return c.Status(400).JSON(fiber.Map{"error": "invalid role"})
 		}
 		user.Role = resolvedRole
+	}
+	if resolvedRole != "manager" {
+		user.ManagerFullAccess = false
+	} else if req.ManagerFullAccess != nil {
+		user.ManagerFullAccess = *req.ManagerFullAccess
 	}
 	if req.Email != nil {
 		user.Email = *req.Email
@@ -695,6 +816,9 @@ func (h *UsersHandler) UpdateUserHandler(c fiber.Ctx) error {
 
 // DELETE /api/users/:id - delete user
 func (h *UsersHandler) DeleteUserHandler(c fiber.Ctx) error {
+	if !h.currentAdmin(c) {
+		return c.Status(403).JSON(fiber.Map{"error": "Only administrators may delete tenant-wide identities"})
+	}
 	role, _ := c.Locals("role").(string)
 	tenantID := tenantIDFromCtx(c)
 	if !canManageUsers(role) {
@@ -706,7 +830,27 @@ func (h *UsersHandler) DeleteUserHandler(c fiber.Ctx) error {
 		utils.Logger(c).Debug("invalid id")
 		return c.Status(400).JSON(fiber.Map{"error": "invalid id"})
 	}
-	if err := h.db.WithContext(c.Context()).Where("tenant_id = ? AND id = ?", tenantID, id).Delete(&models.User{}).Error; err != nil {
+	if err := h.db.WithContext(c.Context()).Transaction(func(tx *gorm.DB) error {
+		var grants []models.ItemGrant
+		if err := tx.Where("tenant_id = ? AND user_id = ?", tenantID, id).Find(&grants).Error; err != nil {
+			return err
+		}
+		// Only recipient access is removed. Onward grants/links created by this
+		// identity survive; creator IDs are audit provenance, not dependencies.
+		for _, model := range []any{&models.ItemGrant{}, &models.UserClient{}, &models.InviteToken{}} {
+			if err := tx.Where("tenant_id = ? AND user_id = ?", tenantID, id).Delete(model).Error; err != nil {
+				return err
+			}
+		}
+		if err := tx.Where("tenant_id = ? AND id = ?", tenantID, id).Delete(&models.User{}).Error; err != nil {
+			return err
+		}
+		payload, err := json.Marshal(map[string]any{"recipient_id": id, "removed_grants": grants})
+		if err != nil {
+			return err
+		}
+		return tx.Create(&models.AuditEvent{TenantID: &tenantID, Actor: fiber.Locals[string](c, "user_id"), Action: "user.delete", TargetID: &id, Payload: string(payload)}).Error
+	}); err != nil {
 		utils.Logger(c).Error("error deleting user", zap.Error(err))
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -715,6 +859,9 @@ func (h *UsersHandler) DeleteUserHandler(c fiber.Ctx) error {
 
 // POST /api/users/:id/assign-client - assign manager to client
 func (h *UsersHandler) AssignManagerToClientHandler(c fiber.Ctx) error {
+	if !h.currentAdmin(c) {
+		return c.Status(403).JSON(fiber.Map{"error": "Only administrators may assign staff"})
+	}
 	role, _ := c.Locals("role").(string)
 	tenantID := tenantIDFromCtx(c)
 	if !canManageUsers(role) {
@@ -846,8 +993,24 @@ func (h *UsersHandler) listClientIDsForUser(ctx context.Context, tenantID, userI
 }
 
 func (h *UsersHandler) replaceClientAssignments(tx *gorm.DB, tenantID, userID string, clientIDs []string) error {
-	if err := tx.Where("tenant_id = ? AND user_id = ?", tenantID, userID).Delete(&models.UserClient{}).Error; err != nil {
+	var existing []models.UserClient
+	if err := tx.Where("tenant_id = ? AND user_id = ?", tenantID, userID).Find(&existing).Error; err != nil {
 		return err
+	}
+	wanted := map[string]bool{}
+	for _, clientID := range clientIDs {
+		wanted[clientID] = true
+	}
+	for _, membership := range existing {
+		if wanted[membership.ClientID] {
+			continue // never reset existing capabilities or invitation provenance
+		}
+		if err := tx.Model(&models.ItemGrant{}).Where("tenant_id = ? AND client_id = ? AND user_id = ? AND revoked_at IS NULL", tenantID, membership.ClientID, userID).Update("revoked_at", time.Now()).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("tenant_id = ? AND client_id = ? AND user_id = ?", tenantID, membership.ClientID, userID).Delete(&models.UserClient{}).Error; err != nil {
+			return err
+		}
 	}
 	for _, clientID := range clientIDs {
 		if err := h.addClientAssignment(tx, tenantID, userID, clientID); err != nil {
@@ -864,6 +1027,14 @@ func (h *UsersHandler) addClientAssignment(tx *gorm.DB, tenantID, userID, client
 	}
 	if rel.TenantID == "" {
 		return fiber.NewError(fiber.StatusBadRequest, "tenant_id is required")
+	}
+	var user models.User
+	if err := tx.Where("tenant_id = ? AND id = ?", rel.TenantID, rel.UserID).First(&user).Error; err != nil {
+		return fiber.NewError(404, "Not Found")
+	}
+	var client models.Client
+	if err := tx.Where("tenant_id = ? AND id = ?", rel.TenantID, rel.ClientID).First(&client).Error; err != nil {
+		return fiber.NewError(404, "Not Found")
 	}
 	return tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&rel).Error
 }

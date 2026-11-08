@@ -18,13 +18,14 @@ import (
 
 func setupTestApp() (*fiber.App, *gorm.DB) {
 	db, _ := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
-	db.AutoMigrate(&models.User{}, &models.UserClient{}, &models.InviteToken{}, &models.TenantEntitlement{})
+	db.AutoMigrate(&models.User{}, &models.UserClient{}, &models.InviteToken{}, &models.TenantEntitlement{}, &models.ItemGrant{}, &models.PasskeyCredential{}, &models.AuditEvent{})
 	db.Create(&models.TenantEntitlement{TenantID: tenantctx.DefaultTenantID})
 	app := fiber.New()
 	// Middleware to inject admin role for all requests
 	app.Use(func(c fiber.Ctx) error {
 		tenantctx.SetLocal(c, tenantctx.RequestContext{ID: tenantctx.DefaultTenantID, Slug: tenantctx.DefaultTenantSlug, Name: tenantctx.DefaultTenantName, Resolution: "test"})
 		c.Locals("role", "admin")
+		c.Locals("user_id", "test-admin")
 		return c.Next()
 	})
 	h := NewUsersHandler(db, nil, "", "secret", "reset-secret", 72*time.Hour, 30*time.Minute, nil)
@@ -37,7 +38,7 @@ func setupTestApp() (*fiber.App, *gorm.DB) {
 
 func TestUserCRUDLifecycle(t *testing.T) {
 	app, db := setupTestApp()
-	db.Create(&models.User{Email: "admin@x.com", PasswordHash: "x", Role: "admin", Name: "Admin", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+	db.Create(&models.User{ID: "test-admin", Email: "admin@x.com", PasswordHash: "x", Role: "admin", Name: "Admin", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 
 	user := map[string]interface{}{"email": "bob@x.com", "role": "manager", "name": "Bob"}
 	body, _ := json.Marshal(user)

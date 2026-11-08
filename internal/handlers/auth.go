@@ -22,6 +22,7 @@ import (
 	"github.com/pixelcop/clientshare/pkg/utils"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type AuthHandler struct {
@@ -483,13 +484,14 @@ func (h *AuthHandler) MeHandler(c fiber.Ctx) error {
 		isInitialAdmin = initialAdmin.ID == user.ID
 	}
 	return c.JSON(fiber.Map{
-		"id":               user.ID,
-		"session_id":       c.Locals("session_id"),
-		"email":            user.Email,
-		"role":             user.Role,
-		"name":             user.Name,
-		"client_ids":       clientIDs,
-		"is_initial_admin": isInitialAdmin,
+		"id":                  user.ID,
+		"session_id":          c.Locals("session_id"),
+		"email":               user.Email,
+		"role":                user.Role,
+		"name":                user.Name,
+		"client_ids":          clientIDs,
+		"is_initial_admin":    isInitialAdmin,
+		"manager_full_access": user.ManagerFullAccess,
 	})
 }
 
@@ -537,14 +539,28 @@ func (h *AuthHandler) RegisterHandler(c fiber.Ctx) error {
 		Name:         req.Name,
 	}
 	if err := h.db.WithContext(c.Context()).Transaction(func(tx *gorm.DB) error {
+		var current models.SecureLink
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id = ? AND id = ?", tenantID, link.ID).First(&current).Error; err != nil {
+			return err
+		}
+		if current.FileID != nil || current.RevokedAt != nil || !current.ExpiresAt.After(time.Now()) || current.AccessType != "readwrite" {
+			return errors.New("link no longer available")
+		}
+		var client models.Client
+		if err := tx.Where("tenant_id = ? AND id = ?", tenantID, current.ClientID).First(&client).Error; err != nil {
+			return err
+		}
 		if err := tx.Create(&user).Error; err != nil {
 			return err
 		}
-		rel := models.UserClient{TenantID: tenantID, UserID: user.ID, ClientID: link.ClientID, CreatedAt: time.Now()}
+		// A bearer credential cannot mint named sharing authority. Preserve
+		// this legacy client-wide registration path within its read/upload
+		// ceiling; scoped links never create client membership.
+		rel := models.UserClient{TenantID: tenantID, UserID: user.ID, ClientID: link.ClientID, CreatedAt: time.Now(), CapabilitiesSet: true, AccessCapabilities: models.AccessCapabilities{CanRead: true, CanUpload: true}, AccessSource: "link-registration"}
 		if err := tx.Create(&rel).Error; err != nil {
 			return err
 		}
-		result := tx.Model(&models.SecureLink{}).Where("tenant_id = ? AND id = ? AND revoked_at IS NULL AND expires_at > ?", tenantID, link.ID, time.Now()).Update("revoked_at", time.Now())
+		result := tx.Model(&models.SecureLink{}).Where("tenant_id = ? AND id = ? AND revoked_at IS NULL", tenantID, link.ID).Update("revoked_at", time.Now())
 		if err := result.Error; err != nil {
 			return err
 		}

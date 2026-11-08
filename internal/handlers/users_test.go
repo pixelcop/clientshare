@@ -536,9 +536,10 @@ func TestUsersHandler_ManagerCanManageUsers(t *testing.T) {
 	env := setupOtherHandlersEnv(t)
 
 	createReq := jsonAuthRequest(http.MethodPost, "/api/users", env.managerToken, map[string]any{
-		"email": "managed-by-manager@test.local",
-		"role":  "manager",
-		"name":  "Managed By Manager",
+		"email":      "managed-by-manager@test.local",
+		"role":       "client",
+		"name":       "Managed By Manager",
+		"client_ids": []string{env.client.ID},
 	})
 	createResp, err := env.app.Test(createReq)
 	if err != nil {
@@ -575,23 +576,8 @@ func TestUsersHandler_ManagerCanManageUsers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("assign client request failed: %v", err)
 	}
-	if assignResp.StatusCode != http.StatusOK {
-		t.Fatalf("expected 200, got %d", assignResp.StatusCode)
-	}
-
-	var assigned models.User
-	if err := json.NewDecoder(assignResp.Body).Decode(&assigned); err != nil {
-		t.Fatalf("decode assigned user failed: %v", err)
-	}
-	foundClientAssignment := false
-	for _, clientID := range assigned.ClientIDs {
-		if clientID == env.client.ID {
-			foundClientAssignment = true
-			break
-		}
-	}
-	if !foundClientAssignment {
-		t.Fatalf("expected manager assignment to include client %s", env.client.ID)
+	if assignResp.StatusCode != http.StatusForbidden {
+		t.Fatalf("staff assignment must be admin-only, got %d", assignResp.StatusCode)
 	}
 
 	updateReq := jsonAuthRequest(http.MethodPut, "/api/users/"+created.ID, env.managerToken, map[string]any{"name": "Manager Updated"})
@@ -599,16 +585,8 @@ func TestUsersHandler_ManagerCanManageUsers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("update user request failed: %v", err)
 	}
-	if updateResp.StatusCode != http.StatusOK {
-		t.Fatalf("expected 200, got %d", updateResp.StatusCode)
-	}
-
-	var updated models.User
-	if err := json.NewDecoder(updateResp.Body).Decode(&updated); err != nil {
-		t.Fatalf("decode updated user failed: %v", err)
-	}
-	if updated.Name != "Manager Updated" {
-		t.Fatalf("expected updated name, got %q", updated.Name)
+	if updateResp.StatusCode != http.StatusForbidden {
+		t.Fatalf("tenant-wide identity updates must be admin-only, got %d", updateResp.StatusCode)
 	}
 
 	beforeResendQueue := len(env.queue.items)
@@ -662,8 +640,8 @@ func TestUsersHandler_ManagerCanManageUsers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("delete user request failed: %v", err)
 	}
-	if deleteResp.StatusCode != http.StatusNoContent {
-		t.Fatalf("expected 204, got %d", deleteResp.StatusCode)
+	if deleteResp.StatusCode != http.StatusForbidden {
+		t.Fatalf("tenant-wide identity deletion must be admin-only, got %d", deleteResp.StatusCode)
 	}
 }
 

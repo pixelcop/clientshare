@@ -59,6 +59,18 @@ user instead of accepting a role string as proof of authority. Client APIs apply
 assigned/full manager policy; creating a client assigns its manager creator
 transactionally, rather than granting the creator access to unrelated clients.
 
+The staff user directory is scoped to manageable clients for managers, including
+search, totals and returned client IDs. Managers can invite capability-bounded
+client users within that scope, but cannot promote staff, change tenant-wide
+identity settings, delete accounts, or generate account/password access links.
+Those global identity operations are administrator-only; client membership
+management is a separate scope from deleting a tenant account. Replacing client
+assignments preserves unchanged capabilities/provenance and revokes only the
+removed recipient's direct grants, not their onward shares or bearer links.
+Legacy client-wide bearer registration, where supported, creates bounded
+read/upload membership without named sharing authority. It never accepts an
+item-targeted link as client membership.
+
 `ResolveItems` batches up to 500 exact items in one client, with parent/grant SQL
 batches of 200. Parent traversal is limited to 128 nodes per chain, rejects
 cycles, non-folder parents, foreign/missing/deleted ancestors and never uses
