@@ -4,6 +4,11 @@
 
 Open your organization's portal and sign in, or follow the secure link the sender gave you. Check the client name before uploading or downloading.
 
+If your account belongs to multiple clients, use **Client workspace** above the
+file area to switch between authorized workspaces. **Shared with me** remains
+separate for direct file/folder shares. Opening an item-only share does not add
+its client to the workspace selector or grant access to its parent content.
+
 ## Send documents
 
 1. Open the destination folder the sender asked you to use.

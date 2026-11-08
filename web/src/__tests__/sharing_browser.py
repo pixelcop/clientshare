@@ -154,6 +154,7 @@ with sync_playwright() as p:
     expect(folder_page).to_have_url(base + "/folder/" + folder["id"])
     expect(folder_page.get_by_role("button", name="Upload", exact=True)).to_be_visible()
     expect(folder_page.get_by_role("button", name="Manage client access", exact=True)).to_have_count(0)
+    expect(folder_page.get_by_role("combobox", name="Client workspace", exact=True)).to_have_count(0)
     assert folder_context.request.get(base + "/api/folders/" + root + "/download-zip").status == 404
     assert folder_context.request.get(base + "/api/folders/" + folder["id"] + "/download-zip").ok
 
@@ -180,6 +181,60 @@ with sync_playwright() as p:
     expect(member_page).to_have_url(base + "/folder/" + root)
     expect(member_page.get_by_role("button", name="Manage client access", exact=True)).to_be_visible()
     assert member_context.request.get(base + "/api/files/" + private["id"]).ok
+
+    # Legacy multi-client navigation coexists with direct item-only discovery.
+    # Granting a folder in a third client must not add that client to the switcher.
+    def create_client(name):
+        response = admin.request.post(base + "/api/clients", data={"name": f"{name} {run}"})
+        assert response.status == 201, response.text()
+        return response.json()
+
+    second_client = create_client("Second workspace")
+    item_client = create_client("Item-only workspace")
+    second_file = upload(second_client["root_folder_id"], "second-workspace.txt")
+    response = admin.request.post(base + "/api/clients/" + second_client["id"] + "/invitations", data={"email": accounts["member"]["email"], "capabilities": {"can_read": True}}, headers={"Idempotency-Key": str(uuid.uuid4())})
+    assert response.status == 201, response.text()
+    assert member_context.request.post(base + "/api/invitations/accept", data={"token": invitation_token(response.json())}).ok
+    response = admin.request.post(base + "/api/folders/" + item_client["root_folder_id"], data={"name": "Item-only shared folder"})
+    assert response.ok, response.text()
+    item_folder = response.json()
+    item_file = upload(item_folder["id"], "item-only.txt")
+    response = admin.request.post(base + "/api/files/" + item_folder["id"] + "/grants", data={"user_id": accounts["member"]["id"], "capabilities": {"can_read": True}})
+    assert response.status == 201, response.text()
+    authorized_ids = {client["id"], second_client["id"]}
+    assert {item["id"] for item in member_context.request.get(base + "/api/clients").json()} == authorized_ids
+    member_page.reload()
+    member_page.wait_for_load_state("networkidle")
+    selector = member_page.get_by_role("combobox", name="Client workspace", exact=True)
+    expect(selector).to_contain_text(client["name"])
+
+    def select_workspace(target):
+        selector.click()
+        expect(member_page.get_by_role("option")).to_have_count(2)
+        expect(member_page.get_by_role("option", name=item_client["name"], exact=True)).to_have_count(0)
+        member_page.get_by_role("option", name=target["name"], exact=True).click()
+        expect(member_page).to_have_url(base + "/folder/" + target["root_folder_id"])
+        expect(member_page.get_by_role("heading", name=target["name"], exact=True)).to_be_visible()
+
+    select_workspace(second_client)
+    expect(member_page.get_by_role("button", name=second_file["filename"], exact=True)).to_be_visible()
+    expect(member_page.get_by_role("button", name=private["filename"], exact=True)).to_have_count(0)
+    member_page.reload()
+    member_page.wait_for_load_state("networkidle")
+    expect(selector).to_contain_text(second_client["name"])
+    member_page.set_viewport_size({"width": 390, "height": 844})
+    expect(selector).to_be_in_viewport()
+    select_workspace(client)
+    assert member_page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    member_page.screenshot(path=str(database.parent / "multi-client-switcher-mobile.png"), full_page=True)
+    member_page.goto(base + "/shared-with-me")
+    member_page.get_by_role("link", name="Item-only shared folder View & download", exact=True).click()
+    expect(member_page).to_have_url(base + "/folder/" + item_folder["id"])
+    expect(member_page.get_by_role("button", name=item_file["filename"], exact=True)).to_be_visible()
+    expect(selector).to_contain_text("Choose a client workspace")
+    assert member_context.request.get(base + "/api/folders/" + item_client["root_folder_id"]).status == 404
+    select_workspace(second_client)
+    assert {item["id"] for item in member_context.request.get(base + "/api/clients").json()} == authorized_ids
 
     # File bearer landings do not infer authority to browse their parent.
     file_link_response = admin.request.post(base + "/api/files/" + file["id"] + "/links", data={"access_type": "read", "expiry_days": 1}, headers={"Idempotency-Key": str(uuid.uuid4())})
@@ -249,4 +304,4 @@ with sync_playwright() as p:
         assert db.execute("select count(*) from secure_links where tenant_id=? and client_id=? and revoked_at is null", (tenant, client["id"])).fetchone()[0] == links_before
     assert not errors, errors
     browser.close()
-print("PASS: named invitation acceptance, exact file/folder discovery, reshare survival, scoped bearer collection, truthful email retries, session-switch confirmation and mobile dialog layout")
+print("PASS: named invitation acceptance, exact file/folder discovery, multi-client workspace switching with item-only navigation, reshare survival, scoped bearer collection, truthful email retries, session-switch confirmation and mobile dialog layout")

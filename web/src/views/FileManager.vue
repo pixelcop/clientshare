@@ -4,6 +4,7 @@ import { Button } from 'openvue';
 import { storeToRefs } from 'pinia';
 
 import ClientAccessDialog from '@/components/ClientAccessDialog.vue';
+import ClientWorkspaceSwitcher from '@/components/ClientWorkspaceSwitcher.vue';
 import CollectionInvitation from '@/components/CollectionInvitation.vue';
 import FileList from '@/components/FileList.vue';
 import PendingEmail from '@/components/PendingEmail.vue';
@@ -81,7 +82,8 @@ onBeforeUnmount(() => {
           fileManager.context?.client_name || fileManager.context?.folder.filename || 'File Manager'
         }}
       </h1>
-      <div class="flex items-center gap-2">
+      <div class="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+        <ClientWorkspaceSwitcher :clientId="fileManager.context?.client_id" />
         <Button
           v-if="canManageAccess && clientId"
           :id="`collect-links-${clientId}`"
