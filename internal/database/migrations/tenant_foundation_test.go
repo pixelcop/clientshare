@@ -25,7 +25,7 @@ func TestMigrationProviderUpCreatesCurrentSchemaAndSeedsTenant(t *testing.T) {
 
 	results, err := provider.Up(context.Background())
 	require.NoError(t, err)
-	require.Len(t, results, 20)
+	require.Len(t, results, 21)
 
 	requireDefaultTenantSeeded(t, db, dbpkg.DatabaseDriverSQLite)
 	requireColumnPresent(t, db, "passkey_signups", "token_hash")
@@ -45,7 +45,7 @@ func TestMigrationProviderUpCreatesCurrentSchemaAndSeedsTenantPostgres(t *testin
 
 	results, err := provider.Up(context.Background())
 	require.NoError(t, err)
-	require.Len(t, results, 20)
+	require.Len(t, results, 21)
 
 	requireDefaultTenantSeeded(t, db, dbpkg.DatabaseDriverPostgres)
 	requireColumnPresent(t, db, "passkey_signups", "token_hash")
@@ -96,7 +96,7 @@ func TestMigrationProviderResetDropsManagedTables(t *testing.T) {
 
 	results, err := provider.DownTo(context.Background(), 0)
 	require.NoError(t, err)
-	require.Len(t, results, 20)
+	require.Len(t, results, 21)
 
 	requireManagedTablesMissing(t, db, dbpkg.DatabaseDriverSQLite)
 }
@@ -110,7 +110,7 @@ func TestMigrationProviderResetDropsManagedTablesPostgres(t *testing.T) {
 
 	results, err := provider.DownTo(context.Background(), 0)
 	require.NoError(t, err)
-	require.Len(t, results, 20)
+	require.Len(t, results, 21)
 
 	requireManagedTablesMissing(t, db, dbpkg.DatabaseDriverPostgres)
 }
@@ -147,6 +147,7 @@ func newMigrationProviderForTest(t *testing.T, db *sql.DB, dialect goose.Dialect
 			migration.NewGoMigration(51, upAddPrivateCollectionSessions, downAddPrivateCollectionSessions),
 			migration.NewGoMigration(52, upAddNotificationAccessContext, downAddNotificationAccessContext),
 			migration.NewGoMigration(53, upAddAccessInvitations, downAddAccessInvitations),
+			migration.NewGoMigration(54, upAddInvitationDeliveryContext, downAddInvitationDeliveryContext),
 		},
 	)
 	require.NoError(t, err)

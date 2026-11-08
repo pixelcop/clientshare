@@ -156,7 +156,7 @@ func (s *SharingService) UpdateGrant(ctx context.Context, req AccessRequest, gra
 			if err := tx.Where("tenant_id = ? AND id = ?", req.TenantID, grant.UserID).First(&user).Error; err != nil {
 				return err
 			}
-			if err := tx.Model(&models.AccessInvitation{}).Where("tenant_id = ? AND client_id = ? AND file_id = ? AND accepted_at IS NULL AND revoked_at IS NULL AND (recipient_user_id = ? OR LOWER(email) = LOWER(?))", req.TenantID, req.ClientID, req.FileID, user.ID, user.Email).Update("revoked_at", s.now()).Error; err != nil {
+			if err := RevokePendingRecipientInvitations(tx, req, user.ID, user.Email, s.now()); err != nil {
 				return err
 			}
 		} else {

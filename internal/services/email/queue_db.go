@@ -99,6 +99,8 @@ func (q *DBEmailQueue) Queue(email Email, sendAt *time.Time) (*models.QueuedEmai
 		RecipientLinkID:         email.RecipientLinkID,
 		NotificationBaseURL:     email.NotificationBaseURL,
 		NotificationProductName: email.NotificationProductName,
+		AccessInvitationID:      email.AccessInvitationID,
+		IdentityInviteID:        email.IdentityInviteID,
 	}
 	if email.DeduplicationKey != "" {
 		key := email.DeduplicationKey
@@ -112,7 +114,7 @@ func (q *DBEmailQueue) Queue(email Email, sendAt *time.Time) (*models.QueuedEmai
 			if err := q.DB.Where("tenant_id = ? AND deduplication_key = ?", email.TenantID, key).First(&item).Error; err != nil {
 				return nil, err
 			}
-			if !strings.EqualFold(item.Recipient, email.To) || !sameLink(item.SecureLinkID, email.SecureLinkID) {
+			if !strings.EqualFold(item.Recipient, email.To) || !sameLink(item.SecureLinkID, email.SecureLinkID) || !sameLink(item.AccessInvitationID, email.AccessInvitationID) || !sameLink(item.IdentityInviteID, email.IdentityInviteID) {
 				return nil, ErrIdempotencyConflict
 			}
 		}
@@ -181,6 +183,15 @@ func (q *DBEmailQueue) send(item models.QueuedEmail) error {
 		return err
 	}
 	item = current
+	if item.AccessInvitationID != nil || item.IdentityInviteID != nil {
+		valid, err := q.accessInvitationDeliveryValid(item)
+		if err != nil {
+			return err
+		}
+		if !valid {
+			return q.DB.Model(&models.QueuedEmail{}).Where("tenant_id = ? AND id = ? AND sent_at IS NULL", item.TenantID, item.ID).Update("canceled_at", q.now()).Error
+		}
+	}
 	if item.CanceledAt != nil {
 		return nil
 	}

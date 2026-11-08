@@ -54,7 +54,7 @@ func TestGrantMutationsAreExplicitVersionedAndAudited(t *testing.T) {
 	require.EqualValues(t, 4, grant.Version)
 	var audit []models.AuditEvent
 	require.NoError(t, f.db.Order("created_at ASC").Find(&audit).Error)
-	require.Len(t, audit, 4)
+	require.Len(t, audit, 5)
 	for _, event := range audit {
 		require.NotContains(t, event.Payload, invite.TokenHash)
 	}

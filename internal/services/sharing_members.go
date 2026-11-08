@@ -107,22 +107,8 @@ func (s *SharingService) RemoveMember(ctx context.Context, req AccessRequest, us
 				return err
 			}
 		}
-		var invitations []models.AccessInvitation
-		if err := tx.Where("tenant_id = ? AND client_id = ? AND accepted_at IS NULL AND revoked_at IS NULL AND (recipient_user_id = ? OR LOWER(email) = LOWER(?))", req.TenantID, req.ClientID, userID, recipient.Email).Find(&invitations).Error; err != nil {
+		if err := RevokePendingRecipientInvitations(tx, req, userID, recipient.Email, s.now()); err != nil {
 			return err
-		}
-		for _, invitation := range invitations {
-			before := invitation
-			if err := tx.Model(&invitation).Update("revoked_at", s.now()).Error; err != nil {
-				return err
-			}
-			inviteReq := req
-			if invitation.FileID != nil {
-				inviteReq.FileID = *invitation.FileID
-			}
-			if err := sharingAudit(tx, inviteReq, "invitation.revoke", userID, before, invitation); err != nil {
-				return err
-			}
 		}
 		if err := tx.Where("tenant_id = ? AND client_id = ? AND user_id = ?", req.TenantID, req.ClientID, userID).Delete(&models.UserClient{}).Error; err != nil {
 			return err

@@ -23,7 +23,15 @@ func TestMemberRemovalRevokesRecipientAccessNotOnwardShares(t *testing.T) {
 	require.NoError(t, err)
 	link := models.SecureLink{TenantID: "tenant", ClientID: "client", Token: "retained-bearer-secret", CreatedBy: "recipient", AccessType: "read", ExpiresAt: accessTestNow.Add(time.Hour)}
 	require.NoError(t, f.db.Create(&link).Error)
+	mail := models.QueuedEmail{TenantID: "tenant", Recipient: pending.Email, AccessInvitationID: &pending.ID}
+	onwardMail := models.QueuedEmail{TenantID: "tenant", Recipient: onwardPending.Email, AccessInvitationID: &onwardPending.ID}
+	require.NoError(t, f.db.Create(&mail).Error)
+	require.NoError(t, f.db.Create(&onwardMail).Error)
 	require.NoError(t, service.RemoveMember(t.Context(), f.req("member", "", AccessInviteClient), "recipient", false))
+	require.NoError(t, f.db.First(&mail, "id = ?", mail.ID).Error)
+	require.NotNil(t, mail.CanceledAt)
+	require.NoError(t, f.db.First(&onwardMail, "id = ?", onwardMail.ID).Error)
+	require.Nil(t, onwardMail.CanceledAt)
 	var count int64
 	require.NoError(t, f.db.Model(&models.UserClient{}).Where("user_id = 'recipient'").Count(&count).Error)
 	require.Zero(t, count)

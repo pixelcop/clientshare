@@ -28,6 +28,8 @@ var QueuedEmail = struct {
 	RecipientLinkID         field.String
 	NotificationBaseURL     field.String
 	NotificationProductName field.String
+	AccessInvitationID      field.String
+	IdentityInviteID        field.String
 }{
 	ID:                      field.String{}.WithColumn("id"),
 	TenantID:                field.String{}.WithColumn("tenant_id"),
@@ -50,4 +52,6 @@ var QueuedEmail = struct {
 	RecipientLinkID:         field.String{}.WithColumn("recipient_link_id"),
 	NotificationBaseURL:     field.String{}.WithColumn("notification_base_url"),
 	NotificationProductName: field.String{}.WithColumn("notification_product_name"),
+	AccessInvitationID:      field.String{}.WithColumn("access_invitation_id"),
+	IdentityInviteID:        field.String{}.WithColumn("identity_invite_id"),
 }

@@ -109,6 +109,9 @@ func (s *SharingService) CreateInvitation(ctx context.Context, req AccessRequest
 			if err := tx.Model(&pending).Update("revoked_at", s.now()).Error; err != nil {
 				return err
 			}
+			if err := cancelInvitationMail(tx, req.TenantID, pending.ID, s.now()); err != nil {
+				return err
+			}
 			if err := sharingAudit(tx, req, "invitation.expire", pending.Email, before, pending); err != nil {
 				return err
 			}
@@ -330,6 +333,9 @@ func (s *SharingService) RevokeInvitation(ctx context.Context, req AccessRequest
 		}
 		before := invitation
 		if err := tx.Model(&invitation).Update("revoked_at", s.now()).Error; err != nil {
+			return err
+		}
+		if err := cancelInvitationMail(tx, req.TenantID, invitation.ID, s.now()); err != nil {
 			return err
 		}
 		return sharingAudit(tx, req, "invitation.revoke", invitation.Email, before, invitation)

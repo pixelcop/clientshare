@@ -823,7 +823,8 @@ func (h *UsersHandler) DeleteUserHandler(c fiber.Ctx) error {
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id = ? AND id = ?", tenantID, id).First(&recipient).Error; err != nil {
 			return err
 		}
-		if err := tx.Model(&models.AccessInvitation{}).Where("tenant_id = ? AND accepted_at IS NULL AND revoked_at IS NULL AND (recipient_user_id = ? OR LOWER(email) = LOWER(?))", tenantID, id, recipient.Email).Update("revoked_at", time.Now()).Error; err != nil {
+		req := services.AccessRequest{TenantID: tenantID, Actor: services.AccessActor{UserID: fiber.Locals[string](c, "user_id")}}
+		if err := services.RevokePendingRecipientInvitations(tx, req, id, recipient.Email, time.Now().UTC()); err != nil {
 			return err
 		}
 		for _, model := range []any{&models.ItemGrant{}, &models.UserClient{}, &models.InviteToken{}} {

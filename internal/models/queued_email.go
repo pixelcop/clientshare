@@ -31,6 +31,8 @@ type QueuedEmail struct {
 	RecipientLinkID         *string    `gorm:"index" json:"-"`
 	NotificationBaseURL     string     `gorm:"not null;default:''" json:"-"`
 	NotificationProductName string     `gorm:"not null;default:''" json:"-"`
+	AccessInvitationID      *string    `gorm:"index" json:"-"`
+	IdentityInviteID        *string    `gorm:"index" json:"-"`
 }
 
 func (e *QueuedEmail) BeforeCreate(_ *gorm.DB) error {

@@ -33,6 +33,8 @@ type Email struct {
 	RecipientLinkID         *string
 	NotificationBaseURL     string
 	NotificationProductName string
+	AccessInvitationID      *string
+	IdentityInviteID        *string
 }
 
 var ErrIdempotencyConflict = errors.New("request key was already used with a different recipient or link")
