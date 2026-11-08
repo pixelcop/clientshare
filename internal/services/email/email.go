@@ -21,14 +21,18 @@ type Email struct {
 	To       string
 	ReplyTo  string
 	// HideRecipients opts multi-recipient notifications into BCC. Single recipients always use To.
-	HideRecipients   bool
-	Subject          string
-	Body             string
-	HTMLBody         string
-	ClientID         *string
-	FileIDsCSV       string
-	DeduplicationKey string
-	SecureLinkID     *string
+	HideRecipients          bool
+	Subject                 string
+	Body                    string
+	HTMLBody                string
+	ClientID                *string
+	FileIDsCSV              string
+	DeduplicationKey        string
+	SecureLinkID            *string
+	RecipientUserID         *string
+	RecipientLinkID         *string
+	NotificationBaseURL     string
+	NotificationProductName string
 }
 
 var ErrIdempotencyConflict = errors.New("request key was already used with a different recipient or link")

@@ -27,6 +27,7 @@ func main() {
 		migration.NewGoMigration(49, upAddLinkDeliveryHistory, downAddLinkDeliveryHistory),
 		migration.NewGoMigration(50, upAddScopedAccess, downAddScopedAccess),
 		migration.NewGoMigration(51, upAddPrivateCollectionSessions, downAddPrivateCollectionSessions),
+		migration.NewGoMigration(52, upAddNotificationAccessContext, downAddNotificationAccessContext),
 	}
 
 	migration.Run(goMigrations, func(path string) (db.DatabaseConfig, error) {

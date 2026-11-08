@@ -78,6 +78,23 @@ jobs the caller can manage; it never invokes a global cross-tenant processor.
 Its result means the jobs were processed/revalidated, not that every message was
 delivered to an inbox.
 
+Upload notifications bind each queued job to one named recipient or one bearer
+link contact. Managers are eligible only within assigned/full client scope;
+upload-only links receive no existing filenames. Direct item grants do not
+automatically subscribe their recipients to client-wide uploads. Each affected
+item is resolved at enqueue and again immediately before dispatch. The dispatcher
+rebuilds names, counts and message bodies from currently readable, active items,
+and cancels a job if none remain or the intended contact has changed.
+
+Migration 052 adds this recipient/render context and cancels unsent legacy
+upload batches that have no trustworthy recipient binding. It leaves sent mail,
+identity invitations and ordinary secure-link delivery jobs intact. Operators
+should review canceled pending upload notifications after upgrading and enqueue
+fresh notifications where appropriate; do not send the old rendered bodies by
+hand. Schema rollback does not reactivate canceled jobs. SMTP delivery cannot
+be undone after a message has left the server; dispatch authorization is a
+current check, not a promise of recalling previously sent mail.
+
 `ResolveItems` batches up to 500 exact items in one client, with parent/grant SQL
 batches of 200. Parent traversal is limited to 128 nodes per chain, rejects
 cycles, non-folder parents, foreign/missing/deleted ancestors and never uses

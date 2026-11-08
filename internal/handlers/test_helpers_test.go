@@ -77,15 +77,20 @@ func (q *memoryEmailQueue) Queue(emailItem email.Email, sendAt *time.Time) (*mod
 		scheduled = *sendAt
 	}
 	item := &models.QueuedEmail{
-		TenantID:     emailItem.TenantID,
-		ID:           ids.NewULID(),
-		Recipient:    emailItem.To,
-		Subject:      emailItem.Subject,
-		Body:         emailItem.Body,
-		FileIDsCSV:   emailItem.FileIDsCSV,
-		ClientID:     emailItem.ClientID,
-		EventType:    "test",
-		ScheduledFor: scheduled,
+		TenantID:                emailItem.TenantID,
+		ID:                      ids.NewULID(),
+		Recipient:               emailItem.To,
+		Subject:                 emailItem.Subject,
+		Body:                    emailItem.Body,
+		FileIDsCSV:              emailItem.FileIDsCSV,
+		ClientID:                emailItem.ClientID,
+		EventType:               "test",
+		RecipientUserID:         emailItem.RecipientUserID,
+		RecipientLinkID:         emailItem.RecipientLinkID,
+		SecureLinkID:            emailItem.SecureLinkID,
+		NotificationBaseURL:     emailItem.NotificationBaseURL,
+		NotificationProductName: emailItem.NotificationProductName,
+		ScheduledFor:            scheduled,
 	}
 	if item.TenantID == "" {
 		item.TenantID = tenantctx.DefaultTenantID

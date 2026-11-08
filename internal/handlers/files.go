@@ -219,56 +219,6 @@ func (h *FileHandler) recordUploadFeedEvents(c fiber.Ctx, activities []*models.F
 	}
 }
 
-func notificationRecipients(ctx context.Context, db *gorm.DB, tenantID, role string, clientID string) ([]string, error) {
-	var users []models.User
-	recipients := make([]string, 0)
-	seen := map[string]struct{}{}
-	appendRecipient := func(emailAddr string) {
-		emailAddr = strings.TrimSpace(emailAddr)
-		if emailAddr == "" {
-			return
-		}
-		key := strings.ToLower(emailAddr)
-		if _, ok := seen[key]; ok {
-			return
-		}
-		seen[key] = struct{}{}
-		recipients = append(recipients, emailAddr)
-	}
-
-	switch role {
-	case "admin", "manager":
-		if err := db.WithContext(ctx).
-			Table("users").
-			Joins("JOIN user_clients uc ON uc.tenant_id = users.tenant_id AND uc.user_id = users.id").
-			Where("users.tenant_id = ? AND users.role = ? AND uc.tenant_id = ? AND uc.client_id = ?", tenantID, "client", tenantID, clientID).
-			Distinct().
-			Find(&users).Error; err != nil {
-			return nil, err
-		}
-		var secureLinks []models.SecureLink
-		if err := db.WithContext(ctx).Where("tenant_id = ? AND client_id = ? AND email <> '' AND revoked_at IS NULL", tenantID, clientID).Find(&secureLinks).Error; err != nil {
-			return nil, err
-		}
-		for _, link := range secureLinks {
-			if link.FileID != nil || !link.ExpiresAt.After(time.Now()) {
-				continue
-			}
-			appendRecipient(link.Email)
-		}
-	case "client", "customer", "link":
-		if err := db.WithContext(ctx).Where("tenant_id = ? AND role IN ?", tenantID, []string{"admin", "manager"}).Find(&users).Error; err != nil {
-			return nil, err
-		}
-	default:
-		return nil, nil
-	}
-	for _, user := range users {
-		appendRecipient(user.Email)
-	}
-	return recipients, nil
-}
-
 func (h *FileHandler) getDefaultFolder(c fiber.Ctx) (*models.File, *fiber.Error) {
 	role := fiber.Locals[string](c, "role")
 	tenantID := tenantIDFromCtx(c)
@@ -630,57 +580,42 @@ func (h *FileHandler) UploadFiles(c fiber.Ctx) error {
 func (h *FileHandler) sendUploadNotification(c fiber.Ctx, client *models.Client, uploadedFiles []models.File) {
 	notifyClient, _ := strconv.ParseBool(strings.ToLower(c.FormValue("notify", "true")))
 	tenantID := tenantIDFromCtx(c)
-	var recipientsTo string
-	if h.emailQueue != nil && notifyClient {
-		role := fiber.Locals[string](c, "role")
-		recipients, err := notificationRecipients(c.Context(), h.db, tenantID, role, client.ID)
+	if h.emailQueue == nil || !notifyClient {
+		return
+	}
+	recipients, err := email.UploadNotificationRecipients(c.Context(), h.db, tenantID, client.ID, fiber.Locals[string](c, "role"), time.Now())
+	if err != nil {
+		utils.Logger(c).Error("error fetching email recipients", zap.Error(err))
+		return
+	}
+	pending := h.emailQueue.Pending(tenantID, client.ID)
+	for _, recipient := range recipients {
+		ids := []string{}
+		for _, item := range pending {
+			if item.CanceledAt != nil || !strings.EqualFold(item.Recipient, recipient.Email) {
+				continue
+			}
+			sameUser := recipient.UserID != nil && item.RecipientUserID != nil && *recipient.UserID == *item.RecipientUserID
+			sameLink := recipient.LinkID != nil && item.RecipientLinkID != nil && *recipient.LinkID == *item.RecipientLinkID
+			if sameUser || sameLink {
+				ids = append(ids, strings.Split(item.FileIDsCSV, ",")...)
+			}
+		}
+		for _, file := range uploadedFiles {
+			ids = append(ids, file.ID)
+		}
+		message, eligible, err := email.BuildUploadNotification(c.Context(), h.db, tenantID, client.ID, recipient.Email, recipient.UserID, recipient.LinkID, ids, tenantBaseURLFromCtx(c, h.baseURL), h.siteTitleForTenant(c, tenantID), time.Now())
 		if err != nil {
-			utils.Logger(c).Error("error fetching email recipients", zap.Error(err))
-		} else if len(recipients) > 0 {
-			recipientsTo = strings.Join(recipients, ", ")
+			utils.Logger(c).Error("error checking notification access", zap.Error(err))
+			continue
+		}
+		if !eligible {
+			continue
+		}
+		if _, err := h.emailQueue.Queue(message, nil); err != nil {
+			utils.Logger(c).Error("error queueing upload email", zap.Error(err))
 		}
 	}
-
-	// queue email after all files
-	if h.emailQueue != nil && notifyClient && recipientsTo != "" {
-		var fileIDs []string
-		pending := h.emailQueue.Pending(tenantID, client.ID)
-		if len(pending) > 0 && pending[0].FileIDsCSV != "" {
-			fileIDs = strings.Split(pending[0].FileIDsCSV, ",")
-		}
-		notificationFiles := make([]models.File, 0, len(uploadedFiles)+len(fileIDs))
-		for _, idStr := range fileIDs {
-			idStr = strings.TrimSpace(idStr)
-			if idStr == "" {
-				continue
-			}
-			f, err := h.fileService.GetFileByID(c.Context(), tenantID, idStr)
-			if err != nil {
-				continue
-			}
-			notificationFiles = append(notificationFiles, *f)
-		}
-
-		for _, f := range uploadedFiles {
-			fileIDs = append(fileIDs, f.ID)
-			notificationFiles = append(notificationFiles, f)
-		}
-
-		subject, body, htmlBody := email.RenderUploadNotification(client.Name, notificationFiles, tenantBaseURLFromCtx(c, h.baseURL), h.siteTitleForTenant(c, tenantID))
-		if _, queueErr := h.emailQueue.Queue(email.Email{
-			TenantID:       tenantID,
-			To:             recipientsTo,
-			HideRecipients: true,
-			Subject:        subject,
-			Body:           body,
-			HTMLBody:       htmlBody,
-			ClientID:       &client.ID,
-			FileIDsCSV:     strings.Join(fileIDs, ","),
-		}, nil); queueErr != nil {
-			utils.Logger(c).Error("error queueing upload email", zap.Error(queueErr))
-		}
-	}
-
 }
 
 // CreateFolder handles POST /api/folder/:id

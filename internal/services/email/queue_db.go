@@ -36,6 +36,16 @@ func (q *DBEmailQueue) Queue(email Email, sendAt *time.Time) (*models.QueuedEmai
 	if email.DeduplicationKey == "" && email.ClientID != nil && email.HideRecipients {
 		var existing models.QueuedEmail
 		query := q.DB.Where("client_id = ? AND sent_at IS NULL AND canceled_at IS NULL AND hide_recipients = ? AND reply_to = ?", *email.ClientID, true, email.ReplyTo)
+		if email.FileIDsCSV != "" || email.RecipientUserID != nil || email.RecipientLinkID != nil {
+			query = query.Where("recipient = ?", email.To)
+		}
+		if email.RecipientUserID != nil {
+			query = query.Where("recipient_user_id = ? AND recipient_link_id IS NULL", *email.RecipientUserID)
+		} else if email.RecipientLinkID != nil {
+			query = query.Where("recipient_link_id = ? AND recipient_user_id IS NULL", *email.RecipientLinkID)
+		} else {
+			query = query.Where("recipient_user_id IS NULL AND recipient_link_id IS NULL")
+		}
 		if strings.TrimSpace(email.TenantID) != "" {
 			query = query.Where("tenant_id = ?", strings.TrimSpace(email.TenantID))
 		}
@@ -73,18 +83,22 @@ func (q *DBEmailQueue) Queue(email Email, sendAt *time.Time) (*models.QueuedEmai
 
 	// new queue item
 	item := models.QueuedEmail{
-		TenantID:       strings.TrimSpace(email.TenantID),
-		Recipient:      email.To,
-		ReplyTo:        email.ReplyTo,
-		HideRecipients: email.HideRecipients,
-		Subject:        email.Subject,
-		Body:           email.Body,
-		HTMLBody:       email.HTMLBody,
-		FileIDsCSV:     email.FileIDsCSV,
-		ClientID:       email.ClientID,
-		EventType:      "generic",
-		ScheduledFor:   *sendAt,
-		SecureLinkID:   email.SecureLinkID,
+		TenantID:                strings.TrimSpace(email.TenantID),
+		Recipient:               email.To,
+		ReplyTo:                 email.ReplyTo,
+		HideRecipients:          email.HideRecipients,
+		Subject:                 email.Subject,
+		Body:                    email.Body,
+		HTMLBody:                email.HTMLBody,
+		FileIDsCSV:              email.FileIDsCSV,
+		ClientID:                email.ClientID,
+		EventType:               "generic",
+		ScheduledFor:            *sendAt,
+		SecureLinkID:            email.SecureLinkID,
+		RecipientUserID:         email.RecipientUserID,
+		RecipientLinkID:         email.RecipientLinkID,
+		NotificationBaseURL:     email.NotificationBaseURL,
+		NotificationProductName: email.NotificationProductName,
 	}
 	if email.DeduplicationKey != "" {
 		key := email.DeduplicationKey
@@ -158,8 +172,26 @@ func (q *DBEmailQueue) Update(tenantID, id, recipient, subject, body string) err
 }
 
 func (q *DBEmailQueue) send(item models.QueuedEmail) error {
+	// Worker snapshots are not authorization or cancellation snapshots.
+	var current models.QueuedEmail
+	if err := q.DB.Where("tenant_id = ? AND id = ? AND sent_at IS NULL AND canceled_at IS NULL", item.TenantID, item.ID).First(&current).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		return err
+	}
+	item = current
 	if item.CanceledAt != nil {
 		return nil
+	}
+	if item.FileIDsCSV != "" {
+		valid, err := q.revalidateUploadNotification(&item)
+		if err != nil {
+			return err
+		}
+		if !valid {
+			return q.DB.Model(&models.QueuedEmail{}).Where("id = ? AND sent_at IS NULL", item.ID).Update("canceled_at", q.now()).Error
+		}
 	}
 	if item.SecureLinkID != nil {
 		var link models.SecureLink

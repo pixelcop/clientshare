@@ -435,10 +435,14 @@ func TestUploadFilesSuccessQueuesEmail(t *testing.T) {
 	if len(env.emailQueue.items) == 0 {
 		t.Fatalf("expected email to be queued")
 	}
-	queued := env.emailQueue.items[0]
-	if !strings.Contains(queued.Recipient, "linkviewer@test.local") {
-		t.Fatalf("expected secure link email in recipients, got %q", queued.Recipient)
+	var queued *models.QueuedEmail
+	for _, item := range env.emailQueue.items {
+		require.NotContains(t, item.Recipient, ",", "each job must bind one recipient identity")
+		if item.Recipient == "linkviewer@test.local" {
+			queued = item
+		}
 	}
+	require.NotNil(t, queued, "expected a separate secure-link recipient job")
 
 	var count int64
 	if err := env.db.Model(&models.File{}).Where("type = ?", "file").Count(&count).Error; err != nil {
@@ -464,11 +468,12 @@ func TestUploadFilesSuccessMergesPendingAndNewFileNamesAndIDs(t *testing.T) {
 	existing := createFileRecord(t, env, env.rootFolder, "already-there.txt", "existing")
 	existingID := existing.ID
 	if _, err := env.queue.Queue(email.Email{
-		To:         "client@test.local",
-		Subject:    "pending",
-		Body:       "pending",
-		ClientID:   &env.client.ID,
-		FileIDsCSV: existingID,
+		To:              "client@test.local",
+		Subject:         "pending",
+		Body:            "pending",
+		ClientID:        &env.client.ID,
+		FileIDsCSV:      existingID,
+		RecipientUserID: &env.clientUser.ID,
 	}, nil); err != nil {
 		t.Fatalf("failed to seed pending queue item: %v", err)
 	}
@@ -499,10 +504,16 @@ func TestUploadFilesSuccessMergesPendingAndNewFileNamesAndIDs(t *testing.T) {
 		t.Fatalf("expected 201, got %d", resp.StatusCode)
 	}
 
-	if len(env.queue.items) != 2 {
-		t.Fatalf("expected 2 queued emails (seed + merged), got %d", len(env.queue.items))
+	if len(env.queue.items) != 3 {
+		t.Fatalf("expected seed + separate jobs for two members, got %d", len(env.queue.items))
 	}
-	queued := env.queue.items[1]
+	var queued *models.QueuedEmail
+	for _, item := range env.queue.items[1:] {
+		if item.RecipientUserID != nil && *item.RecipientUserID == env.clientUser.ID {
+			queued = item
+		}
+	}
+	require.NotNil(t, queued)
 
 	if queued.Subject != "ClientShare: 3 new files uploaded" {
 		t.Fatalf("expected merged subject for 3 files, got %q", queued.Subject)
