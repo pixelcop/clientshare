@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -19,6 +20,24 @@ type request struct {
 	contentLength int
 	hostname      string
 	remoteAddress string
+}
+
+// Access logs retain routing context, not bearer credentials, auth query values
+// or invitation fragments. This also applies to redirect destinations.
+func accessLogURL(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "[invalid-url]"
+	}
+	u.User, u.RawQuery, u.Fragment, u.RawFragment = nil, "", "", ""
+	u.ForceQuery = false
+	for _, prefix := range []string{"/links/", "/api/link/"} {
+		if strings.HasPrefix(u.Path, prefix) {
+			u.Path, u.RawPath = prefix+"[redacted]", ""
+			break
+		}
+	}
+	return u.String()
 }
 
 func (r request) MarshalLogObject(enc zapcore.ObjectEncoder) error {
@@ -100,7 +119,7 @@ func LogWebRequest(c fiber.Ctx, startTime *time.Time, elapsedTime *time.Duration
 
 	req := &request{
 		method:        c.Method(),
-		url:           c.OriginalURL(),
+		url:           accessLogURL(c.OriginalURL()),
 		hostname:      c.Hostname(),
 		remoteAddress: utils.GetIP(c),
 		contentLength: len(c.Request().Body()),
@@ -119,8 +138,8 @@ func LogWebRequest(c fiber.Ctx, startTime *time.Time, elapsedTime *time.Duration
 		bytes:      sentBytes,
 		handler:    handlerType,
 	}
-	if res.statusCode == fiber.StatusMovedPermanently || res.statusCode == fiber.StatusFound {
-		res.location = string(c.Response().Header.Peek(fiber.HeaderLocation))
+	if res.statusCode >= 300 && res.statusCode < 400 {
+		res.location = accessLogURL(string(c.Response().Header.Peek(fiber.HeaderLocation)))
 	}
 
 	fields := []zap.Field{

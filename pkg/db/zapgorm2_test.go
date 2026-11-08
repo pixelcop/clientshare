@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -10,9 +11,44 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
+	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
 )
+
+func TestSQLTraceNeverInterpolatesBoundCredentials(t *testing.T) {
+	for _, singleLine := range []bool{false, true} {
+		core, entries := observer.New(zap.DebugLevel)
+		logger := NewZapLogger(zap.New(core), int(gormlogger.Info))
+		logger.SingleLine = singleLine
+		db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger})
+		if err != nil {
+			t.Fatal(err)
+		}
+		sqlDB, err := db.DB()
+		if err != nil {
+			t.Fatal(err)
+		}
+		const credential = "bearer-credential-must-never-be-logged"
+		var result string
+		if err := db.Raw("SELECT ?", credential).Scan(&result).Error; err != nil || result != credential {
+			t.Fatalf("query behavior changed: %v", err)
+		}
+		// Error traces use the same parameter filter, even for failed queries.
+		if err := db.Exec("INSERT INTO missing_table(token) VALUES (?)", credential).Error; err == nil {
+			t.Fatal("expected query error")
+		}
+		if entries.Len() == 0 {
+			t.Fatal("no SQL traces observed")
+		}
+		for _, entry := range entries.All() {
+			if strings.Contains(entry.Message, credential) || strings.Contains(fmt.Sprint(entry.ContextMap()), credential) {
+				t.Fatal("bound credential leaked into SQL trace")
+			}
+		}
+		_ = sqlDB.Close()
+	}
+}
 
 func TestNewZapLoggerSingleLine(t *testing.T) {
 	for _, value := range []string{"", "false", "true", "1", "invalid"} {

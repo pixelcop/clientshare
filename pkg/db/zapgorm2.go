@@ -28,6 +28,16 @@ type Logger struct {
 	SingleLine                bool // Keep SQL in a structured field, escaping newlines instead of printing them.
 }
 
+func init() {
+	// Scan uses GORM's temporary trace recorder instead of the configured logger.
+	// Configure its supported filter once, before concurrent DB work begins.
+	gormlogger.RecorderParamsFilter = filterSQLParams
+}
+
+func filterSQLParams(_ context.Context, sql string, _ ...interface{}) (string, []interface{}) {
+	return sql, nil
+}
+
 func NewZapLogger(zapLogger *zap.Logger, logLevel int) Logger {
 	singleLine, _ := strconv.ParseBool(os.Getenv("GORM_LOG_SINGLE_LINE"))
 	return Logger{
@@ -47,6 +57,12 @@ func (l Logger) SetAsDefault() {
 func (l Logger) LogMode(level gormlogger.LogLevel) gormlogger.Interface {
 	l.LogLevel = level
 	return l
+}
+
+// GORM's parameter filter keeps tokens, invitation proofs, rendered email and
+// passwords out of SQL traces, including slow/error and PrintQuery paths.
+func (l Logger) ParamsFilter(_ context.Context, sql string, _ ...interface{}) (string, []interface{}) {
+	return sql, nil
 }
 
 func (l Logger) Info(ctx context.Context, str string, args ...interface{}) {
