@@ -58,6 +58,16 @@ with sync_playwright() as p:
     expect(page.get_by_text("report.txt", exact=True)).to_be_visible()
     expect(page.get_by_role("heading", name="No files yet", exact=True)).to_have_count(0)
     assert abs(upload.bounding_box()["y"] - before_y) < 2
+    # The global collection dock refreshes auth/me on window focus. Replacing
+    # the same user must not clear the file store without reloading its route.
+    with page.expect_response(lambda response: response.url.endswith('/api/auth/me')) as revalidated:
+        page.evaluate("window.dispatchEvent(new Event('focus'))")
+    assert revalidated.value.status == 200
+    page.wait_for_load_state('networkidle')
+    expect(page.get_by_role('heading', name=client['name'], exact=True)).to_be_visible()
+    expect(page.get_by_text('report.txt', exact=True)).to_be_visible()
+    expect(upload).to_be_enabled()
+    assert page.evaluate("document.querySelector('#app').__vue_app__.config.globalProperties.$pinia._s.get('fileManager').currentFolder") == root
     page.get_by_text("Upload options", exact=False).click()
     page.get_by_role("checkbox", name="Notify by email after upload").uncheck()
     # A second selection retains duplicate resolution rather than overwriting.

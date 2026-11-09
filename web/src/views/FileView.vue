@@ -33,7 +33,7 @@ const homeRoute = computed(() => {
 });
 
 watch(
-  () => [fileId, auth.user?.session_id] as const,
+  [() => fileId, () => auth.user?.session_id] as const,
   async ([id]) => {
     const version = ++requestVersion;
     file.value = null;

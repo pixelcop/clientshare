@@ -53,6 +53,45 @@ describe('workspace listing state', () => {
     expect(store.isEmpty).toBe(true);
   });
 
+  it('preserves the workspace when auth/me refreshes the same signed-in identity', async () => {
+    const auth = useAuthStore();
+    auth.user = { ...auth.user!, session_id: 'same-session', tenant_id: 'tenant' };
+    const store = useFileManagerStore();
+    await store.changeFolder('root');
+    await flushPromises();
+    store.files = [{ ...folder('document'), type: 'file' }];
+    store.folders = [folder('child')];
+    const { context, breadcrumbs, files, folders } = store;
+    store.sortField = 'filename';
+    vi.mocked(axios.get).mockResolvedValueOnce({ data: { ...auth.user, name: 'Updated name' } });
+    await auth.fetchMe(true);
+    await flushPromises();
+    expect(auth.user?.name).toBe('Updated name');
+    expect(store.currentFolder).toBe('root');
+    expect(store.context).toBe(context);
+    expect(store.breadcrumbs).toBe(breadcrumbs);
+    expect(store.files).toBe(files);
+    expect(store.folders).toBe(folders);
+    expect(store.clientId).toBe('client-root');
+    expect(store.loaded).toBe(true);
+    expect(store.sortField).toBe('filename');
+  });
+
+  it.each(['id', 'tenant_id', 'role', 'session_id', 'link_id'])(
+    'still clears protected workspace data when %s changes',
+    async (field) => {
+      const auth = useAuthStore();
+      const store = useFileManagerStore();
+      await store.changeFolder('root');
+      await flushPromises();
+      auth.user = { ...auth.user!, [field]: 'changed' };
+      expect(store.currentFolder).toBeNull();
+      expect(store.context).toBeNull();
+      expect(store.clientId).toBeNull();
+      expect(store.loaded).toBe(false);
+    },
+  );
+
   it('waits for both lists and does not treat folders-only content as empty', async () => {
     let finish!: (value: unknown) => void;
     vi.mocked(axios.get).mockImplementation(async (url, config) => {

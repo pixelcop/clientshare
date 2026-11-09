@@ -337,7 +337,15 @@ export const useFileManagerStore = defineStore('fileManager', () => {
   );
 
   watch(
-    () => [auth.user?.id, auth.user?.role, auth.user?.session_id, auth.user?.link_id],
+    // Watch identity values separately. A getter returning a new array also
+    // fires when auth/me replaces the user object with the same identity.
+    [
+      () => auth.user?.tenant_id,
+      () => auth.user?.id,
+      () => auth.user?.role,
+      () => auth.user?.session_id,
+      () => auth.user?.link_id,
+    ],
     () => {
       requestVersion += 1;
       currentFolder.value = null;

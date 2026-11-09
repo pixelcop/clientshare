@@ -82,6 +82,17 @@ describe('authorized client workspace switching', () => {
     wrapper.unmount();
   });
 
+  it('keeps workspace choices when a user refresh leaves the identity unchanged', async () => {
+    const { wrapper } = await setup();
+    const select = wrapper.findComponent(Select);
+    useAuthStore().user = { ...useAuthStore().user!, name: 'Updated name' };
+    await flushPromises();
+    expect(axios.get).toHaveBeenCalledExactlyOnceWith('/api/clients');
+    expect(select.props('options')).toEqual([first, second]);
+    expect(select.props('modelValue')).toBe(first.id);
+    wrapper.unmount();
+  });
+
   it.each(['link', 'admin', 'manager'])(
     'does not request client options for %s sessions',
     async (role) => {

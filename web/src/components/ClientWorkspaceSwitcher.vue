@@ -63,7 +63,16 @@ async function switchWorkspace(value: string) {
   }
 }
 
-watch(() => [auth.user?.id, auth.user?.role, auth.user?.session_id], load, { immediate: true });
+watch(
+  [
+    () => auth.user?.tenant_id,
+    () => auth.user?.id,
+    () => auth.user?.role,
+    () => auth.user?.session_id,
+  ],
+  load,
+  { immediate: true },
+);
 onBeforeUnmount(() => {
   version += 1;
 });
