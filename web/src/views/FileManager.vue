@@ -8,6 +8,7 @@ import ClientWorkspaceSwitcher from '@/components/ClientWorkspaceSwitcher.vue';
 import CollectionInvitation from '@/components/CollectionInvitation.vue';
 import FileList from '@/components/FileList.vue';
 import PendingEmail from '@/components/PendingEmail.vue';
+import SharingDialog from '@/components/SharingDialog.vue';
 import { useClientsStore } from '@/stores/clients';
 
 import { useAuthStore } from '../stores/auth';
@@ -23,9 +24,19 @@ const { user } = storeToRefs(useAuthStore());
 
 const pending = ref<InstanceType<typeof PendingEmail> | null>(null);
 const showAccess = ref(false);
+const showFolderShare = ref(false);
 const destinationError = ref('');
 
 const canManageAccess = computed(() => !!fileManager.context?.client_capabilities?.can_share);
+const isClientRoot = computed(
+  () =>
+    !!fileManager.context &&
+    Object.values(fileManager.context.client_capabilities).some(Boolean) &&
+    fileManager.context.folder.id === fileManager.context.root_folder_id,
+);
+const canShareCurrent = computed(() =>
+  isClientRoot.value ? canManageAccess.value : !!fileManager.context?.capabilities.can_share,
+);
 const canNotify = computed(() => user.value?.role !== 'customer');
 const canManageEmailQueue = computed(() => !!fileManager.context?.can_manage_queue);
 
@@ -40,6 +51,7 @@ async function openDestination(id = folderId) {
   const version = ++destinationVersion;
   destinationError.value = '';
   showAccess.value = false;
+  showFolderShare.value = false;
   if (id) {
     await fileManager.changeFolder(id);
     return;
@@ -77,20 +89,37 @@ onBeforeUnmount(() => {
 <template>
   <div>
     <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-      <h1 class="text-2xl md:text-[28px] font-semibold min-w-0 break-words">
-        {{
-          fileManager.context?.client_name || fileManager.context?.folder.filename || 'File Manager'
-        }}
-      </h1>
+      <div class="min-w-0">
+        <h1 class="text-2xl md:text-[28px] font-semibold min-w-0 break-words">
+          {{
+            (isClientRoot
+              ? fileManager.context?.client_name
+              : fileManager.context?.folder.filename) || 'File Manager'
+          }}
+        </h1>
+        <p v-if="fileManager.context" class="workspace-context">
+          {{ isClientRoot ? 'Client workspace' : 'Folder' }}
+          <template v-if="!isClientRoot && fileManager.context.client_name">
+            · {{ fileManager.context.client_name }}
+          </template>
+        </p>
+      </div>
       <div class="flex flex-wrap items-center gap-3 w-full sm:w-auto">
         <ClientWorkspaceSwitcher :clientId="fileManager.context?.client_id" />
         <Button
-          v-if="canManageAccess && clientId"
+          v-if="!isClientRoot && canManageAccess && clientId"
+          label="Share client"
+          severity="secondary"
+          variant="text"
+          @click="showAccess = true"
+        />
+        <Button
+          v-if="canShareCurrent && fileManager.context"
           :id="`collect-links-${clientId}`"
-          label="Manage client access"
+          label="Share"
           icon="oi oi-users"
           severity="secondary"
-          @click="showAccess = true"
+          @click="isClientRoot ? (showAccess = true) : (showFolderShare = true)"
         />
       </div>
     </div>
@@ -114,10 +143,26 @@ onBeforeUnmount(() => {
       :clientName="fileManager.context?.client_name || 'Client workspace'"
       @close="showAccess = false"
     />
+    <SharingDialog
+      v-if="!isClientRoot && fileManager.context?.capabilities.can_share"
+      :visible="showFolderShare"
+      :scope="{
+        kind: 'item',
+        id: fileManager.context.folder.id,
+        name: fileManager.context.folder.filename,
+        itemType: 'folder',
+      }"
+      @close="showFolderShare = false"
+    />
   </div>
 </template>
 
 <style scoped>
+.workspace-context {
+  color: var(--p-text-muted-color);
+  font-size: 14px;
+  margin-top: 4px;
+}
 table {
   border-collapse: collapse;
   background-color: var(--p-dialog-background);

@@ -47,9 +47,9 @@ with sync_playwright() as p:
     page.get_by_role("button", name="New Client", exact=True).click()
     page.get_by_placeholder("Client name").fill(f"Collect browser {run}")
     page.get_by_role("dialog").get_by_role("button", name="Create", exact=True).click()
-    expect(checklist.get_by_text("In the client workspace, open Manage client access, then Manage links and New Link.")).to_be_visible()
+    expect(checklist.get_by_text("In the client workspace, open Share, then Manage links and New Link.")).to_be_visible()
     page.reload()
-    expect(checklist.get_by_text("In the client workspace, open Manage client access, then Manage links and New Link.")).to_be_visible()
+    expect(checklist.get_by_text("In the client workspace, open Share, then Manage links and New Link.")).to_be_visible()
     progress_data = json.loads(page.evaluate("Object.entries(localStorage).find(([k])=>k.startsWith('clientshare:collect:'))[1]"))
     client_id = progress_data["clientId"]
     client_data = context.request.get(base + f"/api/clients/{client_id}").json()

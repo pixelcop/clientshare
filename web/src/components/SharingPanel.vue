@@ -1,6 +1,18 @@
 <script setup lang="ts">
 import axios from 'axios';
-import { Button, Checkbox, DatePicker, Dialog, InputText, Select } from 'openvue';
+import {
+  Button,
+  Checkbox,
+  DatePicker,
+  Dialog,
+  InputText,
+  Select,
+  Tab,
+  TabList,
+  TabPanel,
+  TabPanels,
+  Tabs,
+} from 'openvue';
 
 import type { AccessCapabilities, AccessInvitation, SecureLink } from '@/types/models';
 import {
@@ -21,6 +33,7 @@ const busy = ref(false);
 const error = ref('');
 const status = ref('');
 const history = ref(false);
+const activeTab = ref('people');
 const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 const blank = (): AccessCapabilities => ({
   can_read: false,
@@ -132,6 +145,7 @@ watch(
     linkExpiry.value = new Date(Date.now() + 7 * 86400000);
     linkKey.value = crypto.randomUUID();
     history.value = false;
+    activeTab.value = 'people';
     deliveryKeys.clear();
     void load();
   },
@@ -354,14 +368,25 @@ async function remove() {
 
 <template>
   <div class="sharing-panel">
-    <p class="scope-label">
-      Sharing:
-      {{
-        scope.kind === 'client'
-          ? 'entire client workspace'
-          : `${scope.itemType === 'folder' ? 'this folder and everything inside' : 'this file only'}`
-      }}
-    </p>
+    <div class="scope-label">
+      <strong>
+        Sharing:
+        {{
+          scope.kind === 'client'
+            ? 'entire client workspace'
+            : `${scope.itemType === 'folder' ? 'this folder and everything inside' : 'this file only'}`
+        }}
+      </strong>
+      <p class="muted">
+        {{
+          scope.kind === 'client'
+            ? 'Includes all files and folders in this client.'
+            : scope.itemType === 'folder'
+              ? 'Other folders in this client are not included.'
+              : 'Other files and folders are not included.'
+        }}
+      </p>
+    </div>
     <p v-if="loading" role="status">Loading access…</p>
     <div v-if="error" role="alert">
       <p>{{ error }}</p>
@@ -369,264 +394,279 @@ async function remove() {
     </div>
     <p v-if="status" role="status" class="delivery-status">{{ status }}</p>
     <template v-if="view && !loading">
-      <p v-if="scope.kind === 'item'" class="muted">
-        People may also have access through the client or another folder.
-      </p>
-      <p v-if="view.inherits_client_access || view.inherits_folder_access" class="muted">
-        You have access through
-        {{ view.inherits_client_access ? 'the client' : 'a containing folder' }}.
-      </p>
-      <section aria-label="People with access">
-        <h3>People</h3>
-        <p v-if="view.people && !view.can_manage" class="muted">
-          You can remove people you invited. Other people’s access is managed by the portal team.
-        </p>
-        <div v-for="person in view.people" :key="person.user_id" class="access-row">
-          <div>
-            <strong>{{ person.name || person.email }}</strong
-            ><small>{{ person.email }} · {{ describeCapabilities(person.capabilities) }}</small>
-          </div>
-          <Button
-            v-if="person.can_remove"
-            label="Remove"
-            severity="secondary"
-            :disabled="busy"
-            @click="confirmRemove({ kind: 'member', item: person })"
-          />
-        </div>
-        <div v-for="grant in visibleGrants" :key="grant.id" class="access-row">
-          <div>
-            <strong>{{ grant.recipient_name || grant.recipient_email }}</strong
-            ><small
-              >Added here · {{ describeCapabilities(grant) }} ·
-              {{ grant.revoked_at ? 'Removed' : date(grant.expires_at) }}</small
-            >
-          </div>
-          <div class="row-buttons">
-            <Button
-              v-if="canEdit(grant)"
-              label="Edit"
-              severity="secondary"
-              :disabled="busy"
-              @click="edit(grant)"
-            /><Button
-              v-if="active(grant)"
-              label="Remove"
-              severity="secondary"
-              :disabled="busy"
-              @click="confirmRemove({ kind: 'grant', item: grant })"
-            />
-          </div>
-        </div>
-        <div v-for="invitation in visibleInvitations" :key="invitation.id" class="access-row">
-          <div>
-            <strong>{{ invitation.email }}</strong
-            ><small
-              >{{
-                invitation.accepted_at
-                  ? 'Accepted'
-                  : invitation.revoked_at
-                    ? 'Removed'
-                    : active(invitation)
-                      ? 'Awaiting acceptance'
-                      : 'Expired'
-              }}
-              · {{ date(invitation.expires_at) }}</small
-            >
-          </div>
-          <div v-if="active(invitation)" class="row-buttons">
-            <Button
-              label="Email invitation"
-              severity="secondary"
-              :disabled="busy"
-              @click="sendInvitation(invitation)"
-            /><Button
-              label="Revoke"
-              severity="secondary"
-              :disabled="busy"
-              @click="confirmRemove({ kind: 'invitation', item: invitation })"
-            />
-          </div>
-        </div>
-        <form class="access-form" @submit.prevent="savePerson">
-          <h4>{{ editing ? 'Edit access' : 'Invite by email' }}</h4>
-          <label :for="`${key}-email`">Recipient email</label
-          ><InputText
-            :id="`${key}-email`"
-            v-model="email"
-            type="email"
-            autocomplete="email"
-            required
-            :disabled="busy || !!editing"
-            fluid
-          />
-          <fieldset :disabled="busy">
-            <legend>Permissions</legend>
-            <label
-              ><Checkbox
-                v-model="rights.can_read"
-                binary
-                :disabled="!view.capabilities.can_read"
-                :inputId="`${key}-read`"
-              />
-              View & download</label
-            >
-            <label v-if="!isFile"
-              ><Checkbox
-                v-model="rights.can_upload"
-                binary
-                :disabled="!view.capabilities.can_upload"
-                :inputId="`${key}-upload`"
-              />
-              Upload</label
-            >
-            <label v-if="view.capabilities.can_delete"
-              ><Checkbox v-model="rights.can_delete" binary :inputId="`${key}-delete`" />
-              Delete</label
-            >
-            <label
-              ><Checkbox
-                v-model="rights.can_share"
-                binary
-                :disabled="!view.capabilities.can_share"
-                :inputId="`${key}-reshare`"
-              />
-              Share with others</label
-            >
-          </fieldset>
-          <template v-if="scope.kind === 'item'"
-            ><label :for="`${key}-expiry`">Access ends (optional) · {{ timezone }}</label
-            ><DatePicker
-              v-model="expiry"
-              :inputId="`${key}-expiry`"
-              showTime
-              hourFormat="24"
-              showClear
-              :minDate="new Date()"
-              :disabled="busy"
-              fluid
-          /></template>
-          <div class="row-buttons">
-            <Button
-              type="submit"
-              :label="editing ? 'Save changes' : 'Invite'"
-              :loading="busy"
-              :disabled="!Object.values(rights).some(Boolean)"
-            /><Button
-              v-if="editing"
-              label="Cancel edit"
-              severity="secondary"
-              :disabled="busy"
-              @click="resetForm"
-            />
-          </div>
-          <p class="muted">This invitation is for this email address only.</p>
-        </form>
-      </section>
-      <section aria-label="Sharing links">
-        <h3>Links</h3>
-        <p class="muted">
-          Anyone with a link gets the permissions you choose. Removing a person won’t stop them
-          using a link they already have.
-        </p>
-        <div v-for="link in visibleLinks" :key="link.id" class="access-row">
-          <div>
-            <strong>{{
-              link.access_type === 'write'
-                ? 'Upload only'
-                : link.access_type === 'readwrite'
-                  ? 'View, download & upload'
-                  : 'View & download'
-            }}</strong
-            ><small>{{ link.revoked_at ? 'Revoked' : date(link.expires_at) }}</small>
-          </div>
-          <div class="row-buttons">
-            <Button
-              v-if="active(link) && link.link_url"
-              label="Use link"
-              severity="secondary"
-              :disabled="busy"
-              @click="useLink(link)"
-            /><Button
-              v-if="active(link)"
-              label="Revoke"
-              severity="secondary"
-              :disabled="busy"
-              @click="confirmRemove({ kind: 'link', item: link })"
-            />
-          </div>
-        </div>
-        <form v-if="!result && modes.length" class="access-form" @submit.prevent="createLink">
-          <h4>Create a link for {{ scope.name }}</h4>
-          <label :id="`${key}-mode-label`" :for="`${key}-mode`">Anyone with this link can</label
-          ><Select
-            v-model="linkMode"
-            :inputId="`${key}-mode`"
-            :ariaLabelledby="`${key}-mode-label`"
-            :options="modes"
-            optionLabel="label"
-            optionValue="value"
-            :disabled="busy"
-            fluid
-          />
-          <label :for="`${key}-link-expiry`">Expires · {{ timezone }}</label
-          ><DatePicker
-            v-model="linkExpiry"
-            :inputId="`${key}-link-expiry`"
-            showTime
-            hourFormat="24"
-            :minDate="new Date()"
-            :disabled="busy"
-            required
-            fluid
-          />
-          <p class="muted">
-            {{ scope.name }} · Anyone with the link · Expires {{ date(linkExpiry?.toISOString()) }}
-          </p>
-          <Button
-            type="submit"
-            label="Create link"
-            :loading="busy"
-            :disabled="!linkMode || !linkExpiry"
-          />
-        </form>
-        <div v-if="result && active(result)" class="access-form" aria-label="Created link">
-          <h4 ref="resultHeading" tabindex="-1">Link ready: {{ scope.name }}</h4>
-          <p class="muted">Copy the link to share it yourself, or send it by email below.</p>
-          <label :for="`${key}-url`">Link address</label
-          ><InputText :id="`${key}-url`" :modelValue="result.link_url" readonly fluid />
-          <div class="row-buttons">
-            <Button
-              :label="copied ? 'Copied' : 'Copy link'"
-              :disabled="!result.link_url"
-              @click="copy(result)"
-            /><Button
-              as="a"
-              :href="result.link_url"
-              target="_blank"
-              rel="noopener noreferrer"
-              label="Open recipient view"
-              severity="secondary"
-            />
-          </div>
-          <form class="access-form" @submit.prevent="emailLink">
-            <label :for="`${key}-link-email`">Email link to</label
-            ><InputText
-              :id="`${key}-link-email`"
-              v-model="recipient"
-              type="email"
-              required
-              fluid
-            /><Button type="submit" label="Email link" :loading="busy" />
-          </form>
-          <Button
-            label="Create another link"
-            severity="secondary"
-            :disabled="busy"
-            @click="createAnotherLink"
-          />
-        </div>
-      </section>
+      <Tabs v-model:value="activeTab">
+        <TabList aria-label="Sharing options">
+          <Tab value="people">People</Tab>
+          <Tab value="links">Links</Tab>
+        </TabList>
+        <TabPanels>
+          <TabPanel value="people">
+            <p v-if="scope.kind === 'item'" class="muted">
+              People may also have access through the client or another folder.
+            </p>
+            <p v-if="view.inherits_client_access || view.inherits_folder_access" class="muted">
+              You have access through
+              {{ view.inherits_client_access ? 'the client' : 'a containing folder' }}.
+            </p>
+            <section aria-label="People with access">
+              <p v-if="view.people && !view.can_manage" class="muted">
+                You can remove people you invited. Other people’s access is managed by the portal
+                team.
+              </p>
+              <div v-for="person in view.people" :key="person.user_id" class="access-row">
+                <div>
+                  <strong>{{ person.name || person.email }}</strong
+                  ><small
+                    >{{ person.email }} · {{ describeCapabilities(person.capabilities) }}</small
+                  >
+                </div>
+                <Button
+                  v-if="person.can_remove"
+                  label="Remove"
+                  severity="secondary"
+                  :disabled="busy"
+                  @click="confirmRemove({ kind: 'member', item: person })"
+                />
+              </div>
+              <div v-for="grant in visibleGrants" :key="grant.id" class="access-row">
+                <div>
+                  <strong>{{ grant.recipient_name || grant.recipient_email }}</strong
+                  ><small
+                    >Added here · {{ describeCapabilities(grant) }} ·
+                    {{ grant.revoked_at ? 'Removed' : date(grant.expires_at) }}</small
+                  >
+                </div>
+                <div class="row-buttons">
+                  <Button
+                    v-if="canEdit(grant)"
+                    label="Edit"
+                    severity="secondary"
+                    :disabled="busy"
+                    @click="edit(grant)"
+                  /><Button
+                    v-if="active(grant)"
+                    label="Remove"
+                    severity="secondary"
+                    :disabled="busy"
+                    @click="confirmRemove({ kind: 'grant', item: grant })"
+                  />
+                </div>
+              </div>
+              <div v-for="invitation in visibleInvitations" :key="invitation.id" class="access-row">
+                <div>
+                  <strong>{{ invitation.email }}</strong
+                  ><small
+                    >{{
+                      invitation.accepted_at
+                        ? 'Accepted'
+                        : invitation.revoked_at
+                          ? 'Removed'
+                          : active(invitation)
+                            ? 'Awaiting acceptance'
+                            : 'Expired'
+                    }}
+                    · {{ date(invitation.expires_at) }}</small
+                  >
+                </div>
+                <div v-if="active(invitation)" class="row-buttons">
+                  <Button
+                    label="Email invitation"
+                    severity="secondary"
+                    :disabled="busy"
+                    @click="sendInvitation(invitation)"
+                  /><Button
+                    label="Revoke"
+                    severity="secondary"
+                    :disabled="busy"
+                    @click="confirmRemove({ kind: 'invitation', item: invitation })"
+                  />
+                </div>
+              </div>
+              <form class="access-form" @submit.prevent="savePerson">
+                <h4>{{ editing ? 'Edit access' : 'Invite by email' }}</h4>
+                <label :for="`${key}-email`">Recipient email</label
+                ><InputText
+                  :id="`${key}-email`"
+                  v-model="email"
+                  type="email"
+                  autocomplete="email"
+                  required
+                  :disabled="busy || !!editing"
+                  fluid
+                />
+                <fieldset :disabled="busy">
+                  <legend>Permissions</legend>
+                  <label
+                    ><Checkbox
+                      v-model="rights.can_read"
+                      binary
+                      :disabled="!view.capabilities.can_read"
+                      :inputId="`${key}-read`"
+                    />
+                    View & download</label
+                  >
+                  <label v-if="!isFile"
+                    ><Checkbox
+                      v-model="rights.can_upload"
+                      binary
+                      :disabled="!view.capabilities.can_upload"
+                      :inputId="`${key}-upload`"
+                    />
+                    Upload</label
+                  >
+                  <label v-if="view.capabilities.can_delete"
+                    ><Checkbox v-model="rights.can_delete" binary :inputId="`${key}-delete`" />
+                    Delete</label
+                  >
+                  <label
+                    ><Checkbox
+                      v-model="rights.can_share"
+                      binary
+                      :disabled="!view.capabilities.can_share"
+                      :inputId="`${key}-reshare`"
+                    />
+                    Share with others</label
+                  >
+                </fieldset>
+                <template v-if="scope.kind === 'item'"
+                  ><label :for="`${key}-expiry`">Access ends (optional) · {{ timezone }}</label
+                  ><DatePicker
+                    v-model="expiry"
+                    :inputId="`${key}-expiry`"
+                    showTime
+                    hourFormat="24"
+                    showClear
+                    :minDate="new Date()"
+                    :disabled="busy"
+                    fluid
+                /></template>
+                <div class="row-buttons">
+                  <Button
+                    type="submit"
+                    :label="editing ? 'Save changes' : 'Invite'"
+                    :loading="busy"
+                    :disabled="!Object.values(rights).some(Boolean)"
+                  /><Button
+                    v-if="editing"
+                    label="Cancel edit"
+                    severity="secondary"
+                    :disabled="busy"
+                    @click="resetForm"
+                  />
+                </div>
+                <p class="muted">This invitation is for this email address only.</p>
+              </form>
+            </section>
+          </TabPanel>
+          <TabPanel value="links">
+            <section aria-label="Sharing links">
+              <p class="muted">
+                Anyone with a link gets the permissions you choose. Removing a person won’t stop
+                them using a link they already have.
+              </p>
+              <div v-for="link in visibleLinks" :key="link.id" class="access-row">
+                <div>
+                  <strong>{{
+                    link.access_type === 'write'
+                      ? 'Upload only'
+                      : link.access_type === 'readwrite'
+                        ? 'View, download & upload'
+                        : 'View & download'
+                  }}</strong
+                  ><small>{{ link.revoked_at ? 'Revoked' : date(link.expires_at) }}</small>
+                </div>
+                <div class="row-buttons">
+                  <Button
+                    v-if="active(link) && link.link_url"
+                    label="Use link"
+                    severity="secondary"
+                    :disabled="busy"
+                    @click="useLink(link)"
+                  /><Button
+                    v-if="active(link)"
+                    label="Revoke"
+                    severity="secondary"
+                    :disabled="busy"
+                    @click="confirmRemove({ kind: 'link', item: link })"
+                  />
+                </div>
+              </div>
+              <form v-if="!result && modes.length" class="access-form" @submit.prevent="createLink">
+                <h4>Create a link for {{ scope.name }}</h4>
+                <label :id="`${key}-mode-label`" :for="`${key}-mode`"
+                  >Anyone with this link can</label
+                ><Select
+                  v-model="linkMode"
+                  :inputId="`${key}-mode`"
+                  :ariaLabelledby="`${key}-mode-label`"
+                  :options="modes"
+                  optionLabel="label"
+                  optionValue="value"
+                  :disabled="busy"
+                  fluid
+                />
+                <label :for="`${key}-link-expiry`">Expires · {{ timezone }}</label
+                ><DatePicker
+                  v-model="linkExpiry"
+                  :inputId="`${key}-link-expiry`"
+                  showTime
+                  hourFormat="24"
+                  :minDate="new Date()"
+                  :disabled="busy"
+                  required
+                  fluid
+                />
+                <p class="muted">
+                  {{ scope.name }} · Anyone with the link · Expires
+                  {{ date(linkExpiry?.toISOString()) }}
+                </p>
+                <Button
+                  type="submit"
+                  label="Create link"
+                  :loading="busy"
+                  :disabled="!linkMode || !linkExpiry"
+                />
+              </form>
+              <div v-if="result && active(result)" class="access-form" aria-label="Created link">
+                <h4 ref="resultHeading" tabindex="-1">Link ready: {{ scope.name }}</h4>
+                <p class="muted">Copy the link to share it yourself, or send it by email below.</p>
+                <label :for="`${key}-url`">Link address</label
+                ><InputText :id="`${key}-url`" :modelValue="result.link_url" readonly fluid />
+                <div class="row-buttons">
+                  <Button
+                    :label="copied ? 'Copied' : 'Copy link'"
+                    :disabled="!result.link_url"
+                    @click="copy(result)"
+                  /><Button
+                    as="a"
+                    :href="result.link_url"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    label="Open recipient view"
+                    severity="secondary"
+                  />
+                </div>
+                <form class="access-form" @submit.prevent="emailLink">
+                  <label :for="`${key}-link-email`">Email link to</label
+                  ><InputText
+                    :id="`${key}-link-email`"
+                    v-model="recipient"
+                    type="email"
+                    required
+                    fluid
+                  /><Button type="submit" label="Email link" :loading="busy" />
+                </form>
+                <Button
+                  label="Create another link"
+                  severity="secondary"
+                  :disabled="busy"
+                  @click="createAnotherLink"
+                />
+              </div>
+            </section>
+          </TabPanel>
+        </TabPanels>
+      </Tabs>
       <label class="history-toggle"
         ><Checkbox v-model="history" binary :inputId="`${key}-history`" /> Show history</label
       >
@@ -692,6 +732,16 @@ h4 {
   background: var(--p-content-hover-background);
   border-radius: 6px;
 }
+.scope-label .muted {
+  margin-top: 4px;
+  font-weight: 400;
+}
+.sharing-panel :deep(.p-tabpanels) {
+  padding: 20px 0 0;
+}
+.sharing-panel :deep(.p-tab) {
+  min-height: 44px;
+}
 h3 {
   font-size: 18px;
   margin-bottom: 12px;
@@ -705,8 +755,7 @@ small {
   line-height: 1.5;
 }
 section {
-  border-top: 1px solid var(--p-content-border-color);
-  padding-top: 16px;
+  min-width: 0;
 }
 .access-row {
   display: flex;

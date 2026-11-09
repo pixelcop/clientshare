@@ -15,6 +15,16 @@ describe('exact-scope sharing panel', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe = vi.fn();
+
+        unobserve = vi.fn();
+
+        disconnect = vi.fn();
+      },
+    );
+    vi.stubGlobal(
       'matchMedia',
       vi.fn(() => ({
         matches: false,
@@ -31,6 +41,31 @@ describe('exact-scope sharing panel', () => {
       configurable: true,
       value: { writeText: vi.fn().mockResolvedValue(undefined) },
     });
+  });
+
+  it('separates People and Links without losing a draft, and resets tabs for a new target', async () => {
+    const wrapper = mount(SharingPanel, { props: { scope }, global: { plugins: [OpenVue] } });
+    await flushPromises();
+    const tabs = wrapper.findAll('[role="tab"]');
+    expect(tabs.map((tab) => tab.text())).toEqual(['People', 'Links']);
+    expect(tabs[0].attributes('aria-selected')).toBe('true');
+    await wrapper.get('input#item-file-email').setValue('draft@example.test');
+    await tabs[1].trigger('click');
+    expect(tabs[1].attributes('aria-selected')).toBe('true');
+    expect(wrapper.findAll('[role="tabpanel"]')[0].isVisible()).toBe(false);
+    await tabs[0].trigger('click');
+    expect((wrapper.get('input#item-file-email').element as HTMLInputElement).value).toBe(
+      'draft@example.test',
+    );
+    await tabs[1].trigger('click');
+    await wrapper.setProps({
+      scope: { kind: 'item', id: 'folder', name: 'Reports', itemType: 'folder' },
+    });
+    await flushPromises();
+    expect(wrapper.findAll('[role="tab"]')[0].attributes('aria-selected')).toBe('true');
+    expect(wrapper.text()).toContain('Other folders in this client are not included.');
+    expect((wrapper.get('input#item-folder-email').element as HTMLInputElement).value).toBe('');
+    wrapper.unmount();
   });
 
   it('uses the server ceiling, keeps files read-only and reports disabled invitation delivery truthfully', async () => {
@@ -93,6 +128,7 @@ describe('exact-scope sharing panel', () => {
       global: { plugins: [OpenVue] },
     });
     await flushPromises();
+    await wrapper.get('[role="tab"][aria-selected="false"]').trigger('click');
     const form = wrapper.findAll('form')[1];
     await form.trigger('submit');
     await flushPromises();

@@ -11,7 +11,7 @@ const emit = defineEmits<{ close: [] }>();
   <Dialog
     :id="`sharing-${scope.kind}-${scope.id}`"
     :visible="visible"
-    :header="`${scope.kind === 'client' ? 'Manage client access' : 'Share'}: ${scope.name}`"
+    :header="`Share: ${scope.name}`"
     modal
     blockScroll
     :draggable="false"

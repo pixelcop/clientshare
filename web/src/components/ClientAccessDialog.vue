@@ -15,8 +15,8 @@ const canManageLinks = computed(() => ['admin', 'manager'].includes(auth.user?.r
 <template>
   <Dialog
     :visible="visible"
-    :header="`Manage client access: ${clientName}`"
-    :aria-label="`Manage client access: ${clientName}`"
+    :header="`Share: ${clientName}`"
+    :aria-label="`Share: ${clientName}`"
     modal
     blockScroll
     position="right"

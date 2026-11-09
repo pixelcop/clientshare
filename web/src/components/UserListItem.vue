@@ -145,7 +145,7 @@ const userActions = computed<MenuItem[]>(() => {
     <td class="px-4 py-2">
       <div class="flex gap-2 flex-wrap">
         <span v-if="!isAdmin && user.invite_accepted" class="text-sm text-muted-color"
-          >Use Manage client access in the workspace</span
+          >Use Share in the client workspace</span
         >
         <SplitButton
           v-else

@@ -43,7 +43,7 @@ function onClickAddUser() {
 
 const clientActions = computed<MenuItem[]>(() => [
   {
-    label: 'Manage client access',
+    label: 'Share',
     icon: 'oi oi-users',
     command: () => {
       showAccess.value = true;

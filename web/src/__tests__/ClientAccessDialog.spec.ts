@@ -19,6 +19,16 @@ describe('client access entry', () => {
     async (role, people, links) => {
       vi.restoreAllMocks();
       vi.stubGlobal(
+        'ResizeObserver',
+        class {
+          observe = vi.fn();
+
+          unobserve = vi.fn();
+
+          disconnect = vi.fn();
+        },
+      );
+      vi.stubGlobal(
         'matchMedia',
         vi.fn(() => ({
           matches: false,

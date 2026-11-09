@@ -80,7 +80,7 @@ with sync_playwright() as p:
     page.on("pageerror", lambda error: errors.append(str(error)))
     page.goto(base + f"/folder/{root}")
     page.wait_for_load_state("networkidle")
-    assert "Manage client access" in page.get_by_role("button").all_text_contents()
+    expect(page.get_by_role("button", name="Share", exact=True)).to_be_visible()
 
     def open_share(target):
         row = page.get_by_role("row").filter(has=page.get_by_role("button", name=target["filename"], exact=True))
@@ -148,12 +148,20 @@ with sync_playwright() as p:
     dialog.get_by_role("button", name="Done", exact=True).click()
 
     dialog = open_share(folder)
-    folder_invite = invite(dialog, accounts["folder"], upload_access=True)
+    folder_invite = invite(dialog, accounts["folder"], upload_access=True, reshare=True)
     dialog.get_by_role("button", name="Done", exact=True).click()
     folder_context, folder_page = accept(accounts["folder"], folder_invite)
     expect(folder_page).to_have_url(base + "/folder/" + folder["id"])
     expect(folder_page.get_by_role("button", name="Upload", exact=True)).to_be_visible()
-    expect(folder_page.get_by_role("button", name="Manage client access", exact=True)).to_have_count(0)
+    expect(folder_page.get_by_role("button", name="Share client", exact=True)).to_have_count(0)
+    expect(folder_page.get_by_role("heading", name="Shared folder", exact=True)).to_be_visible()
+    folder_page.get_by_role("button", name="Share", exact=True).click()
+    folder_only_dialog = folder_page.get_by_role("dialog", name="Share: Shared folder", exact=True)
+    expect(folder_only_dialog.get_by_text("Sharing: this folder and everything inside", exact=True)).to_be_visible()
+    expect(folder_only_dialog.get_by_role("tab", name="People", exact=True)).to_have_attribute("aria-selected", "true")
+    folder_only_dialog.get_by_role("tab", name="Links", exact=True).click()
+    expect(folder_only_dialog.get_by_role("combobox", name="Anyone with this link can", exact=True)).to_be_visible()
+    folder_only_dialog.get_by_role("button", name="Done", exact=True).click()
     expect(folder_page.get_by_role("combobox", name="Client workspace", exact=True)).to_have_count(0)
     assert folder_context.request.get(base + "/api/folders/" + root + "/download-zip").status == 404
     assert folder_context.request.get(base + "/api/folders/" + folder["id"] + "/download-zip").ok
@@ -172,14 +180,14 @@ with sync_playwright() as p:
     assert named_upload.value.status == 201
 
     # Whole-client invitations remain a separate, explicitly named scope.
-    page.get_by_role("button", name="Manage client access", exact=True).click()
-    client_dialog = page.get_by_role("dialog", name="Manage client access: " + client["name"], exact=True)
+    page.get_by_role("button", name="Share", exact=True).click()
+    client_dialog = page.get_by_role("dialog", name="Share: " + client["name"], exact=True)
     expect(client_dialog.get_by_text("Sharing: entire client workspace", exact=False)).to_be_visible()
     member_invite = invite(client_dialog, accounts["member"], reshare=True, upload_access=True)
     client_dialog.get_by_role("button", name="Done", exact=True).click()
     member_context, member_page = accept(accounts["member"], member_invite)
     expect(member_page).to_have_url(base + "/folder/" + root)
-    expect(member_page.get_by_role("button", name="Manage client access", exact=True)).to_be_visible()
+    expect(member_page.get_by_role("button", name="Share", exact=True)).to_be_visible()
     assert member_context.request.get(base + "/api/files/" + private["id"]).ok
 
     # Legacy multi-client navigation coexists with direct item-only discovery.
@@ -252,7 +260,29 @@ with sync_playwright() as p:
         db.execute("update secure_links set expires_at='2000-01-01T00:00:00Z' where id=?", (file_link["id"],))
     assert file_visitor.request.get(base + "/api/files/" + file["id"] + "/download").status in (401, 403, 404)
 
-    dialog = open_share(folder)
+    # The toolbar shares the open folder, with a separate whole-client action.
+    page.goto(base + "/folder/" + folder["id"])
+    expect(page.get_by_role("heading", name="Shared folder", exact=True)).to_be_visible()
+    page.get_by_role("button", name="Share", exact=True).click()
+    dialog = page.get_by_role("dialog", name="Share: Shared folder", exact=True)
+    expect(dialog.get_by_text("Sharing: this folder and everything inside", exact=True)).to_be_visible()
+    dialog.get_by_role("button", name="Done", exact=True).click()
+    page.get_by_role("button", name="Share client", exact=True).click()
+    whole_client_dialog = page.get_by_role("dialog", name="Share: " + client["name"], exact=True)
+    expect(whole_client_dialog.get_by_text("Sharing: entire client workspace", exact=True)).to_be_visible()
+    whole_client_dialog.get_by_role("button", name="Done", exact=True).click()
+    page.get_by_role("button", name="Share", exact=True).click()
+    dialog.get_by_role("tab", name="People", exact=True).focus()
+    page.keyboard.press("ArrowRight")
+    page.keyboard.press("Enter")
+    expect(dialog.get_by_role("tab", name="Links", exact=True)).to_have_attribute("aria-selected", "true")
+    expect(dialog.get_by_role("tabpanel", name="People", exact=True)).to_have_count(0)
+    page.set_viewport_size({"width": 390, "height": 844})
+    expect(dialog.get_by_text("Sharing: this folder and everything inside", exact=True)).to_be_in_viewport()
+    expect(dialog.get_by_role("tab", name="Links", exact=True)).to_be_in_viewport()
+    assert dialog.evaluate("el => el.scrollWidth <= el.clientWidth")
+    page.screenshot(path=str(database.parent / "sharing-tabs-mobile.png"), full_page=True)
+    page.set_viewport_size({"width": 1280, "height": 900})
     page.screenshot(path=str(database.parent / "sharing-dialog-desktop.png"))
     page.evaluate("document.documentElement.classList.add('app-dark')")
     page.screenshot(path=str(database.parent / "sharing-dialog-dark.png"))
