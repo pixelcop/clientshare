@@ -198,12 +198,16 @@ watch(
     }
   },
 );
-async function refresh() {
-  await auth.fetchMe(true);
-  if (workflow.allowed) {
-    await workflow.reconcile();
-  }
-}
+// Auth owns focus/visibility checks. Refresh the checklist only after that
+// shared check succeeds, rather than issuing a second auth/me request here.
+watch(
+  () => auth.sessionCheckVersion,
+  () => {
+    if (workflow.allowed) {
+      void workflow.reconcile();
+    }
+  },
+);
 watch(
   () => route.path,
   async () => {
@@ -259,7 +263,6 @@ const stopLinks = useSecureLinksStore().$onAction(({ name, args, after }) => {
   });
 });
 onMounted(() => {
-  window.addEventListener('focus', refresh);
   void axios
     .get('/api/help')
     .then(({ data }) => {
@@ -272,7 +275,6 @@ onBeforeUnmount(() => {
   stopLinks();
   clearHint();
   clearTimeout(expiryTimer);
-  window.removeEventListener('focus', refresh);
 });
 </script>
 
