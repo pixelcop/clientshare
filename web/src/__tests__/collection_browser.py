@@ -75,6 +75,14 @@ with sync_playwright() as p:
     dialog.get_by_role("button", name="Copy link", exact=True).click()
     dialog.get_by_role("button", name="Done", exact=True).click()
     expect(checklist.get_by_text("Your link is ready to share.")).to_be_visible()
+    # An active checklist refreshes its own data on focus, never auth/me.
+    page.wait_for_load_state('networkidle')
+    focus_auth_requests = []
+    page.on('request', lambda request: focus_auth_requests.append(request.url) if request.url.endswith('/api/auth/me') else None)
+    with page.expect_response(lambda response: response.url.split('?')[0].endswith(f'/api/clients/{client_id}/collection')):
+        page.evaluate("window.dispatchEvent(new Event('focus'))")
+    page.wait_for_timeout(250)
+    assert not focus_auth_requests, focus_auth_requests
     # Nor should a staff upload after request creation complete the exchange.
     response = context.request.post(upload_url, multipart={"files": {"name": f"staff-{run}.txt", "mimeType": "text/plain", "buffer": b"Staff file after request"}})
     assert response.status == 201, response.text()

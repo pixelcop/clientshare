@@ -28,81 +28,59 @@ describe('auth store', () => {
     return { auth, get };
   }
 
-  it('coalesces visibility and focus into one auth check and updates account details', async () => {
+  it('does not recheck auth on focus, visibility changes or page restores', async () => {
     vi.useFakeTimers();
     const { auth, get } = await signedIn();
-    get.mockResolvedValue({ data: { ...identity, name: 'Updated name' } });
+    const { user } = auth;
     document.dispatchEvent(new Event('visibilitychange'));
-    await vi.advanceTimersByTimeAsync(40);
     window.dispatchEvent(new Event('focus'));
-    await vi.advanceTimersByTimeAsync(99);
-    expect(get).not.toHaveBeenCalled();
-    await vi.advanceTimersByTimeAsync(1);
-    expect(get).toHaveBeenCalledExactlyOnceWith('/api/auth/me');
-    expect(auth.user?.name).toBe('Updated name');
-    expect(auth.sessionCheckVersion).toBe(1);
-    window.dispatchEvent(new Event('focus'));
-    await vi.advanceTimersByTimeAsync(100);
-    expect(get).toHaveBeenCalledTimes(2);
-  });
-
-  it('shares an in-flight session check and ignores extra focus events during it', async () => {
-    vi.useFakeTimers();
-    const { auth, get } = await signedIn();
-    let finish!: (value: { data: typeof identity }) => void;
-    get.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          finish = resolve;
-        }),
-    );
-    const first = auth.revalidateSession();
-    const second = auth.revalidateSession();
-    window.dispatchEvent(new Event('focus'));
-    document.dispatchEvent(new Event('visibilitychange'));
-    await vi.advanceTimersByTimeAsync(100);
-    expect(get).toHaveBeenCalledTimes(1);
-    finish({ data: { ...identity } });
-    expect(await first).toBe(true);
-    expect(await second).toBe(true);
-    expect(auth.sessionCheckVersion).toBe(1);
-  });
-
-  it('keeps the current identity on a transient failure and permits a retry', async () => {
-    const { auth, get } = await signedIn();
-    get.mockRejectedValueOnce(new Error('Temporarily unavailable'));
-    expect(await auth.revalidateSession()).toBe(false);
-    expect(auth.user?.id).toBe(identity.id);
-    expect(auth.sessionCheckVersion).toBe(0);
-    expect(await auth.revalidateSession()).toBe(true);
-    expect(get).toHaveBeenCalledTimes(2);
-  });
-
-  it('checks restored pages, but not initial pageshow or hidden documents', async () => {
-    vi.useFakeTimers();
-    const { get } = await signedIn();
-    window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: false }));
-    await vi.advanceTimersByTimeAsync(100);
-    expect(get).not.toHaveBeenCalled();
     window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
-    await vi.advanceTimersByTimeAsync(100);
-    expect(get).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(get).not.toHaveBeenCalled();
     vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
     document.dispatchEvent(new Event('visibilitychange'));
     window.dispatchEvent(new Event('focus'));
-    await vi.advanceTimersByTimeAsync(100);
-    expect(get).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(get).not.toHaveBeenCalled();
+    expect(auth.user).toBe(user);
   });
 
-  it('removes focus listeners and scheduled checks when the store is disposed', async () => {
-    vi.useFakeTimers();
-    const { auth, get } = await signedIn();
-    window.dispatchEvent(new Event('focus'));
-    auth.$dispose();
-    window.dispatchEvent(new Event('focus'));
-    document.dispatchEvent(new Event('visibilitychange'));
-    await vi.advanceTimersByTimeAsync(100);
+  it('loads auth at startup, reuses it for navigation and allows explicit refreshes', async () => {
+    const get = vi.spyOn(axios, 'get').mockResolvedValue({ data: { ...identity } });
+    const auth = useAuthStore();
+    await auth.fetchMe();
+    expect(get).toHaveBeenCalledExactlyOnceWith('/api/auth/me');
+    get.mockClear();
+    await auth.fetchMe();
     expect(get).not.toHaveBeenCalled();
+    await auth.fetchMe(true);
+    expect(get).toHaveBeenCalledExactlyOnceWith('/api/auth/me');
+  });
+
+  it('clears auth on an API 401 without sending a logout request', async () => {
+    const { auth, get } = await signedIn();
+    get.mockRestore();
+    const post = vi.spyOn(axios, 'post');
+    await expect(
+      axios.get('/api/protected', {
+        adapter: async () => {
+          throw Object.assign(new Error('Unauthorized'), { response: { status: 401 } });
+        },
+      }),
+    ).rejects.toThrow('Unauthorized');
+    expect(auth.user).toBeNull();
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it('retains cross-tab session notifications and removes the listener on disposal', async () => {
+    const add = vi.spyOn(window, 'addEventListener');
+    const remove = vi.spyOn(window, 'removeEventListener');
+    const { auth } = await signedIn();
+    const storage = add.mock.calls.find(([event]) => event === 'storage');
+    expect(storage).toBeDefined();
+    expect(add.mock.calls.map(([event]) => event)).not.toContain('focus');
+    auth.$dispose();
+    expect(remove).toHaveBeenCalledWith('storage', storage![1]);
   });
 
   it('offers passkey enrollment after a hosted login handoff', async () => {

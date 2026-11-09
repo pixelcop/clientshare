@@ -58,15 +58,13 @@ with sync_playwright() as p:
     expect(page.get_by_text("report.txt", exact=True)).to_be_visible()
     expect(page.get_by_role("heading", name="No files yet", exact=True)).to_have_count(0)
     assert abs(upload.bounding_box()["y"] - before_y) < 2
-    # Auth owns a single check even with the global collection dock mounted.
-    # Replacing the same user must not clear the file store.
+    # Returning to the window must not recheck auth or clear the workspace,
+    # even with the global collection dock mounted.
     auth_requests = []
     page.on('request', lambda request: auth_requests.append(request.url) if request.url.endswith('/api/auth/me') else None)
-    with page.expect_response(lambda response: response.url.endswith('/api/auth/me')) as revalidated:
-        page.evaluate("document.dispatchEvent(new Event('visibilitychange')); window.dispatchEvent(new Event('focus'))")
-    assert revalidated.value.status == 200
-    page.wait_for_load_state('networkidle')
-    assert len(auth_requests) == 1, f'Expected one focus auth check, got {len(auth_requests)}'
+    page.evaluate("document.dispatchEvent(new Event('visibilitychange')); window.dispatchEvent(new Event('focus')); window.dispatchEvent(new PageTransitionEvent('pageshow', {persisted: true}))")
+    page.wait_for_timeout(250)
+    assert len(auth_requests) == 0, f'Expected no focus auth checks, got {len(auth_requests)}'
     expect(page.get_by_role('heading', name=client['name'], exact=True)).to_be_visible()
     expect(page.get_by_text('report.txt', exact=True)).to_be_visible()
     expect(upload).to_be_enabled()

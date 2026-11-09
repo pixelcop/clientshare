@@ -6,7 +6,6 @@ import axios from 'axios';
 import { Button, Message, Panel, Step, StepItem, StepPanel, Stepper } from 'openvue';
 
 import CollectionSpotlight from '@/components/CollectionSpotlight.vue';
-import { useAuthStore } from '@/stores/auth';
 import { useBrandingStore } from '@/stores/branding';
 import { useClientsStore } from '@/stores/clients';
 import { guideTopic, useCollectionStore } from '@/stores/collection';
@@ -14,7 +13,6 @@ import { useSecureLinksStore } from '@/stores/secureLinks';
 
 const workflow = useCollectionStore();
 const clients = useClientsStore();
-const auth = useAuthStore();
 const branding = useBrandingStore();
 const route = useRoute();
 const tucked = ref(false);
@@ -198,16 +196,16 @@ watch(
     }
   },
 );
-// Auth owns focus/visibility checks. Refresh the checklist only after that
-// shared check succeeds, rather than issuing a second auth/me request here.
-watch(
-  () => auth.sessionCheckVersion,
-  () => {
-    if (workflow.allowed) {
-      void workflow.reconcile();
-    }
-  },
-);
+function refreshChecklist() {
+  if (
+    document.visibilityState === 'visible' &&
+    workflow.allowed &&
+    workflow.progress &&
+    !workflow.progress.dismissed
+  ) {
+    void workflow.reconcile();
+  }
+}
 watch(
   () => route.path,
   async () => {
@@ -263,6 +261,7 @@ const stopLinks = useSecureLinksStore().$onAction(({ name, args, after }) => {
   });
 });
 onMounted(() => {
+  window.addEventListener('focus', refreshChecklist);
   void axios
     .get('/api/help')
     .then(({ data }) => {
@@ -271,6 +270,7 @@ onMounted(() => {
     .catch(() => undefined);
 });
 onBeforeUnmount(() => {
+  window.removeEventListener('focus', refreshChecklist);
   stopClients();
   stopLinks();
   clearHint();

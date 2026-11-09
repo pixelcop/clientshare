@@ -50,11 +50,9 @@ export const useAuthStore = defineStore('auth', () => {
     | null
   >(null);
   const token = ref<string | null>(null);
-  let sessionID: string | null = null;
   const loading = ref(false);
   const error = ref<string | null>(null);
   const passkeyEnrollmentPrompt = ref(false);
-  const sessionCheckVersion = ref(0);
 
   // Set token in axios headers
   function setAuthHeader(jwt: string | null) {
@@ -75,7 +73,6 @@ export const useAuthStore = defineStore('auth', () => {
 
   function clear() {
     user.value = null;
-    sessionID = null;
     clearLegacyToken();
     clearPasskeyEnrollmentPrompt();
   }
@@ -90,78 +87,9 @@ export const useAuthStore = defineStore('auth', () => {
       invalidatePage();
     }
   }
-  let revalidation: Promise<boolean> | null = null;
-  let focusTimer: ReturnType<typeof setTimeout> | undefined;
-
-  async function checkSession(): Promise<boolean> {
-    if (document.visibilityState !== 'visible' || !sessionID) {
-      return false;
-    }
-    const previous = sessionID;
-    const previousUser = user.value;
-    try {
-      const response = await axios.get('/api/auth/me');
-      // A response from before a local login/logout must not replace its result.
-      if (previous !== sessionID) {
-        return false;
-      }
-      if (
-        previous !== response.data.session_id ||
-        response.data.id !== previousUser?.id ||
-        response.data.tenant_id !== previousUser?.tenant_id ||
-        response.data.role !== previousUser?.role ||
-        response.data.link_id !== previousUser?.link_id
-      ) {
-        invalidatePage();
-        return false;
-      }
-      user.value = response.data;
-      sessionCheckVersion.value += 1;
-      return true;
-    } catch (err) {
-      if (axios.isAxiosError(err) && err.response?.status === 401) {
-        invalidatePage();
-      }
-      return false;
-    }
-  }
-
-  async function revalidateSession(): Promise<boolean> {
-    if (revalidation) {
-      return revalidation;
-    }
-    revalidation = checkSession();
-    try {
-      return await revalidation;
-    } finally {
-      revalidation = null;
-    }
-  }
-
-  function scheduleRevalidation() {
-    clearTimeout(focusTimer);
-    if (document.visibilityState !== 'visible' || !sessionID || revalidation) {
-      return;
-    }
-    // Returning to a window can emit visibilitychange and focus separately.
-    // Coalesce that burst rather than rechecking once for each event.
-    focusTimer = setTimeout(() => void revalidateSession(), 100);
-  }
-  function onPageShow(event: PageTransitionEvent) {
-    if (event.persisted) {
-      scheduleRevalidation();
-    }
-  }
   window.addEventListener('storage', onStorage);
-  window.addEventListener('focus', scheduleRevalidation);
-  window.addEventListener('pageshow', onPageShow);
-  document.addEventListener('visibilitychange', scheduleRevalidation);
   onScopeDispose(() => {
-    clearTimeout(focusTimer);
     window.removeEventListener('storage', onStorage);
-    window.removeEventListener('focus', scheduleRevalidation);
-    window.removeEventListener('pageshow', onPageShow);
-    document.removeEventListener('visibilitychange', scheduleRevalidation);
   });
 
   async function fetchMe(force = false): Promise<User | null> {
@@ -172,7 +100,6 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const res = await axios.get('/api/auth/me');
       user.value = res.data;
-      sessionID = res.data.session_id;
       if (token.value) {
         clearLegacyToken();
       }
@@ -290,8 +217,6 @@ export const useAuthStore = defineStore('auth', () => {
     acceptHostedLoginHandoff,
     logout,
     fetchMe,
-    revalidateSession,
-    sessionCheckVersion,
     offerPasskeyEnrollment,
     clearPasskeyEnrollmentPrompt,
   };
