@@ -25,15 +25,15 @@ Try [previewing the file](../files/preview-and-download.md) before sharing it.
 ## 3. Share access
 
 1. Return to **Clients**.
-2. Open the client workspace and select **Manage client access → Links**.
+2. Open the client workspace root and select **Share → Links**.
 3. Choose **View, download & upload** and an expiry. Check that you want to share the entire client.
 4. Create the link, then use **Copy link** or **Email link** to send it. Check the email status if you send it from the portal.
 
 The recipient can view, download, and upload within this client's workspace. For ongoing access through a named account, [invite a client user](../clients/manage-users.md) instead.
 
 ::: tip Check what you’re sharing
-**Manage client access** shares the entire client. To share only one file or
-folder, use its **Share** action instead.
+At the workspace root, **Share** shares the entire client. Inside a folder,
+**Share** shares that folder. Check the banner in the dialog before sending.
 :::
 
 ## 4. Collect the response

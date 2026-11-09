@@ -7,7 +7,7 @@ Anyone with the link can use it, so check what it includes before sending.
 
 ## Create the link
 
-1. Open **Manage client access → Links** for the whole client, or a file or
+1. Open **Share → Links** at the client workspace root for the whole client, or a file or
    folder's **Share → Links** section for just that content.
 2. Choose **View & download**, **Upload only**, or **View, download & upload**.
    File links allow viewing and downloading only.
@@ -18,8 +18,9 @@ Staff can also use **Clients → Links → New link**. There, **Send documents**
 **Collect uploads** select a starting set of permissions. Always check them before creating the link.
 
 ::: important Review the entire workspace
-A link created in **Manage client access** includes the entire client. To share
-only one file or folder, use its **Share** action instead.
+At the client workspace root, **Share** includes the entire client. Inside a
+folder, **Share** includes only that folder and everything inside it. Use
+**Share client** there if you want to share the whole workspace instead.
 :::
 
 ## Copy and share

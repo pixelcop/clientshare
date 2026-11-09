@@ -20,7 +20,7 @@ set up an account. After accepting, they can find the file or folder in
 ## Access shared from elsewhere
 
 People may already have access through the client or a containing folder.
-Removing them here will not remove that access. Open **Manage client access** or
+Removing them here will not remove that access. Open the client's **Share** dialog or
 the containing folder's **Share** dialog to change it, if you have permission.
 
 Use **Edit** to change someone's permissions or expiry, or **Remove** to end the
@@ -41,4 +41,7 @@ from your signed-in account.
 Reopen a link with **Use link**, or choose **Revoke** to stop it working, even if
 someone already has it open. Select **Show history** to see past invitations and links.
 
-To invite someone to the whole client, open **Manage client access** in the client workspace.
+Inside a folder, the top **Share** button shares that folder. To invite someone
+to the whole client, use **Share client**, or return to the client workspace root
+and select **Share**. Check the banner above the **People** and **Links** tabs
+to confirm what is included.

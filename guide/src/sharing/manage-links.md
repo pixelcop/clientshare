@@ -4,7 +4,7 @@
 
 ## Find a client's links
 
-Open **Manage client access → Links** for the whole client, or a file or folder's
+Open **Share → Links** at the client workspace root for the whole client, or a file or folder's
 **Share → Links** section. Staff can also open **Links** from the client directory.
 
 Choose **Use link** or **Details & email** to copy or email an existing link.

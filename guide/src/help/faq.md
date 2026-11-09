@@ -15,7 +15,8 @@ A client is a document workspace. A user is a person who signs in. One client ca
 ## Can I share only one folder with a secure link?
 
 Yes. Select the folder's **Share** action and create a link there. It includes
-that folder and everything inside it. **Manage client access** shares the entire client.
+that folder and everything inside it. To share the entire client, use **Share**
+at the client workspace root, or **Share client** while inside a folder.
 
 ## Can upload-only recipients download or delete files?
 
