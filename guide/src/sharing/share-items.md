@@ -7,11 +7,10 @@
 1. Find the file or folder and select **Share** on its row or in **More**. On a
    narrow screen, use **More → Share**. File detail pages also have **Share**.
 2. Check the name. Sharing a folder includes everything inside it.
-3. Enter **Recipient email** and choose what the person can do. Select
-   **Share with others** if they should be able to invite more people.
-4. To limit how long they have access, choose **Access ends**. Check the timezone.
-5. Select **Invite** and check the email status. If sending fails, use
-   **Email invitation** to try again.
+3. Under **Add people**, enter an email address and select **Continue**.
+4. Choose a role. To limit access duration, expand **Add expiry** and check the timezone.
+5. Select **Send invitation** and check the email status. If sending fails, expand
+   **Pending** beside the invitation and use **Email invitation** to try again.
 
 The recipient signs in with the invited email address, or follows the email to
 set up an account. After accepting, they can find the file or folder in
@@ -23,8 +22,30 @@ People may already have access through the client or a containing folder.
 Removing them here will not remove that access. Open the client's **Share** dialog or
 the containing folder's **Share** dialog to change it, if you have permission.
 
-Use **Edit** to change someone's permissions or expiry, or **Remove** to end the
-access added here. Shares they created for other people keep working.
+Select the role beside a person to change their role or expiry, or choose
+**Remove access** in that view to end access added here. Shares they created for
+other people keep working. Past invitations and removed access are kept in a
+collapsed section below the current people, when there are past entries.
+
+## Sharing roles
+
+| Role | What the person can do |
+| --- | --- |
+| Viewer | View and download files. |
+| Uploader | Upload to a folder or client workspace without seeing existing files or folders. |
+| Contributor | View, download and upload files. |
+| Editor | View, download, upload and delete files. For a single file, view, download and delete it. |
+| Manager | Everything an Editor can do, plus invite others and create sharing links. |
+
+These roles apply only to the shared file, folder or client workspace. **Manager**
+here does not make someone a portal manager or grant administrative access.
+Uploader and Contributor are not offered for individual files. Only roles within
+your own permissions are available; new invitations default to Viewer, or Uploader
+when you can only collect uploads. Delete and sharing are never standalone roles.
+
+Existing combinations that do not match a role appear as **Custom access**. Their
+permissions are preserved when changing expiry; choosing a role explicitly replaces
+that combination. Access inherited from elsewhere is not reduced by a role here.
 
 ## Share a link
 
@@ -39,9 +60,9 @@ Use **Copy link** to paste it into your own message, or enter an address under
 from your signed-in account.
 
 Reopen a link with **Use link**, or choose **Revoke** to stop it working, even if
-someone already has it open. Select **Show history** to see past invitations and links.
+someone already has it open. Select **Include expired and revoked links** to see past links.
 
 Inside a folder, the top **Share** button shares that folder. To invite someone
 to the whole client, use **Share client**, or return to the client workspace root
-and select **Share**. Check the banner above the **People** and **Links** tabs
+and select **Share**. Check the scope below the dialog title
 to confirm what is included.

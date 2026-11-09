@@ -10,7 +10,9 @@ Open **Share → Links** at the client workspace root for the whole client, or a
 Choose **Use link** or **Details & email** to copy or email an existing link.
 Check its permissions and expiry before sending it.
 
-Select **Show history** in the sharing dialog to see past invitations and links.
+In the sharing dialog's **Links** tab, select **Include expired and revoked links**
+to see past links. Past invitations and removed access are in a collapsed section
+in **People**.
 In the client's link list, use **Expired & revoked history** to see links that no longer work.
 
 **Details & email → Link history** shows when a link was created and last used,
