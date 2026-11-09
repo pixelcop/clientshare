@@ -184,8 +184,8 @@ async function revokeLink(link: SecureLink) {
       />
     </header>
     <p class="links-note">
-      Bearer links are separate from named account access. Anyone holding an active link can use its
-      permitted actions.
+      Anyone with a link gets its permissions. Removing someone’s account access won’t stop them
+      using a link they already have.
     </p>
     <p v-if="clientLoading" role="status">Loading client…</p>
     <p v-if="clientError" role="alert" class="links-error">{{ clientError }}</p>

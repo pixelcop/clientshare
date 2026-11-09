@@ -30,7 +30,7 @@ export function describeCapabilities(c: AccessCapabilities) {
     c.can_read && 'View & download',
     c.can_upload && 'Upload',
     c.can_delete && 'Delete',
-    c.can_share && 'Reshare',
+    c.can_share && 'Share with others',
   ]
     .filter(Boolean)
     .join(' · ');

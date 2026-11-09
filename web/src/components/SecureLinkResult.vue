@@ -73,7 +73,7 @@ async function email() {
         : 'failed';
     deliveryError.value =
       (axios.isAxiosError(error) && error.response?.data?.error) ||
-      'Could not queue the email. Retry uses this same link.';
+      'We could not confirm the email was sent. Try again or copy the link.';
   } finally {
     sending.value = false;
   }
@@ -92,7 +92,7 @@ watch(recipient, () => {
     </h3>
     <dl class="link-summary">
       <div>
-        <dt>Scope</dt>
+        <dt>Sharing</dt>
         <dd>Entire client workspace · {{ targetName }}</dd>
       </div>
       <div>
@@ -119,7 +119,7 @@ watch(recipient, () => {
       <p v-if="link.email">
         Contact email: {{ link.email }}. This does not restrict who can use the link.
       </p>
-      <p>Access timestamps are not proof that a particular person read the documents.</p>
+      <p>Link activity does not tell you who read the documents.</p>
     </details>
     <template v-if="usable">
       <label :for="`link-url-${link.id}`">Link address</label>
@@ -149,11 +149,10 @@ watch(recipient, () => {
       </div>
       <p v-if="copyMessage" role="status">{{ copyMessage }}</p>
       <p class="link-note">
-        Opening recipient view preserves the portal’s confirmation before switching a signed-in
-        session.
+        Recipient view asks before switching away from your signed-in account.
       </p>
       <form class="link-email" @submit.prevent="email">
-        <label :for="`link-recipient-${link.id}`">Email this existing link</label>
+        <label :for="`link-recipient-${link.id}`">Email link to</label>
         <InputText
           :id="`link-recipient-${link.id}`"
           v-model="recipient"
@@ -175,13 +174,11 @@ watch(recipient, () => {
           :disabled="deliveryStatus === 'queued' || deliveryStatus === 'sent'"
         />
         <p v-if="!deliveryStatus" class="link-note">
-          Not emailed from this dialog. Copying a link does not send an email.
+          Copying the link does not send an email. Use Email link to send it.
         </p>
-        <p v-if="deliveryStatus === 'queued'" role="status">
-          Email queued. Delivery has not been confirmed.
-        </p>
+        <p v-if="deliveryStatus === 'queued'" role="status">Email is waiting to send.</p>
         <p v-if="deliveryStatus === 'sent'" role="status">
-          Accepted by the mail server. Recipient delivery has not been confirmed.
+          Email sent. Delivery has not been confirmed.
         </p>
         <p v-if="deliveryError" role="alert" class="link-error">{{ deliveryError }}</p>
       </form>

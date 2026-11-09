@@ -1,45 +1,50 @@
 # Create and send a secure link
 
-**Who:** Named users with sharing authority on the intended scope.
+**Who:** People with permission to share the client, folder or file.
 
-A secure link lets a recipient exchange documents without first creating a user account. Decide whether to share a whole client, folder or file before generating it. For item scope, use [the item's Share dialog](./share-items.md).
+A secure link lets someone view files or upload documents without an account.
+Anyone with the link can use it, so check what it includes before sending.
 
 ## Create the link
 
-1. Open **Clients**.
-2. Open the client workspace and select **Manage client access**. Its **Links** section is explicitly whole-client scope.
-3. Choose permissions and expiry in **Create a link**. The staff directory's **Links → New link** shortcut also remains available.
-4. Choose **View & download**, **Upload only**, or **View, download & upload**, limited to your own rights. The directory shortcut also offers **Send documents** and **Collect uploads** presets; Collect resets to Upload only.
-5. Review the absolute expiry timestamp and timezone. In the directory shortcut, **Expires in (days)** accepts 1 to 120.
-6. Confirm the client name, entire-workspace scope, audience, permissions and expiry in the access summary.
-7. Select **Create link**. Creating it does not email it.
+1. Open **Manage client access → Links** for the whole client, or a file or
+   folder's **Share → Links** section for just that content.
+2. Choose **View & download**, **Upload only**, or **View, download & upload**.
+   File links allow viewing and downloading only.
+3. Choose when the link expires. Check the date, time and timezone.
+4. Review the name and what is included, then select **Create link**.
 
-The result stays open with the created address, **Copy link**, **Open recipient view**, and a separate email action. Authorized staff can also generate a link while creating a new client; its result opens on the client's links page.
+Staff can also use **Clients → Links → New link**. There, **Send documents** and
+**Collect uploads** select a starting set of permissions. Always check them before creating the link.
 
 ::: important Review the entire workspace
-A link created in **Manage client access** applies to the entire client. Opening a folder first does not narrow it. Use the item's **Share** control when only that file or folder should be shared.
+A link created in **Manage client access** includes the entire client. To share
+only one file or folder, use its **Share** action instead.
 :::
 
 ## Copy and share
 
-Select **Copy link** in the result, or **Copy** on a usable link's row. When the button reads **Copied**, paste it into your message to the intended recipient. Creation dates are plain text, not clipboard actions.
+Select **Copy link**, then paste it into your message. Copying does not send an email.
 
 Include the purpose of the exchange, the documents you need, and the deadline. For example: “Please upload your project brief and supporting images using this link by Friday.”
 
-If copying fails, select and copy the address in the result. Reopen it with **Use link** in the access dialog, or **Details & email** in the directory shortcut. **Open recipient view** asks before replacing a signed-in portal session; it does not silently use staff privileges.
+If copying fails, select and copy the address yourself. To reopen a link, choose
+**Use link** in the sharing dialog or **Details & email** in the client's link list.
 
-## Email the existing link
+## Send by email
 
-Enter an address under **Email this existing link**, then select **Email link**. A retry uses that same link, not a newly created URL.
+Enter an address under **Email link to**, then select **Email link**.
 
-- **Email queued** means the configured queue accepted the message. It is not proof of delivery.
-- **Accepted by the mail server** means a recorded send succeeded, not that the recipient read or received it.
-- If email is unavailable or queueing fails, the result keeps the address. Copy it yourself or use **Retry email** after the problem is resolved.
+- **Waiting to send** means the email has not been sent yet.
+- **Sent** does not confirm that the email reached the recipient's inbox.
+- If sending fails, try again or copy the link to share it yourself.
 
-Emailing a bearer link does not prove the recipient's identity or create named account access. Link email and upload-notification preferences are separate.
+Emailing a link does not make it exclusive to that address. Anyone who gets the
+link can use it. Use an [email invitation](./share-items.md) when someone should sign in to access shared files.
 
-## Check the result
+## Check what the recipient sees
 
-Confirm **Permissions** and **Expires** before sending. A new dialog starts from its explicit preset rather than silently restoring another client's saved permissions. Links are bearer credentials: anyone who obtains an active URL can use its permitted actions.
+Select **Open recipient view** to check the link. You’ll be asked before switching
+away from your signed-in account.
 
 Next: [Choose permissions and expiry](./permissions-and-expiry.md), or [review and revoke links](./manage-links.md).

@@ -37,18 +37,18 @@ func sharingError(err error) error {
 	case errors.Is(err, gorm.ErrRecordNotFound):
 		return fiber.ErrNotFound
 	case errors.Is(err, services.ErrSharingConflict), errors.Is(err, services.ErrLinkRequestConflict), errors.Is(err, emailpkg.ErrIdempotencyConflict):
-		return fiber.NewError(409, "Access changed; refresh before retrying")
+		return fiber.NewError(409, "Sharing settings changed. Refresh and try again.")
 	case errors.Is(err, services.ErrSharingCapabilities):
-		return fiber.NewError(403, "Requested capabilities exceed your current sharing authority")
+		return fiber.NewError(403, "You can only share permissions you already have.")
 	case errors.Is(err, services.ErrSharingInput):
 		return fiber.NewError(400, "Invalid sharing settings")
 	default:
-		return fiber.NewError(503, "Access validation is temporarily unavailable")
+		return fiber.NewError(503, "Sharing is temporarily unavailable. Please try again.")
 	}
 }
 
 func sharingJSONError(c fiber.Ctx, err error) error {
-	code, message := 503, "Access validation is temporarily unavailable"
+	code, message := 503, "Sharing is temporarily unavailable. Please try again."
 	var apiError *fiber.Error
 	if errors.As(err, &apiError) {
 		code, message = apiError.Code, apiError.Message
@@ -172,7 +172,7 @@ func (h *SharingHandler) EmailInvitation(c fiber.Ctx) error {
 		return sharingError(err)
 	}
 	if h.emailQueue == nil {
-		return c.Status(503).JSON(fiber.Map{"status": "unavailable", "error": "Email is unavailable; retry this invitation after email is configured"})
+		return c.Status(503).JSON(fiber.Map{"status": "unavailable", "error": "Email is unavailable. Ask your portal administrator to check email settings."})
 	}
 	delivery, err := h.service.PrepareInvitationDelivery(c.Context(), req, c.Params("invitationID"), h.identityTTL)
 	if err != nil {
@@ -180,19 +180,19 @@ func (h *SharingHandler) EmailInvitation(c fiber.Ctx) error {
 	}
 	baseURL := strings.TrimRight(tenantBaseURLFromCtx(c, h.baseURL), "/")
 	if baseURL == "" {
-		return fiber.NewError(503, "Invitation URL is unavailable")
+		return fiber.NewError(503, "The invitation link is unavailable. Ask your portal administrator for help.")
 	}
 	path := "/accept-access#token="
 	if delivery.NeedsIdentity {
 		path = "/accept-invite#token="
 	}
 	inviteURL := baseURL + path + url.QueryEscape(delivery.RawToken)
-	subject, body, htmlBody := emailpkg.RenderUserInviteEmail(delivery.User.Name, inviteURL, services.DefaultSiteTitle, "You have been invited to shared content. Sign in with the invited email to accept.", delivery.ExpiresAt)
+		subject, body, htmlBody := emailpkg.RenderUserInviteEmail(delivery.User.Name, inviteURL, services.DefaultSiteTitle, "You have been invited to shared files. Use this email address to accept the invitation.", delivery.ExpiresAt)
 	item, err := h.emailQueue.Queue(emailpkg.Email{TenantID: req.TenantID, To: delivery.Invitation.Email, Subject: subject, Body: body, HTMLBody: htmlBody, ClientID: &delivery.Invitation.ClientID, AccessInvitationID: &delivery.Invitation.ID, IdentityInviteID: delivery.IdentityInviteID, DeduplicationKey: *key}, models.Now())
 	if err != nil {
-		code, status, message := 503, "failed", "Could not queue this invitation email; retry keeps the same invitation"
+		code, status, message := 503, "failed", "The invitation email could not be sent. Please try again."
 		if errors.Is(err, emailpkg.ErrAccessValidationUnavailable) {
-			status, message = "unavailable", err.Error()
+			status, message = "unavailable", "Email is unavailable. Ask your portal administrator to check email settings."
 		}
 		if errors.Is(err, emailpkg.ErrIdempotencyConflict) {
 			code = 409
@@ -200,10 +200,10 @@ func (h *SharingHandler) EmailInvitation(c fiber.Ctx) error {
 		return c.Status(code).JSON(fiber.Map{"status": status, "error": message})
 	}
 	if item == nil {
-		return fiber.NewError(503, "Email queue did not accept the invitation")
+		return fiber.NewError(503, "The invitation email could not be sent. Please try again.")
 	}
 	if item.CanceledAt != nil {
-		return c.Status(410).JSON(fiber.Map{"status": "unavailable", "error": "This delivery request was canceled"})
+		return c.Status(410).JSON(fiber.Map{"status": "unavailable", "error": "This invitation email was canceled."})
 	}
 	status := "queued"
 	if item.SentAt != nil {

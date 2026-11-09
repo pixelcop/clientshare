@@ -263,7 +263,7 @@ function clearClientScope() {
               ? 'Manage users assigned to this client.'
               : isAdmin
                 ? 'Manage admin, manager, and customer accounts.'
-                : 'Invite customers to your assigned clients. Manage workspace membership from Manage client access.'
+                : 'Invite customers to your clients. To remove someone’s access, open Manage client access in their workspace.'
           }}
         </p>
       </div>

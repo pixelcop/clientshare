@@ -138,12 +138,9 @@ const formComponent = computed(() => (props.embedded ? 'div' : 'form'));
       class="link-settings"
       @submit.prevent="expiryValid && emit('submit', getSettings())"
     >
-      <p class="link-scope">Scope: entire client workspace · {{ targetName }}</p>
-      <p class="link-note">
-        This link applies to the whole client, not just the current folder or file.
-      </p>
+      <p class="link-scope">Sharing: entire client workspace · {{ targetName }}</p>
       <fieldset class="link-purpose" :disabled="loading">
-        <legend>Purpose preset</legend>
+        <legend>What would you like to do?</legend>
         <label
           ><input
             type="radio"
@@ -200,12 +197,10 @@ const formComponent = computed(() => (props.embedded ? 'div' : 'form'));
           <strong>{{ linkAccessLabel(accessType) }}</strong> in <strong>{{ targetName }}</strong
           >.
         </p>
-        <p>Scope: entire client workspace.</p>
+        <p>Includes all files and folders in this client.</p>
         <p>Expires {{ formatLinkExpiry(expiresAt) }}.</p>
       </section>
-      <p class="link-note">
-        Create the link first. Copy it or email that same link from the result.
-      </p>
+      <p class="link-note">After creating the link, you can copy it or send it by email.</p>
       <p v-if="error" role="alert" class="link-error">{{ error }}</p>
     </component>
     <template v-if="!embedded" #footer>

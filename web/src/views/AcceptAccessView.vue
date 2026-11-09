@@ -37,9 +37,11 @@ async function accept() {
 
 <template>
   <section class="accept-access">
-    <h1>Accept shared access</h1>
+    <h1>Accept invitation</h1>
     <p>Use the account with the email address that received this invitation.</p>
-    <p v-if="!token" role="alert">This invitation is missing its acceptance token.</p>
+    <p v-if="!token" role="alert">
+      This invitation link is incomplete. Open the full link from your email.
+    </p>
     <template v-else-if="auth.user && auth.user.role !== 'link'">
       <p>
         Signed in as <strong>{{ auth.user.email }}</strong>
@@ -55,7 +57,8 @@ async function accept() {
     </template>
     <template v-else-if="auth.user?.role === 'link'">
       <p>
-        A bearer link is not a named account. Sign out of recipient view to use the invited account.
+        You’re using a sharing link. Sign out, then sign in with the email address that received
+        this invitation.
       </p>
       <Button label="Sign out of recipient view" severity="secondary" @click="auth.logout()" />
     </template>

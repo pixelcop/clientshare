@@ -10,23 +10,31 @@
 | **Upload only** | Upload-only | Upload; downloads are disabled | Collect supporting documents |
 | **View, download & upload** | Read & upload | View, download, and upload | Exchange drafts and responses |
 
-These options never grant sharing authority, staff administration or deletion. Upload-only is private collection: existing filenames, folders, counts and duplicate checks are not exposed. Incoming names receive opaque suffixes to avoid collisions without disclosure.
+Links never allow deletion or management of other people's access. **Upload only**
+hides existing files and folders. Uploaded files do not replace existing files.
 
 Read-only recipients can browse folders, preview files, download files, and download folders as ZIP archives. They cannot upload or replace files, create folders, or delete anything.
 
-The stored API modes remain `read`, `write`, and `readwrite`; legacy `view` is interpreted as `read`. Only client-wide **View, download & upload** links offer optional account registration. Item links never create client membership; ask for a named invitation instead. Registration cannot bypass link restrictions or grant sharing authority.
+Some whole-client **View, download & upload** links offer account creation.
+For account access to a shared file or folder, ask the sender for an email invitation.
 
 ## Understand the scope
 
-A link targets a **client workspace**, **folder and descendants**, or **single file**. A folder link never grants access to its parents or siblings. File links are view/download only. Review the named target in the creation dialog; **Manage client access** always creates client-wide links.
+A link shares an entire **client workspace**, a **folder and everything inside**,
+or a **single file**. A folder link does not open other folders outside it. File
+links allow viewing and downloading only. Check the name before creating the link.
 
-Someone who also has a user account may have separate access through that account. Link permissions describe the link session, not every access path the person could have.
+Someone with an account may also have access separately. Changing a link does not
+change their account permissions.
 
 ## Set an expiry
 
-In an access dialog, select an expiry date/time. The staff **New link** shortcut accepts a suggested number of days or a value from **1 to 120**. Review the exact expiry timestamp and timezone. The link becomes unusable after expiry, including in already-open sessions.
+Choose an expiry date and time. In **New link**, you can choose a suggested number
+of days or enter a value from **1 to 120**. Check the date, time and timezone before
+sharing. The link stops working after expiry, even if someone already has it open.
 
-Portal settings provide the default expiry. New dialogs do not restore permissions from another client or sharing scope. **Send documents** and **Collect uploads** are presets, not additional permissions; always review the selected capability and timestamp.
+**Send documents** and **Collect uploads** select a starting set of permissions.
+Check the permissions and expiry for each new recipient.
 
 ## Expiry versus revocation
 

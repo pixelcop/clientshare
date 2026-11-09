@@ -168,9 +168,9 @@ async function sendInvitation(invitation: AccessInvitation) {
     status.value =
       response.data.status === 'sent'
         ? 'Invitation email sent.'
-        : 'Invitation email queued, not yet delivered.';
+        : 'Invitation email is waiting to send.';
   } catch (e) {
-    status.value = `Invitation saved. ${failure(e, 'Email could not be queued; retry this invitation.')}`;
+    status.value = `Invitation saved. ${failure(e, 'We could not confirm the email was sent. Try Email invitation again.')}`;
   }
 }
 async function savePerson() {
@@ -192,7 +192,7 @@ async function savePerson() {
         version: editing.value.version,
         user_id: editing.value.user_id,
       });
-      status.value = 'Direct access updated. Inherited access is unchanged.';
+      status.value = 'Access updated. Access through the client or another folder is unchanged.';
     } else {
       const response = await axios.post<AccessInvitation>(
         `${base.value}/invitations`,
@@ -255,7 +255,7 @@ async function createLink() {
     await nextTick();
     resultHeading.value?.focus();
   } catch (e) {
-    error.value = failure(e, 'The link could not be created. Retry uses the same request.');
+    error.value = failure(e, 'The link could not be created. Please try again.');
   } finally {
     busy.value = false;
   }
@@ -277,7 +277,7 @@ async function copy(link: SecureLink) {
     await navigator.clipboard.writeText(link.link_url || '');
     copied.value = true;
   } catch {
-    status.value = 'Clipboard unavailable. Select and copy the link address.';
+    status.value = 'Could not copy. Select and copy the link address.';
   }
 }
 async function emailLink() {
@@ -293,11 +293,12 @@ async function emailLink() {
       { headers: { 'Idempotency-Key': linkEmailKey.value } },
     );
     status.value =
-      response.data.status === 'sent'
-        ? 'Link email sent.'
-        : 'Link email queued, not yet delivered.';
+      response.data.status === 'sent' ? 'Link email sent.' : 'Link email is waiting to send.';
   } catch (e) {
-    error.value = failure(e, 'Could not queue this email. Retry sends this same link.');
+    error.value = failure(
+      e,
+      'We could not confirm the email was sent. Try again or copy the link.',
+    );
   } finally {
     busy.value = false;
   }
@@ -341,7 +342,7 @@ async function remove() {
       }
     }
     removal.value = null;
-    status.value = 'Access removed. Other inherited or independently granted access may remain.';
+    status.value = 'Access removed.';
     await load();
   } catch (e) {
     error.value = failure(e, 'Access could not be removed. Refresh before retrying.');
@@ -354,13 +355,12 @@ async function remove() {
 <template>
   <div class="sharing-panel">
     <p class="scope-label">
-      Scope:
+      Sharing:
       {{
         scope.kind === 'client'
           ? 'entire client workspace'
-          : `${scope.itemType === 'folder' ? 'folder and its descendants' : 'this file only'}`
+          : `${scope.itemType === 'folder' ? 'this folder and everything inside' : 'this file only'}`
       }}
-      — {{ scope.name }}
     </p>
     <p v-if="loading" role="status">Loading access…</p>
     <div v-if="error" role="alert">
@@ -370,18 +370,16 @@ async function remove() {
     <p v-if="status" role="status" class="delivery-status">{{ status }}</p>
     <template v-if="view && !loading">
       <p v-if="scope.kind === 'item'" class="muted">
-        Client and parent-folder access is inherited. A direct share adds permissions; it cannot
-        restrict existing access.
+        People may also have access through the client or another folder.
       </p>
       <p v-if="view.inherits_client_access || view.inherits_folder_access" class="muted">
-        Your access includes
-        {{ view.inherits_client_access ? 'inherited client access' : 'a parent-folder share' }}.
-        This dialog manages direct access to this item only, not inherited recipients.
+        You have access through
+        {{ view.inherits_client_access ? 'the client' : 'a containing folder' }}.
       </p>
       <section aria-label="People with access">
         <h3>People</h3>
         <p v-if="view.people && !view.can_manage" class="muted">
-          You can manage your own invitees, not independent members or staff.
+          You can remove people you invited. Other people’s access is managed by the portal team.
         </p>
         <div v-for="person in view.people" :key="person.user_id" class="access-row">
           <div>
@@ -400,7 +398,7 @@ async function remove() {
           <div>
             <strong>{{ grant.recipient_name || grant.recipient_email }}</strong
             ><small
-              >Direct access · {{ describeCapabilities(grant) }} ·
+              >Added here · {{ describeCapabilities(grant) }} ·
               {{ grant.revoked_at ? 'Removed' : date(grant.expires_at) }}</small
             >
           </div>
@@ -451,7 +449,7 @@ async function remove() {
           </div>
         </div>
         <form class="access-form" @submit.prevent="savePerson">
-          <h4>{{ editing ? 'Edit direct access' : 'Invite by email' }}</h4>
+          <h4>{{ editing ? 'Edit access' : 'Invite by email' }}</h4>
           <label :for="`${key}-email`">Recipient email</label
           ><InputText
             :id="`${key}-email`"
@@ -463,7 +461,7 @@ async function remove() {
             fluid
           />
           <fieldset :disabled="busy">
-            <legend>Permissions — limited to your current access</legend>
+            <legend>Permissions</legend>
             <label
               ><Checkbox
                 v-model="rights.can_read"
@@ -493,11 +491,11 @@ async function remove() {
                 :disabled="!view.capabilities.can_share"
                 :inputId="`${key}-reshare`"
               />
-              Allow resharing</label
+              Share with others</label
             >
           </fieldset>
           <template v-if="scope.kind === 'item'"
-            ><label :for="`${key}-expiry`">Access expiry (optional) · {{ timezone }}</label
+            ><label :for="`${key}-expiry`">Access ends (optional) · {{ timezone }}</label
             ><DatePicker
               v-model="expiry"
               :inputId="`${key}-expiry`"
@@ -511,7 +509,7 @@ async function remove() {
           <div class="row-buttons">
             <Button
               type="submit"
-              :label="editing ? 'Save direct access' : 'Invite'"
+              :label="editing ? 'Save changes' : 'Invite'"
               :loading="busy"
               :disabled="!Object.values(rights).some(Boolean)"
             /><Button
@@ -522,17 +520,14 @@ async function remove() {
               @click="resetForm"
             />
           </div>
-          <p class="muted">
-            Invitations are identity-bound. Account setup credentials are sent only by email, never
-            copied to the inviter.
-          </p>
+          <p class="muted">This invitation is for this email address only.</p>
         </form>
       </section>
-      <section aria-label="Bearer links">
+      <section aria-label="Sharing links">
         <h3>Links</h3>
         <p class="muted">
-          Anyone holding an active link can use its permitted actions. Removing a person does not
-          invalidate known links.
+          Anyone with a link gets the permissions you choose. Removing a person won’t stop them
+          using a link they already have.
         </p>
         <div v-for="link in visibleLinks" :key="link.id" class="access-row">
           <div>
@@ -586,7 +581,7 @@ async function remove() {
             fluid
           />
           <p class="muted">
-            Target: {{ scope.name }} · Anyone with the link · {{ date(linkExpiry?.toISOString()) }}
+            {{ scope.name }} · Anyone with the link · Expires {{ date(linkExpiry?.toISOString()) }}
           </p>
           <Button
             type="submit"
@@ -596,11 +591,8 @@ async function remove() {
           />
         </form>
         <div v-if="result && active(result)" class="access-form" aria-label="Created link">
-          <h4 ref="resultHeading" tabindex="-1">Link ready — {{ scope.name }}</h4>
-          <p class="muted">
-            Copying does not send email. Recipient view will ask before switching your current
-            portal session.
-          </p>
+          <h4 ref="resultHeading" tabindex="-1">Link ready: {{ scope.name }}</h4>
+          <p class="muted">Copy the link to share it yourself, or send it by email below.</p>
           <label :for="`${key}-url`">Link address</label
           ><InputText :id="`${key}-url`" :modelValue="result.link_url" readonly fluid />
           <div class="row-buttons">
@@ -618,7 +610,7 @@ async function remove() {
             />
           </div>
           <form class="access-form" @submit.prevent="emailLink">
-            <label :for="`${key}-link-email`">Email this existing link</label
+            <label :for="`${key}-link-email`">Email link to</label
             ><InputText
               :id="`${key}-link-email`"
               v-model="recipient"
@@ -636,8 +628,7 @@ async function remove() {
         </div>
       </section>
       <label class="history-toggle"
-        ><Checkbox v-model="history" binary :inputId="`${key}-history`" /> Show expired, accepted
-        and revoked history</label
+        ><Checkbox v-model="history" binary :inputId="`${key}-history`" /> Show history</label
       >
     </template>
     <Dialog
@@ -651,21 +642,21 @@ async function remove() {
       @update:visible="(value) => !value && (removal = null)"
     >
       <p v-if="removal?.kind === 'member'">
-        This removes the client membership, all direct grants and pending invitations for this
-        person in this client. Their onward shares and known bearer links survive. Independent staff
-        or inherited authority may remain.
+        Remove their access to this client and its files and folders, and cancel their pending
+        invitations. Shares they created for other people stay active. They may still have staff
+        access or use a link.
       </p>
       <p v-else-if="removal?.kind === 'link'">
-        This revokes this bearer link, including already-open recipient sessions. Other grants and
-        links are unchanged.
+        This link will stop working, even for people who already have it open. Other links and
+        people’s account access are unchanged.
       </p>
       <p v-else>
-        This removes only this direct grant or pending invitation. Inherited access and independent
-        links may still permit access.
+        This removes the invitation or access added here. The person may still have access through
+        the client, another folder or a link.
       </p>
       <label v-if="removal?.kind === 'member'" class="history-toggle"
-        ><Checkbox v-model="revokeLinks" binary :inputId="`${key}-revoke-links`" /> Also revoke all
-        client, file and folder links within this client</label
+        ><Checkbox v-model="revokeLinks" binary :inputId="`${key}-revoke-links`" /> Also turn off
+        every sharing link for this client</label
       >
       <p v-if="error" role="alert">{{ error }}</p>
       <template #footer

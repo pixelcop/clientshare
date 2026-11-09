@@ -25,21 +25,24 @@ Try [previewing the file](../files/preview-and-download.md) before sharing it.
 ## 3. Share access
 
 1. Return to **Clients**.
-2. Open the client's **Manage client access**, then its **Links** section. The staff directory's **Links** action remains a shortcut.
-3. Create a secure link with **View, download & upload** permissions and review the exact expiry and whole-client scope.
-4. Use **Copy link** or email the existing link from its result. Queue acceptance does not confirm delivery.
+2. Open the client workspace and select **Manage client access → Links**.
+3. Choose **View, download & upload** and an expiry. Check that you want to share the entire client.
+4. Create the link, then use **Copy link** or **Email link** to send it. Check the email status if you send it from the portal.
 
 The recipient can view, download, and upload within this client's workspace. For ongoing access through a named account, [invite a client user](../clients/manage-users.md) instead.
 
-::: tip Check the scope
-A link created from **Manage client access** applies to the whole client, not just the folder you last opened. To share only one file or folder instead, use that item's **Share** action. Review the target and inherited access before sending.
+::: tip Check what you’re sharing
+**Manage client access** shares the entire client. To share only one file or
+folder, use its **Share** action instead.
 :::
 
 ## 4. Collect the response
 
 Ask the recipient to open the link and upload their document. They do not need to create an account to use the link. You can send them the [client document guide](../for-clients/send-and-receive-documents.md).
 
-Return to the client's files to confirm that the document arrived. Review **Activity** for available notifications. If you only need to collect files, use an [Upload only link](../sharing/request-documents.md) instead of combined access.
+Return to the client's files to confirm that the document arrived. Review
+**Activity** for available notifications. If you only need to collect files, use
+an [Upload only link](../sharing/request-documents.md).
 
 ## 5. Finish the exchange
 

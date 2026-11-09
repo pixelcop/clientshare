@@ -1,6 +1,6 @@
 # Request documents from a client
 
-**Who:** Named users with upload and sharing authority for the intended client or folder.
+**Who:** People with permission to upload and share in the client or folder.
 
 Use an **Upload only** secure link when you want a recipient to send documents without downloading material from the workspace.
 
@@ -14,16 +14,17 @@ For example, ask for a project brief, an asset inventory, and supporting images.
 
 ## Send an upload link
 
-1. Open **Manage client access → Links** for the entire client, or a folder's **Share → Links** for just that subtree. The staff **Links → New link** shortcut also remains available.
-2. Select **Upload only**, or use the shortcut's **Collect uploads** preset and review the permissions.
+1. Open **Manage client access → Links** for the entire client, or a folder's **Share → Links** for just that folder.
+2. Select **Upload only**.
 3. Set the expiry to cover the requested submission period.
-4. Create the link, then use **Copy link** or **Email this existing link**. A queued email is not proof of delivery.
+4. Create the link, then use **Copy link** or **Email link** to send it. Check the email status if sending from the portal.
 
 You can include the [recipient instructions](../for-clients/send-and-receive-documents.md) in your message.
 
 ## What the recipient sees
 
-The secure-link page identifies the client and shows **Upload-only** access with an expiry. The recipient uses **Upload**, the **Upload folder** menu action, or drags files into the file surface. Downloads are disabled, and a permanent account is not required.
+The recipient can use **Upload**, choose **Upload folder** from its menu, or drag
+files onto the page. They do not need an account and cannot see existing files or folders.
 
 ## Confirm receipt
 

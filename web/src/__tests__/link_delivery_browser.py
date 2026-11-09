@@ -53,7 +53,7 @@ with sync_playwright() as p:
     page.get_by_role('button', name='Usable links (0)', exact=True).click()
     page.get_by_role('button', name='New link', exact=True).click()
     dialog = page.get_by_role('dialog', name=f"Share client workspace: {client['name']}")
-    expect(dialog.get_by_text(f"Scope: entire client workspace · {client['name']}", exact=True)).to_be_visible()
+    expect(dialog.get_by_text(f"Sharing: entire client workspace · {client['name']}", exact=True)).to_be_visible()
     expect(dialog.get_by_role('combobox').first).to_contain_text('View & download')
     dialog.get_by_role('radio', name='Collect uploads', exact=True).check()
     expect(dialog.get_by_role('combobox').first).to_contain_text('Upload only')
@@ -92,7 +92,7 @@ with sync_playwright() as p:
     created = committed[0]
     assert created['expires_at'] == context.request.get(endpoint).json()[0]['expires_at']
     assert dialog.locator('input[readonly]').input_value() == created['link_url']
-    expect(dialog.get_by_text('Not emailed from this dialog. Copying a link does not send an email.', exact=True)).to_be_visible()
+    expect(dialog.get_by_text('Copying the link does not send an email. Use Email link to send it.', exact=True)).to_be_visible()
     dialog.get_by_role('button', name='Copy link', exact=True).click()
     expect(dialog.get_by_role('button', name='Copied', exact=True)).to_be_visible()
     assert page.evaluate('navigator.clipboard.readText()') == created['link_url']
@@ -104,7 +104,7 @@ with sync_playwright() as p:
     assert context.request.get(base + '/api/auth/me').json()['role'] == 'admin'
     recipient_view.close()
     # Real disabled-email response; retries keep the existing link and request key.
-    dialog.get_by_label('Email this existing link', exact=True).fill('recipient@example.invalid')
+    dialog.get_by_label('Email link to', exact=True).fill('recipient@example.invalid')
     delivery = base + f"/api/links/{created['id']}/email"
     with page.expect_request(delivery) as first:
         dialog.get_by_role('button', name='Email link', exact=True).click()
@@ -117,7 +117,7 @@ with sync_playwright() as p:
     # Simulated queue acceptance tests presentation only; no real mail is sent.
     page.route(delivery, lambda route: route.fulfill(status=202, json={'status': 'queued', 'link_id': created['id'], 'email_queued': True}))
     dialog.get_by_role('button', name='Retry email', exact=True).click()
-    expect(dialog.get_by_text('Email queued. Delivery has not been confirmed.', exact=True)).to_be_visible()
+    expect(dialog.get_by_text('Email is waiting to send.', exact=True)).to_be_visible()
     expect(dialog.get_by_role('button', name='Email link', exact=True)).to_be_disabled()
     page.screenshot(path=str(output / 'link-result-desktop.png'), full_page=True)
     page.set_viewport_size({'width': 390, 'height': 844})
@@ -131,7 +131,7 @@ with sync_playwright() as p:
     page.get_by_role('button', name='Details & email', exact=True).click()
     expect(dialog.get_by_role('heading', name='Your link is ready', exact=True)).to_be_visible()
     expect(dialog.locator('input[readonly]')).to_have_value(created['link_url'])
-    expect(dialog.get_by_text('Email queued. Delivery has not been confirmed.', exact=True)).to_be_visible()
+    expect(dialog.get_by_text('Email is waiting to send.', exact=True)).to_be_visible()
     dialog.get_by_role('button', name='Done', exact=True).click()
     assert context.request.delete(base + f"/api/links/{created['id']}").status == 204
     page.reload(wait_until='networkidle')

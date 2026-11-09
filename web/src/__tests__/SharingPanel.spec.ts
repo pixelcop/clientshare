@@ -48,7 +48,7 @@ describe('exact-scope sharing panel', () => {
       });
     const wrapper = mount(SharingPanel, { props: { scope }, global: { plugins: [OpenVue] } });
     await flushPromises();
-    expect(wrapper.text()).toContain('Scope: this file only');
+    expect(wrapper.text()).toContain('Sharing: this file only');
     expect(wrapper.find('input[id$="-upload"]').exists()).toBe(false);
     expect(wrapper.find('input[id$="-delete"]').exists()).toBe(false);
     expect(wrapper.findComponent(Select).props('options')).toHaveLength(1);
@@ -114,7 +114,7 @@ describe('exact-scope sharing panel', () => {
     await flushPromises();
     expect(post.mock.calls[2][0]).toBe('/api/links/link/email');
     expect(post.mock.calls[3]).toEqual(post.mock.calls[2]);
-    expect(wrapper.text()).toContain('Link email queued, not yet delivered.');
+    expect(wrapper.text()).toContain('Link email is waiting to send.');
     wrapper.unmount();
   });
 
@@ -137,8 +137,8 @@ describe('exact-scope sharing panel', () => {
     const patch = vi.spyOn(axios, 'patch').mockResolvedValue({ data: grant });
     const wrapper = mount(SharingPanel, { props: { scope }, global: { plugins: [OpenVue] } });
     await flushPromises();
-    expect(wrapper.text()).toContain('inherited client access');
-    expect(wrapper.text()).toContain('Direct access');
+    expect(wrapper.text()).toContain('You have access through the client');
+    expect(wrapper.text()).toContain('Added here');
     await wrapper
       .findAll('button')
       .find((button) => button.text() === 'Edit')!
@@ -151,7 +151,7 @@ describe('exact-scope sharing panel', () => {
       capabilities: { can_read: true, can_upload: false, can_share: false, can_delete: false },
       expires_at: null,
     });
-    expect(wrapper.text()).toContain('Inherited access is unchanged.');
+    expect(wrapper.text()).toContain('Access through the client or another folder is unchanged.');
     wrapper.unmount();
   });
 });

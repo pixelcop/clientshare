@@ -1,50 +1,44 @@
 # Share a file or folder
 
-**Who:** Named users with sharing authority on the selected item.
+**Who:** People with permission to share the file or folder.
 
 ## Invite a person
 
 1. Find the file or folder and select **Share** on its row or in **More**. On a
    narrow screen, use **More → Share**. File detail pages also have **Share**.
-2. Review the item name and scope: one file, or a folder and its descendants.
-3. Enter **Recipient email** and choose permissions within your current rights.
-   **Allow resharing** is separate from viewing, uploading and deleting.
-4. Optionally choose an access expiry. Review its timestamp and timezone.
-5. Select **Invite** and check the email status. **Saved** or **queued** is not
-   proof of delivery. If unavailable, retry **Email invitation** after mail is
-   configured; do not create another invitation merely to retry delivery.
+2. Check the name. Sharing a folder includes everything inside it.
+3. Enter **Recipient email** and choose what the person can do. Select
+   **Share with others** if they should be able to invite more people.
+4. To limit how long they have access, choose **Access ends**. Check the timezone.
+5. Select **Invite** and check the email status. If sending fails, use
+   **Email invitation** to try again.
 
-The recipient signs in with the invited email or sets up their account through
-the email-only setup link. Existing accounts keep their role and other access.
-An item invitation never creates client membership. After acceptance, the item
-appears in **Shared with me** and opens at its authorized boundary.
+The recipient signs in with the invited email address, or follows the email to
+set up an account. After accepting, they can find the file or folder in
+**Shared with me**. This invitation does not give them the whole client workspace.
 
-## Understand inherited access
+## Access shared from elsewhere
 
-The dialog manages direct access to this item. Client membership and parent-folder
-shares remain inherited; their recipient rosters are not exposed here. A direct
-share cannot reduce someone else's inherited permissions. Ask an authorized
-client or parent-folder manager to change the original access source.
+People may already have access through the client or a containing folder.
+Removing them here will not remove that access. Open **Manage client access** or
+the containing folder's **Share** dialog to change it, if you have permission.
 
-Use **Edit** to change a direct grant or its expiry, or **Remove** to revoke it.
-If someone changed access since you opened the dialog, refresh before retrying.
-Removing a person's grant does not revoke shares they already made for others.
+Use **Edit** to change someone's permissions or expiry, or **Remove** to end the
+access added here. Shares they created for other people keep working.
 
-## Create an item link
+## Share a link
 
-In **Links**, choose what anyone holding the link can do, select an expiry and
-review the target before **Create link**. Files offer view/download only; folders
-also offer upload-only or combined access. An upload-only link cannot browse
-existing names, folders or files.
+In **Links**, choose permissions and an expiry, then select **Create link**.
+Anyone with the link can use it. File links allow viewing and downloading;
+folder links can also allow uploads. **Upload only** hides existing files and folders.
 
-The result provides **Copy link**, **Open recipient view**, and **Email link**.
-Email retries use that same link. Recipient view asks before switching an
-existing signed-in session; it never silently uses staff privileges.
+Use **Copy link** to paste it into your own message, or enter an address under
+**Email link to** and select **Email link**. A waiting email has not been sent yet.
 
-Reopen a usable result with **Use link**, or choose **Revoke** to end its access
-on the next protected request, including already-open sessions. **Show expired,
-accepted and revoked history** reveals retained records. Removing named access
-does not invalidate independent bearer links.
+**Open recipient view** shows what the link allows. It asks before switching away
+from your signed-in account.
 
-To share the whole client instead, open **Manage client access** from the client
-workspace. Sharing the root folder directly still does not create membership.
+Reopen a link with **Use link**, or choose **Revoke** to stop it working, even if
+someone already has it open. Select **Show history** to see past invitations and links.
+
+To invite someone to the whole client, open **Manage client access** in the client workspace.

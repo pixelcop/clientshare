@@ -28,10 +28,10 @@ export function linkAccessDescription(mode: string) {
     return 'Recipients can view and download files. Uploads are disabled.';
   }
   if (mode === 'write') {
-    return 'Recipients can upload files. Downloads are disabled.';
+    return 'Recipients can upload files, but cannot see or download existing files.';
   }
   if (mode === 'readwrite') {
-    return 'Recipients can view, download and upload files. This does not allow document editing or deletion.';
+    return 'Recipients can view, download and upload files. They cannot edit or delete files.';
   }
   return 'This link cannot be used.';
 }

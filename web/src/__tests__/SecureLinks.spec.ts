@@ -71,7 +71,7 @@ describe('link creation and delivery', () => {
     await radios[1].setValue(true);
     expect(wrapper.vm.getSettings().accessType).toBe('write');
     expect(wrapper.vm.getSettings().sendEmail).toBe(false);
-    expect(wrapper.text()).toContain('Scope: entire client workspace');
+    expect(wrapper.text()).toContain('Sharing: entire client workspace');
     expect(wrapper.text()).toContain('Anyone with this link');
     expect(wrapper.text()).toContain('Acme');
     const result = wrapper.vm.getSettings();
@@ -111,7 +111,7 @@ describe('link creation and delivery', () => {
     await flushPromises();
     expect(send.mock.calls[0]).toEqual(send.mock.calls[1]);
     expect(send.mock.calls[0][0]).toBe(link.id);
-    expect(wrapper.text()).toContain('Email queued. Delivery has not been confirmed.');
+    expect(wrapper.text()).toContain('Email is waiting to send.');
     expect(wrapper.text()).not.toContain('Email sent.');
     wrapper.unmount();
   });

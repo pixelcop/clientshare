@@ -24,9 +24,6 @@ const canManageLinks = computed(() => ['admin', 'manager'].includes(auth.user?.r
     :style="{ width: '42rem', maxWidth: '95vw' }"
     @update:visible="(value) => !value && emit('close')"
   >
-    <p class="mb-4 text-sm" style="color: var(--p-text-muted-color)">
-      These controls apply to {{ clientName }}, not just the current folder or file.
-    </p>
     <SharingPanel
       v-if="visible"
       :key="clientId"

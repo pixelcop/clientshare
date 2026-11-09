@@ -106,7 +106,7 @@ export const useSecureLinksStore = defineStore('secureLinks', () => {
     } catch (e: unknown) {
       error.value =
         (axios.isAxiosError(e) && e.response?.data?.error) ||
-        'Failed to create link. Retry will reuse this creation request.';
+        'The link could not be created. Please try again.';
       throw e;
     } finally {
       loading.value = false;

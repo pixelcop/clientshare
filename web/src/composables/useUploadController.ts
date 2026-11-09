@@ -168,7 +168,7 @@ export function useUploadController(options: {
   function splitRelativePath(path: string) {
     const segments = path.split('/').filter((segment) => segment.length > 0 && segment !== '.');
     if (segments.some((segment) => segment === '..')) {
-      throw new Error('Dropped folder contains an invalid path.');
+      throw new Error('This folder could not be uploaded. Try choosing it with Upload folder.');
     }
     return segments;
   }
@@ -642,7 +642,7 @@ export function useUploadController(options: {
       seen.add(key);
     }
     if (names.size !== files.length) {
-      return 'Rename entries conflict with other selected files.';
+      return 'Some selected files have the same name. Give each one a different name.';
     }
     return null;
   }

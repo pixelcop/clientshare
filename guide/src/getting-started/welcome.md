@@ -13,7 +13,10 @@ ClientShare gives your team and your clients one place to exchange documents. St
 
 A **client** is a workspace for an organization or person you work with. It contains a root folder, subfolders, and files. A **user** is someone who signs in. A client user can be assigned to one or more client workspaces; creating a client does not itself create a user account.
 
-A **secure link** provides bearer access to a client workspace, folder or file without requiring an account. An authorized named user chooses its scope, permissions and expiry. Use an item's **Share** dialog for item scope; **Manage client access** is whole-client scope. Named invitations instead bind access to the invited account, with direct shares discoverable in **Shared with me**.
+A **secure link** lets anyone who has it open a shared client, folder or file
+without an account. The sender chooses what it allows and when it expires. To
+share with a specific person's account, send an email invitation. They can find
+individual file and folder shares in **Shared with me**.
 
 See [Roles and access](./roles-and-access.md) before inviting staff or sharing files.
 

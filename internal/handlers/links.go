@@ -256,7 +256,7 @@ func (h *LinkHandler) queueSecureLinkEmail(c fiber.Ctx, link models.SecureLink, 
 		return "unavailable", errors.New("This link is expired or revoked")
 	}
 	if h.emailQueue == nil {
-		return "unavailable", errors.New("Email is unavailable. Copy the existing link instead, or retry after email is configured.")
+		return "unavailable", errors.New("Email is unavailable. Copy the link to share it, or ask your portal administrator to check email settings.")
 	}
 	targetName := "Shared content"
 	if link.FileID == nil {
@@ -282,15 +282,15 @@ func (h *LinkHandler) queueSecureLinkEmail(c fiber.Ctx, link models.SecureLink, 
 	if err != nil {
 		utils.Logger(c).Error("failed to queue secure link email", zap.Error(err))
 		if errors.Is(err, emailpkg.ErrAccessValidationUnavailable) {
-			return "unavailable", err
+			return "unavailable", errors.New("Email is temporarily unavailable. Try again or copy the link.")
 		}
 		return "failed", err
 	}
 	if item == nil {
-		return "failed", errors.New("Email queue did not accept the message")
+		return "failed", errors.New("The email could not be sent. Please try again.")
 	}
 	if item.CanceledAt != nil {
-		return "unavailable", errors.New("This email request was canceled")
+		return "unavailable", errors.New("This email was canceled.")
 	}
 	if item.SentAt != nil {
 		return "sent", nil
@@ -324,9 +324,9 @@ func (h *LinkHandler) EmailSecureLink(c fiber.Ctx) error {
 	status, queueErr := h.queueSecureLinkEmail(c, link, address.Address, *key, siteTitle)
 	if queueErr != nil {
 		code := 503
-		message := "Could not queue the email. Retry sends this same link, not a new one."
+		message := "The email could not be sent. Try again or copy the link."
 		if errors.Is(queueErr, emailpkg.ErrIdempotencyConflict) {
-			code, message = 409, queueErr.Error()
+			code, message = 409, "This email request has changed. Refresh and try again."
 		}
 		if status == "unavailable" {
 			message = queueErr.Error()

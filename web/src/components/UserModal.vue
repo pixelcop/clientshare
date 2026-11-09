@@ -128,7 +128,7 @@ function onSubmit() {
       <div class="flex flex-col items-start">
         <h2 class="text-lg font-bold mb-0!">{{ isEdit ? 'Edit User' : 'New User' }}</h2>
         <p v-if="!isEdit" class="text-sm text-gray-600 mb-4">
-          An invite email will be sent right away so this user can set their password.
+          This person will use the invitation email to set a password.
         </p>
       </div>
     </template>
@@ -179,8 +179,7 @@ function onSubmit() {
             Full access to all current and future clients
           </label>
           <p class="text-sm text-muted-color">
-            New managers are assigned-only by default. Full access is not required for staff to work
-            with selected clients.
+            Leave this off to choose which clients this manager can access.
           </p>
         </div>
         <div v-if="role === 'client' || (role === 'manager' && !managerFullAccess)">

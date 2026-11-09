@@ -45,7 +45,7 @@ function rights(item: FileItem) {
   return [
     item.capabilities?.can_read && 'View & download',
     item.capabilities?.can_upload && 'Upload',
-    item.capabilities?.can_share && 'Reshare',
+    item.capabilities?.can_share && 'Share with others',
   ]
     .filter(Boolean)
     .join(' · ');
@@ -56,7 +56,7 @@ function rights(item: FileItem) {
   <section class="shared-content">
     <header>
       <h1>Shared with me</h1>
-      <p>Files and folders shared directly with your account. Client memberships are separate.</p>
+      <p>Files and folders people have shared with you.</p>
     </header>
     <p v-if="loading" role="status">Loading shared content…</p>
     <div v-else-if="error" role="alert">
@@ -76,11 +76,8 @@ function rights(item: FileItem) {
       </li>
     </ul>
     <div v-else class="shared-empty">
-      <h2>Nothing shared directly yet</h2>
-      <p>
-        Accept a named invitation to find that file or folder here. Expired or removed shares no
-        longer appear.
-      </p>
+      <h2>No shared files or folders yet</h2>
+      <p>Accept an email invitation to find shared files and folders here.</p>
     </div>
     <nav v-if="pages > 1" aria-label="Shared content pages" class="flex items-center gap-3 mt-4">
       <Button

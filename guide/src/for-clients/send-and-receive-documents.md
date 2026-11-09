@@ -5,9 +5,8 @@
 Open your organization's portal and sign in, or follow the secure link the sender gave you. Check the client name before uploading or downloading.
 
 If your account belongs to multiple clients, use **Client workspace** above the
-file area to switch between authorized workspaces. **Shared with me** remains
-separate for direct file/folder shares. Opening an item-only share does not add
-its client to the workspace selector or grant access to its parent content.
+file area to switch between them. Files and folders shared with you individually
+appear in **Shared with me**. They do not give you access to the whole client workspace.
 
 ## Send documents
 
@@ -15,7 +14,7 @@ its client to the workspace selector or grant access to its parent content.
 2. Drag files into the upload area, or select files with the picker.
 3. If asked to rename duplicate files, give each one a distinct name and continue.
 4. Wait until the upload finishes.
-5. Check that the uploaded filenames appear in the list.
+5. If you can browse the folder, check that your uploaded files appear in the list.
 
 You can select multiple files. For a large batch, keep the page open until every transfer has finished. If an error appears, check which files arrived before trying again.
 
@@ -34,10 +33,14 @@ If a file cannot be previewed, download it and open it in the appropriate applic
 
 ## Correct an upload
 
-Uploading does not grant deletion; named users need explicit delete permission, and link recipients never have it. Contact the sender if you uploaded the wrong document and cannot remove it. If sending a replacement, use a clear name such as `Project brief - corrected.pdf` and tell the sender which version to use.
+If you uploaded the wrong document and cannot delete it, contact the sender.
+Sharing links never allow deletion. For a replacement, use a clear name such as
+`Project brief - corrected.pdf` and tell the sender which version to use.
 
 ## When you are finished
 
-Confirm that the files are listed before closing the page. Sign out if you are using an account on a shared device. If the sender asked for confirmation or more information, reply through your usual communication channel.
+Wait for the upload to finish before closing the page. Sign out if you are using
+an account on a shared device. If the sender asked for confirmation or more
+information, reply through your usual communication channel.
 
 For access, expiry, and transfer problems, see [Troubleshooting](../help/troubleshooting.md).

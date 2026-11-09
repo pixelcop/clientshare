@@ -7,7 +7,7 @@ You can use a secure link without creating an account. The sender chooses the cl
 ## Open the workspace
 
 1. Follow the complete link provided by the sender.
-2. Check the target name. A file link opens that file directly; a folder link stays within its subtree.
+2. Check the file, folder or client name. A folder link opens only that folder and what is inside it.
 3. Read the access label and expiry.
 4. Use the file list or upload area to complete the exchange.
 
@@ -19,13 +19,16 @@ You can use a secure link without creating an account. The sender chooses the cl
 
 The portal may offer account creation for continued access. That offer is separate from using the current link; you do not need to accept it to perform the actions allowed by the link.
 
-Upload-only links do not browse existing files or folders. File links never allow uploads. Item links do not offer whole-client registration; request a named invitation for account access.
+**Upload-only** links hide existing files and folders. File links do not allow
+uploads. If you need an account to return to shared files later, ask the sender
+for an email invitation.
 
 ![Recipient workspace showing the client name, Read & upload permission, expiry, upload area, and available folders.](/screenshots/recipient-workspace.png)
 
 ## Use the correct access session
 
-Opening a secure link establishes a session bounded to that target. If already signed in, review the confirmation before switching to recipient view. The link session does not combine your account's permissions. Sign in again for normal account navigation; a separate browser profile can keep recipient and staff sessions separate.
+If you are already signed in, the portal asks before switching to recipient view.
+That view shows only what the link allows. Sign in again to return to your account.
 
 ## If the link fails
 

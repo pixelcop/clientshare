@@ -95,7 +95,7 @@ with sync_playwright() as p:
         if not read_access:
             dialog.get_by_role("checkbox", name="View & download", exact=True).uncheck()
         if reshare:
-            dialog.get_by_role("checkbox", name="Allow resharing", exact=True).check()
+            dialog.get_by_role("checkbox", name="Share with others", exact=True).check()
         if upload_access:
             dialog.get_by_role("checkbox", name="Upload", exact=True).check()
         with page.expect_response(lambda response: response.url.endswith("/invitations") and response.request.method == "POST") as created:
@@ -117,7 +117,7 @@ with sync_playwright() as p:
         return context, recipient
 
     dialog = open_share(file)
-    expect(dialog.get_by_text("Scope: this file only", exact=False)).to_be_visible()
+    expect(dialog.get_by_text("Sharing: this file only", exact=False)).to_be_visible()
     invitation = invite(dialog, accounts["A"], reshare=True)
     dialog.get_by_role("button", name="Done", exact=True).click()
     named, named_page = accept(accounts["A"], invitation)
@@ -174,7 +174,7 @@ with sync_playwright() as p:
     # Whole-client invitations remain a separate, explicitly named scope.
     page.get_by_role("button", name="Manage client access", exact=True).click()
     client_dialog = page.get_by_role("dialog", name="Manage client access: " + client["name"], exact=True)
-    expect(client_dialog.get_by_text("Scope: entire client workspace", exact=False)).to_be_visible()
+    expect(client_dialog.get_by_text("Sharing: entire client workspace", exact=False)).to_be_visible()
     member_invite = invite(client_dialog, accounts["member"], reshare=True, upload_access=True)
     client_dialog.get_by_role("button", name="Done", exact=True).click()
     member_context, member_page = accept(accounts["member"], member_invite)
@@ -263,9 +263,9 @@ with sync_playwright() as p:
         dialog.get_by_role("button", name="Create link", exact=True).click()
     assert link_created.value.status == 201, link_created.value.text()
     link = link_created.value.json()
-    expect(dialog.get_by_role("heading", name="Link ready — Shared folder", exact=True)).to_be_visible()
+    expect(dialog.get_by_role("heading", name="Link ready: Shared folder", exact=True)).to_be_visible()
     assert dialog.get_by_label("Link address", exact=True).input_value() == link["link_url"]
-    dialog.get_by_label("Email this existing link", exact=True).fill("link-recipient@example.invalid")
+    dialog.get_by_label("Email link to", exact=True).fill("link-recipient@example.invalid")
     for _ in range(2):
         dialog.get_by_role("button", name="Email link", exact=True).click()
         expect(dialog.get_by_role("alert").filter(has_text="Email is unavailable")).to_be_visible()
