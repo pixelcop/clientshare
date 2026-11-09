@@ -7,6 +7,7 @@ import base64
 import datetime
 import hashlib
 import hmac
+import re
 import secrets
 import sqlite3
 import time
@@ -87,19 +88,31 @@ with sync_playwright() as p:
         row.hover()
         row.get_by_role("button", name="Share " + target["filename"], exact=True).click()
         dialog = page.get_by_role("dialog", name="Share: " + target["filename"], exact=True)
-        expect(dialog.get_by_label("Recipient email", exact=True)).to_be_visible()
+        expect(dialog.get_by_label("Add people", exact=True)).to_be_visible()
+        expect(dialog.get_by_role("combobox", name="Role", exact=True)).to_have_count(0)
         return dialog
 
     def invite(dialog, account, reshare=False, upload_access=False, read_access=True):
-        dialog.get_by_label("Recipient email", exact=True).fill(account["email"])
-        if not read_access:
-            dialog.get_by_role("checkbox", name="View & download", exact=True).uncheck()
-        if reshare:
-            dialog.get_by_role("checkbox", name="Share with others", exact=True).check()
-        if upload_access:
-            dialog.get_by_role("checkbox", name="Upload", exact=True).check()
+        page.screenshot(path=str(database.parent / "sharing-people-opening.png"), animations="disabled")
+        dialog.get_by_label("Add people", exact=True).fill(account["email"])
+        dialog.get_by_role("button", name="Continue", exact=True).click()
+        role = "Manager" if reshare else "Uploader" if not read_access else "Contributor" if upload_access else "Viewer"
+        role_select = dialog.get_by_role("combobox", name="Role", exact=True)
+        expect(role_select).to_be_focused()
+        role_select.click()
+        page.screenshot(path=str(database.parent / "sharing-people-roles.png"), animations="disabled")
+        page.get_by_role("option", name=re.compile("^" + role)).click()
+        expect(page.get_by_role("listbox")).not_to_be_visible()
+        if dialog.locator(".optional-setting").count():
+            expect(dialog.locator(".optional-setting")).not_to_have_attribute("open")
+        page.screenshot(path=str(database.parent / "sharing-people-recipient.png"), animations="disabled")
+        page.set_viewport_size({"width": 390, "height": 844})
+        expect(dialog.get_by_role("button", name="Send invitation", exact=True)).to_be_in_viewport()
+        assert dialog.evaluate("el => el.scrollWidth <= el.clientWidth")
+        page.screenshot(path=str(database.parent / "sharing-people-recipient-mobile.png"), animations="disabled")
+        page.set_viewport_size({"width": 1280, "height": 900})
         with page.expect_response(lambda response: response.url.endswith("/invitations") and response.request.method == "POST") as created:
-            dialog.get_by_role("button", name="Invite", exact=True).click()
+            dialog.get_by_role("button", name="Send invitation", exact=True).click()
         assert created.value.status == 201, created.value.text()
         invitation = created.value.json()
         assert "token" not in invitation and "password" not in invitation
@@ -117,7 +130,7 @@ with sync_playwright() as p:
         return context, recipient
 
     dialog = open_share(file)
-    expect(dialog.get_by_text("Sharing: this file only", exact=False)).to_be_visible()
+    expect(dialog.get_by_text("This file only", exact=True)).to_be_visible()
     invitation = invite(dialog, accounts["A"], reshare=True)
     dialog.get_by_role("button", name="Done", exact=True).click()
     named, named_page = accept(accounts["A"], invitation)
@@ -129,9 +142,10 @@ with sync_playwright() as p:
     assert named.request.get(base + "/api/clients/" + client["id"] + "/access").status == 404
     named_page.get_by_role("button", name="Share", exact=True).click()
     onward_dialog = named_page.get_by_role("dialog", name="Share: selected.txt", exact=True)
-    onward_dialog.get_by_label("Recipient email", exact=True).fill(accounts["B"]["email"])
+    onward_dialog.get_by_label("Add people", exact=True).fill(accounts["B"]["email"])
+    onward_dialog.get_by_role("button", name="Continue", exact=True).click()
     with named_page.expect_response(lambda response: response.url.endswith("/invitations") and response.request.method == "POST") as onward:
-        onward_dialog.get_by_role("button", name="Invite", exact=True).click()
+        onward_dialog.get_by_role("button", name="Send invitation", exact=True).click()
     assert onward.value.status == 201, onward.value.text()
     onward_context, onward_page = accept(accounts["B"], onward.value.json())
     expect(onward_page).to_have_url(base + "/files/" + file["id"])
@@ -139,7 +153,8 @@ with sync_playwright() as p:
     expect(onward_page.get_by_role("link", name="selected.txt View & download", exact=True)).to_be_visible()
     dialog = open_share(file)
     row = dialog.locator(".access-row").filter(has_text=accounts["A"]["name"])
-    row.get_by_role("button", name="Remove", exact=True).click()
+    row.get_by_role("button", name="Change access for " + accounts["A"]["email"], exact=True).click()
+    dialog.get_by_role("button", name="Remove access", exact=True).click()
     confirmation = page.get_by_role("dialog", name="Remove access?", exact=True)
     confirmation.get_by_role("button", name="Remove access", exact=True).click()
     expect(confirmation).not_to_be_visible()
@@ -157,7 +172,7 @@ with sync_playwright() as p:
     expect(folder_page.get_by_role("heading", name="Shared folder", exact=True)).to_be_visible()
     folder_page.get_by_role("button", name="Share", exact=True).click()
     folder_only_dialog = folder_page.get_by_role("dialog", name="Share: Shared folder", exact=True)
-    expect(folder_only_dialog.get_by_text("Sharing: this folder and everything inside", exact=True)).to_be_visible()
+    expect(folder_only_dialog.get_by_text("This folder and everything inside", exact=True)).to_be_visible()
     expect(folder_only_dialog.get_by_role("tab", name="People", exact=True)).to_have_attribute("aria-selected", "true")
     folder_only_dialog.get_by_role("tab", name="Links", exact=True).click()
     expect(folder_only_dialog.get_by_role("combobox", name="Anyone with this link can", exact=True)).to_be_visible()
@@ -182,7 +197,7 @@ with sync_playwright() as p:
     # Whole-client invitations remain a separate, explicitly named scope.
     page.get_by_role("button", name="Share", exact=True).click()
     client_dialog = page.get_by_role("dialog", name="Share: " + client["name"], exact=True)
-    expect(client_dialog.get_by_text("Sharing: entire client workspace", exact=False)).to_be_visible()
+    expect(client_dialog.get_by_text("Entire client workspace", exact=False)).to_be_visible()
     member_invite = invite(client_dialog, accounts["member"], reshare=True, upload_access=True)
     client_dialog.get_by_role("button", name="Done", exact=True).click()
     member_context, member_page = accept(accounts["member"], member_invite)
@@ -265,11 +280,11 @@ with sync_playwright() as p:
     expect(page.get_by_role("heading", name="Shared folder", exact=True)).to_be_visible()
     page.get_by_role("button", name="Share", exact=True).click()
     dialog = page.get_by_role("dialog", name="Share: Shared folder", exact=True)
-    expect(dialog.get_by_text("Sharing: this folder and everything inside", exact=True)).to_be_visible()
+    expect(dialog.get_by_text("This folder and everything inside", exact=True)).to_be_visible()
     dialog.get_by_role("button", name="Done", exact=True).click()
     page.get_by_role("button", name="Share client", exact=True).click()
     whole_client_dialog = page.get_by_role("dialog", name="Share: " + client["name"], exact=True)
-    expect(whole_client_dialog.get_by_text("Sharing: entire client workspace", exact=True)).to_be_visible()
+    expect(whole_client_dialog.get_by_text("Entire client workspace", exact=False)).to_be_visible()
     whole_client_dialog.get_by_role("button", name="Done", exact=True).click()
     page.get_by_role("button", name="Share", exact=True).click()
     dialog.get_by_role("tab", name="People", exact=True).focus()
@@ -278,7 +293,7 @@ with sync_playwright() as p:
     expect(dialog.get_by_role("tab", name="Links", exact=True)).to_have_attribute("aria-selected", "true")
     expect(dialog.get_by_role("tabpanel", name="People", exact=True)).to_have_count(0)
     page.set_viewport_size({"width": 390, "height": 844})
-    expect(dialog.get_by_text("Sharing: this folder and everything inside", exact=True)).to_be_in_viewport()
+    expect(dialog.get_by_text("This folder and everything inside", exact=True)).to_be_in_viewport()
     expect(dialog.get_by_role("tab", name="Links", exact=True)).to_be_in_viewport()
     assert dialog.evaluate("el => el.scrollWidth <= el.clientWidth")
     page.screenshot(path=str(database.parent / "sharing-tabs-mobile.png"), full_page=True)
@@ -323,6 +338,41 @@ with sync_playwright() as p:
     assert collector.request.get(base + "/api/folders/" + root).status == 404
     assert admin.request.delete(base + "/api/links/" + link["id"]).status == 204
     assert collector.request.get(base + "/api/folders/" + folder["id"]).status in (401, 403, 404)
+    # People stays simple after sharing. Editing uses the same role flow, with
+    # keyboard focus restored to the newly rendered row after cancellation.
+    dialog.get_by_role("tab", name="People", exact=True).click()
+    page.set_viewport_size({"width": 1280, "height": 900})
+    page.screenshot(path=str(database.parent / "sharing-people-populated.png"), animations="disabled")
+    change = dialog.get_by_role("button", name="Change access for " + accounts["folder"]["email"], exact=True)
+    change.click()
+    expect(dialog.get_by_role("button", name="Done", exact=True)).to_have_count(0)
+    dialog.get_by_role("button", name="Cancel", exact=True).click()
+    expect(change).to_be_focused()
+    change.click()
+    role = dialog.get_by_role("combobox", name="Role", exact=True)
+    role.press("ArrowDown")
+    page.keyboard.press("Home")
+    page.keyboard.press("ArrowDown")
+    page.keyboard.press("ArrowDown")
+    page.keyboard.press("Enter")
+    expect(role).to_have_text("Contributor")
+    expect(page.get_by_role("listbox")).not_to_be_visible()
+    dialog.locator(".optional-setting summary").click()
+    expect(dialog.get_by_label(re.compile("^Access ends"))).to_be_visible()
+    page.evaluate("document.documentElement.classList.add('app-dark')")
+    page.screenshot(path=str(database.parent / "sharing-people-edit-dark.png"), animations="disabled")
+    page.evaluate("document.documentElement.classList.remove('app-dark')")
+    page.set_viewport_size({"width": 390, "height": 844})
+    expect(dialog.get_by_role("button", name="Save changes", exact=True)).to_be_in_viewport()
+    assert dialog.evaluate("el => el.scrollWidth <= el.clientWidth")
+    page.screenshot(path=str(database.parent / "sharing-people-edit-mobile.png"), animations="disabled")
+    with page.expect_response(lambda response: "/grants/" in response.url and response.request.method == "PATCH") as changed:
+        dialog.get_by_role("button", name="Save changes", exact=True).click()
+    assert changed.value.ok, changed.value.text()
+    expect(dialog.get_by_label("Add people", exact=True)).to_be_focused()
+    refreshed = admin.request.get(base + "/api/files/" + folder["id"] + "/access").json()
+    grant = next(grant for grant in refreshed["grants"] if grant["user_id"] == accounts["folder"]["id"])
+    assert grant["can_read"] and grant["can_upload"] and not grant["can_delete"] and not grant["can_share"]
     # Membership removal removes that recipient's direct grants and pending intent,
     # while retaining onward access and bearer links unless explicitly revoked.
     with sqlite3.connect(database) as db:

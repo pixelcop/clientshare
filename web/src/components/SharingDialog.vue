@@ -6,6 +6,7 @@ import type { SharingScope } from '@/types/sharing';
 import SharingPanel from './SharingPanel.vue';
 const { visible, scope } = defineProps<{ visible: boolean; scope: SharingScope }>();
 const emit = defineEmits<{ close: [] }>();
+const composing = ref(false);
 </script>
 <template>
   <Dialog
@@ -15,10 +16,21 @@ const emit = defineEmits<{ close: [] }>();
     modal
     blockScroll
     :draggable="false"
-    :style="{ width: '42rem', maxWidth: '95vw' }"
+    :style="{ width: '36rem', maxWidth: '95vw' }"
     @update:visible="(value) => !value && emit('close')"
   >
-    <SharingPanel v-if="visible" :key="`${scope.kind}-${scope.id}`" :scope />
-    <template #footer><Button label="Done" severity="secondary" @click="emit('close')" /></template>
+    <SharingPanel
+      v-if="visible"
+      :key="`${scope.kind}-${scope.id}`"
+      :scope
+      @composing="composing = $event"
+    />
+    <template v-if="!composing" #footer
+      ><Button
+        label="Done"
+        severity="secondary"
+        :style="{ minHeight: '44px' }"
+        @click="emit('close')"
+    /></template>
   </Dialog>
 </template>

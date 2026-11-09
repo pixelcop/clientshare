@@ -22,7 +22,7 @@ export interface SharingAccess {
   can_manage?: boolean;
   grants?: GrantAccess[];
   people?: MemberAccess[];
-  invitations: AccessInvitation[];
+  invitations: (AccessInvitation & AccessCapabilities)[];
   links?: SecureLink[];
 }
 export function describeCapabilities(c: AccessCapabilities) {

@@ -71,7 +71,7 @@ const nextAction = computed(() => {
     return {
       targets: [`collect-links-${clientId}`],
       title: 'Share the client workspace',
-      body: 'Select Share, then Manage links to open this client’s secure links.',
+      body: 'Select Share, then Links and Manage links to open this client’s secure links.',
     };
   }
   if (links && workflow.step === 1) {
@@ -403,7 +403,9 @@ onBeforeUnmount(() => {
                       >This link no longer accepts uploads. Create a new link or copy an active
                       upload link.</Message
                     >
-                    <p>In the client workspace, open Share, then Manage links and New Link.</p>
+                    <p>
+                      In the client workspace, open Share, then Links, Manage links and New Link.
+                    </p>
                     <div class="collection-permission">
                       <i class="oi oi-lock" aria-hidden="true" />
                       <div>

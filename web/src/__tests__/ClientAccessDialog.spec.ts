@@ -10,69 +10,74 @@ import type { User } from '@/types/models';
 
 describe('client access entry', () => {
   it.each([
-    ['admin', true, true],
-    ['manager', true, true],
-    ['client', false, false],
-    ['link', false, false],
-  ])(
-    'keeps advanced staff routes separate from server-bounded sharing for %s',
-    async (role, people, links) => {
-      vi.restoreAllMocks();
-      vi.stubGlobal(
-        'ResizeObserver',
-        class {
-          observe = vi.fn();
+    ['admin', true],
+    ['manager', true],
+    ['client', false],
+    ['link', false],
+  ])('keeps the first view focused and sharing server-bounded for %s', async (role, people) => {
+    vi.restoreAllMocks();
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe = vi.fn();
 
-          unobserve = vi.fn();
+        unobserve = vi.fn();
 
-          disconnect = vi.fn();
-        },
-      );
-      vi.stubGlobal(
-        'matchMedia',
-        vi.fn(() => ({
-          matches: false,
-          addEventListener: vi.fn(),
-          removeEventListener: vi.fn(),
-          addListener: vi.fn(),
-          removeListener: vi.fn(),
-        })),
-      );
-      vi.spyOn(axios, 'get').mockImplementation(async (url) => {
-        if (role === 'link') {
-          throw new Error('Bearer links cannot manage sharing');
-        }
-        return {
-          data: String(url).endsWith('/access')
-            ? {
-                capabilities: {
-                  can_read: true,
-                  can_upload: true,
-                  can_share: true,
-                  can_delete: false,
-                },
-                invitations: [],
-                people: [],
-                can_manage: people,
-              }
-            : [],
-        };
-      });
-      setActivePinia(createPinia());
-      useAuthStore().user = { id: 'user', role } as User;
-      const wrapper = mount(ClientAccessDialog, {
-        props: { visible: true, clientId: 'client', clientName: 'Acme' },
-        global: {
-          plugins: [OpenVue],
-          stubs: { teleport: true, RouterLink: { template: '<a><slot /></a>' } },
-        },
-      });
-      await flushPromises();
-      expect(wrapper.text()).toContain('Sharing: entire client workspace');
-      expect(wrapper.text().includes('Manage people')).toBe(people);
-      expect(wrapper.text().includes('Manage links')).toBe(links);
-      expect(wrapper.find('input[type="email"]').exists()).toBe(role !== 'link');
-      wrapper.unmount();
-    },
-  );
+        disconnect = vi.fn();
+      },
+    );
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+      })),
+    );
+    vi.spyOn(axios, 'get').mockImplementation(async (url) => {
+      if (role === 'link') {
+        throw new Error('Bearer links cannot manage sharing');
+      }
+      return {
+        data: String(url).endsWith('/access')
+          ? {
+              capabilities: {
+                can_read: true,
+                can_upload: true,
+                can_share: true,
+                can_delete: false,
+              },
+              invitations: [],
+              people: [],
+              can_manage: people,
+            }
+          : [],
+      };
+    });
+    setActivePinia(createPinia());
+    useAuthStore().user = { id: 'user', role } as User;
+    const wrapper = mount(ClientAccessDialog, {
+      props: { visible: true, clientId: 'client', clientName: 'Acme' },
+      global: {
+        plugins: [OpenVue],
+        stubs: { teleport: true, RouterLink: { template: '<a><slot /></a>' } },
+      },
+    });
+    await flushPromises();
+    expect(wrapper.text()).toContain('Entire client workspace');
+    expect(wrapper.text()).not.toContain('Manage people');
+    expect(
+      wrapper.findAll('a').some((link) => link.text() === 'Manage links' && link.isVisible()),
+    ).toBe(false);
+    if (people) {
+      await wrapper.findAll('[role="tab"]')[1].trigger('click');
+    }
+    expect(
+      wrapper.findAll('a').some((link) => link.text() === 'Manage links' && link.isVisible()),
+    ).toBe(people);
+    expect(wrapper.find('input[type="email"]').exists()).toBe(role !== 'link');
+    wrapper.unmount();
+  });
 });

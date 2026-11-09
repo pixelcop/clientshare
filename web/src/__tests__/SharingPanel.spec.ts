@@ -63,7 +63,7 @@ describe('exact-scope sharing panel', () => {
     });
     await flushPromises();
     expect(wrapper.findAll('[role="tab"]')[0].attributes('aria-selected')).toBe('true');
-    expect(wrapper.text()).toContain('Other folders in this client are not included.');
+    expect(wrapper.text()).toContain('This folder and everything inside');
     expect((wrapper.get('input#item-folder-email').element as HTMLInputElement).value).toBe('');
     wrapper.unmount();
   });
@@ -83,13 +83,14 @@ describe('exact-scope sharing panel', () => {
       });
     const wrapper = mount(SharingPanel, { props: { scope }, global: { plugins: [OpenVue] } });
     await flushPromises();
-    expect(wrapper.text()).toContain('Sharing: this file only');
+    expect(wrapper.text()).toContain('This file only');
     expect(wrapper.find('input[id$="-upload"]').exists()).toBe(false);
     expect(wrapper.find('input[id$="-delete"]').exists()).toBe(false);
     expect(wrapper.findComponent(Select).props('options')).toHaveLength(1);
     expect(wrapper.findComponent(Select).props('ariaLabelledby')).toBe('item-file-mode-label');
     expect(wrapper.get('#item-file-mode-label').text()).toBe('Anyone with this link can');
     await wrapper.get('input#item-file-email').setValue('recipient@example.test');
+    await wrapper.findAll('form')[0].trigger('submit');
     await wrapper.findAll('form')[0].trigger('submit');
     await flushPromises();
     expect(post).toHaveBeenNthCalledWith(
@@ -151,6 +152,8 @@ describe('exact-scope sharing panel', () => {
     expect(post.mock.calls[2][0]).toBe('/api/links/link/email');
     expect(post.mock.calls[3]).toEqual(post.mock.calls[2]);
     expect(wrapper.text()).toContain('Link email is waiting to send.');
+    await wrapper.findAll('[role="tab"]')[0].trigger('click');
+    expect(wrapper.text()).not.toContain('Link email is waiting to send.');
     wrapper.unmount();
   });
 
@@ -173,11 +176,12 @@ describe('exact-scope sharing panel', () => {
     const patch = vi.spyOn(axios, 'patch').mockResolvedValue({ data: grant });
     const wrapper = mount(SharingPanel, { props: { scope }, global: { plugins: [OpenVue] } });
     await flushPromises();
-    expect(wrapper.text()).toContain('You have access through the client');
-    expect(wrapper.text()).toContain('Added here');
+    expect(wrapper.text()).toContain('People may also have access through the client');
     await wrapper
       .findAll('button')
-      .find((button) => button.text() === 'Edit')!
+      .find(
+        (button) => button.attributes('aria-label') === 'Change access for recipient@example.test',
+      )!
       .trigger('click');
     await wrapper.findAll('form')[0].trigger('submit');
     await flushPromises();
@@ -188,6 +192,114 @@ describe('exact-scope sharing panel', () => {
       expires_at: null,
     });
     expect(wrapper.text()).toContain('Access through the client or another folder is unchanged.');
+    wrapper.unmount();
+  });
+
+  it('starts with people only, reveals roles after an email, and keeps expiry optional', async () => {
+    const wrapper = mount(SharingPanel, {
+      attachTo: document.body,
+      props: { scope },
+      global: { plugins: [OpenVue] },
+    });
+    await flushPromises();
+    expect(wrapper.find('.person-form').exists()).toBe(false);
+    expect(wrapper.find('fieldset').exists()).toBe(false);
+    expect(wrapper.find('.past-access').exists()).toBe(false);
+    expect(wrapper.text()).not.toContain('Show history');
+    await wrapper.get('#item-file-email').setValue('person@example.test');
+    await wrapper.get('.add-person').trigger('submit');
+    expect(wrapper.find('[role="tablist"]').exists()).toBe(false);
+    expect(wrapper.find('[aria-label="People with access"]').exists()).toBe(false);
+    expect(wrapper.get('.optional-setting').attributes('open')).toBeUndefined();
+    expect(document.activeElement?.id).toBe('item-file-role');
+    expect(
+      wrapper
+        .findAllComponents(Select)[0]
+        .props('options')
+        .map((role: { label: string }) => role.label),
+    ).toEqual(['Viewer']);
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Back')!
+      .trigger('click');
+    expect(wrapper.get('#item-file-email').element).toBe(document.activeElement);
+    expect((wrapper.get('#item-file-email').element as HTMLInputElement).value).toBe(
+      'person@example.test',
+    );
+    wrapper.unmount();
+  });
+
+  it('preserves unusual existing permissions and expiry until a role is explicitly chosen', async () => {
+    const grant = {
+      id: 'custom',
+      user_id: 'person',
+      version: 3,
+      recipient_email: 'custom@example.test',
+      can_read: false,
+      can_upload: false,
+      can_delete: true,
+      can_share: false,
+      expires_at: new Date(Date.now() + 86400000).toISOString(),
+    };
+    vi.mocked(axios.get).mockImplementation(async (url) => ({
+      data: String(url).endsWith('/access')
+        ? {
+            ...access,
+            capabilities: { can_read: true, can_upload: true, can_delete: true, can_share: true },
+            grants: [grant],
+          }
+        : [],
+    }));
+    const patch = vi.spyOn(axios, 'patch').mockResolvedValue({ data: grant });
+    const wrapper = mount(SharingPanel, { props: { scope }, global: { plugins: [OpenVue] } });
+    await flushPromises();
+    await wrapper.get('[aria-label="Change access for custom@example.test"]').trigger('click');
+    expect(wrapper.get('.optional-setting').attributes('open')).toBeDefined();
+    expect(wrapper.findAllComponents(Select)[0].props('modelValue')).toBe('custom');
+    await wrapper.get('.person-form').trigger('submit');
+    await flushPromises();
+    expect(patch.mock.calls[0][1]).toEqual(
+      expect.objectContaining({
+        capabilities: { can_read: false, can_upload: false, can_delete: true, can_share: false },
+        expires_at: grant.expires_at,
+        version: 3,
+      }),
+    );
+    wrapper.unmount();
+  });
+
+  it('separates past invitations from current people and never offers standalone delete or share', async () => {
+    vi.mocked(axios.get).mockImplementation(async (url) => ({
+      data: String(url).endsWith('/access')
+        ? {
+            ...access,
+            capabilities: { can_read: true, can_upload: true, can_delete: true, can_share: true },
+            invitations: [
+              { id: 'past', email: 'past@example.test', revoked_at: new Date().toISOString() },
+            ],
+          }
+        : [],
+    }));
+    const wrapper = mount(SharingPanel, {
+      props: { scope: { ...scope, itemType: 'folder' } },
+      global: { plugins: [OpenVue] },
+    });
+    await flushPromises();
+    expect(wrapper.get('.past-access').attributes('open')).toBeUndefined();
+    expect(wrapper.get('.past-access').text()).toContain('Invitation revoked');
+    await wrapper.get('#item-file-email').setValue('person@example.test');
+    await wrapper.get('.add-person').trigger('submit');
+    const select = wrapper.findAllComponents(Select)[0];
+    expect(select.props('options').map((role: { label: string }) => role.label)).toEqual([
+      'Viewer',
+      'Uploader',
+      'Contributor',
+      'Editor',
+      'Manager',
+    ]);
+    select.vm.$emit('update:modelValue', 'uploader');
+    await flushPromises();
+    expect(wrapper.get('.person-form').text()).toContain('existing files stay private');
     wrapper.unmount();
   });
 });
