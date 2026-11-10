@@ -1,4 +1,4 @@
-import { intlFormatDistance } from 'date-fns';
+import { formatTimeAgoIntl } from '@vueuse/core';
 
 import type { FileItem, PaginationResponse } from './models';
 
@@ -73,13 +73,10 @@ export function formatDateNatural(dateStr: string) {
   if (!dateStr) {
     return '-';
   }
-  const date = new Date(dateStr);
-  // const i = interval(date, new Date());
-  // const d = intervalToDuration(i);
-  // if (!d.days || d.days < 21) {
-  return intlFormatDistance(date, new Date(), { style: 'narrow' });
-  // }
-  // return formatDate(dateStr);
+  return formatTimeAgoIntl(new Date(dateStr), {
+    insertSpace: false,
+    relativeTimeFormatOptions: { style: 'narrow', numeric: 'auto' },
+  });
 }
 
 export function getFileIcon(item: FileItem) {
