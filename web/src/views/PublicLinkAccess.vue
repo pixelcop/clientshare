@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia';
 
+import Breadcrumb from '@/components/Breadcrumb.vue';
 import Dropzone from '@/components/Dropzone.vue';
 import FileList from '@/components/FileList.vue';
 import PublicLinkSignup from '@/components/PublicLinkSignup.vue';
@@ -12,7 +13,6 @@ const { folderId } = defineProps<{ folderId: string }>();
 const publicLink = usePublicLinkStore();
 const fileManager = useFileManagerStore();
 
-const clientName = computed(() => publicLink.client?.name || 'Client Files');
 const { accessType, canWrite } = storeToRefs(publicLink);
 
 const accessLabel = computed(() => {
@@ -71,11 +71,8 @@ watch(
   <div class="space-y-6">
     <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
       <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <h1 class="text-2xl font-semibold text-slate-900">{{ clientName }}</h1>
-          <p class="text-sm text-slate-500">Secure link access</p>
-        </div>
-        <div class="flex items-center gap-3">
+        <Breadcrumb heading class="min-w-0 flex-1" />
+        <div class="flex shrink-0 items-center gap-3">
           <span
             class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium"
             :class="

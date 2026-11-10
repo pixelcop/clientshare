@@ -2,6 +2,7 @@
 import { FloatLabel, type SelectChangeEvent } from 'openvue';
 import { storeToRefs } from 'pinia';
 
+import Breadcrumb from '@/components/Breadcrumb.vue';
 import Dropzone from '@/components/Dropzone.vue';
 import FileList from '@/components/FileList.vue';
 import { useClientsStore } from '@/stores/clients';
@@ -14,8 +15,6 @@ const fileManager = useFileManagerStore();
 const clientsStore = useClientsStore();
 const { currentClient, clients, clientId } = storeToRefs(clientsStore);
 const { currentFolder } = storeToRefs(fileManager);
-
-const clientName = computed(() => currentClient.value?.name || 'Client Files');
 
 function handleUploaded() {}
 
@@ -71,12 +70,9 @@ watch(
   <div class="space-y-6">
     <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
       <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <h1 class="text-2xl font-semibold text-slate-900">{{ clientName }}</h1>
-          <p class="text-sm text-slate-500">Secure access</p>
-        </div>
+        <Breadcrumb heading class="min-w-0 flex-1" />
 
-        <div v-if="clients.length > 1" class="md:ml-auto md:text-right">
+        <div v-if="clients.length > 1" class="shrink-0 md:ml-auto md:text-right">
           <FloatLabel>
             <Select
               id="client-select"

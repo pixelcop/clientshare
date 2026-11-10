@@ -2,6 +2,7 @@
 import { Button } from 'openvue';
 import { storeToRefs } from 'pinia';
 
+import Breadcrumb from '@/components/Breadcrumb.vue';
 import CollectionInvitation from '@/components/CollectionInvitation.vue';
 import FileList from '@/components/FileList.vue';
 import PendingEmail from '@/components/PendingEmail.vue';
@@ -14,7 +15,7 @@ import { useFileManagerStore } from '../stores/fileManager';
 const { folderId } = defineProps<{ folderId: string }>();
 
 const fileManager = useFileManagerStore();
-const { currentClient, clientId } = storeToRefs(useClientsStore());
+const { clientId } = storeToRefs(useClientsStore());
 
 const { user } = storeToRefs(useAuthStore());
 const notifyClient = ref(true);
@@ -52,9 +53,9 @@ watch(
 
 <template>
   <div>
-    <div class="flex items-center justify-between mb-4">
-      <h1>{{ currentClient?.name || 'File Manager' }}</h1>
-      <div class="flex items-center gap-2">
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-center mb-4">
+      <Breadcrumb heading class="min-w-0 flex-1" />
+      <div class="flex shrink-0 items-center gap-2">
         <Button
           v-if="showUsers && clientId"
           asChild

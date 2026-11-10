@@ -8,7 +8,6 @@ import { useFileManagerStore } from '@/stores/fileManager';
 import type { FileItem } from '@/types/models';
 import { getFileType, getFileURL } from '@/types/util';
 
-import Breadcrumb from './Breadcrumb.vue';
 import FileListItem from './FileListItem.vue';
 import FilePreviewModal from './FilePreviewModal.vue';
 import FolderList from './FolderList.vue';
@@ -16,8 +15,7 @@ import NewFolderModal from './NewFolderModal.vue';
 
 const router = useRouter();
 const fileManager = useFileManagerStore();
-const { files, folders, breadcrumbs, pagination, sortField, sortDirection, canWrite } =
-  storeToRefs(fileManager);
+const { files, folders, pagination, sortField, sortDirection, canWrite } = storeToRefs(fileManager);
 const { user } = storeToRefs(useAuthStore());
 
 const showNewFolder = ref(false);
@@ -86,19 +84,14 @@ function closePreview() {
     </template>
     <template #content>
       <div class="space-y-6">
-        <div class="flex items-center justify-between mb-4">
-          <Breadcrumb v-if="breadcrumbs.length > 1" />
-          <div v-else>&nbsp;</div>
-          <div class="flex items-center gap-2">
-            <Button
-              v-if="canWrite"
-              @click="showNewFolder = true"
-              icon="oi oi-plus"
-              label="New Folder"
-              severity="info"
-              size="small"
-            />
-          </div>
+        <div v-if="canWrite" class="flex items-center justify-end mb-4">
+          <Button
+            @click="showNewFolder = true"
+            icon="oi oi-plus"
+            label="New Folder"
+            severity="info"
+            size="small"
+          />
         </div>
 
         <FolderList v-if="folders.length > 0" :items="folders" @open="enterFolder" />
