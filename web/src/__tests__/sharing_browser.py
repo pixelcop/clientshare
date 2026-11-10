@@ -435,6 +435,7 @@ with sync_playwright() as p:
     assert admin.request.delete(base + "/api/links/" + link["id"]).status == 204
     assert collector.request.get(base + "/api/folders/" + folder["id"]).status in (401, 403, 404)
     dialog.get_by_role("button", name="Done", exact=True).click()
+    page.set_viewport_size({"width": 1280, "height": 900})
     page.get_by_role("button", name="Share folder", exact=True).click()
     dialog.get_by_role("button", name="Sharing links", exact=True).click()
     expect(dialog.get_by_text("No active links.", exact=True)).to_be_visible()
@@ -443,6 +444,7 @@ with sync_playwright() as p:
     expect(dialog.get_by_text("Revoked", exact=True)).to_be_visible()
     expect(dialog.get_by_role("button", name="Use link", exact=True)).to_have_count(0)
     expect(dialog.get_by_role("button", name="Revoke", exact=True)).to_have_count(0)
+    page.set_viewport_size({"width": 390, "height": 844})
     page.screenshot(path=str(database.parent / "sharing-link-history-mobile.png"), full_page=True)
     history.uncheck()
     expect(dialog.get_by_text("Revoked", exact=True)).to_have_count(0)

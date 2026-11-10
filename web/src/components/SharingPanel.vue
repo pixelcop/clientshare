@@ -155,6 +155,7 @@ const modes = computed(() =>
 );
 const visibleGrants = computed(() => (view.value?.grants || []).filter(active));
 const visibleInvitations = computed(() => (view.value?.invitations || []).filter(active));
+const hasLinkHistory = computed(() => links.value.some((link) => !active(link)));
 const visibleLinks = computed(() => links.value.filter((link) => history.value || active(link)));
 function date(value?: string) {
   if (!value) {
@@ -835,58 +836,36 @@ async function remove() {
           @click="activeTab = 'people'"
         />
         <section aria-label="Sharing links">
-          <label class="history-toggle"
-            ><Checkbox v-model="history" binary :inputId="`${key}-history`" /> Include expired and
-            revoked links</label
+          <form
+            v-if="!result && modes.length"
+            class="access-form link-composer"
+            @submit.prevent="createLink"
           >
-          <p class="muted">
-            Anyone with a link gets the permissions you choose. Removing a person won’t stop them
-            using a link they already have.
-          </p>
-          <div v-for="link in visibleLinks" :key="link.id" class="access-row">
-            <div>
-              <strong>{{
-                link.access_type === 'write'
-                  ? 'Upload only'
-                  : link.access_type === 'readwrite'
-                    ? 'View, download & upload'
-                    : 'View & download'
-              }}</strong
-                ><small>{{ link.revoked_at ? 'Revoked' : `Expires ${date(link.expires_at)}` }}</small>
-            </div>
-            <div class="row-buttons">
-              <Button
-                v-if="active(link) && link.link_url"
-                label="Use link"
-                severity="secondary"
-                :disabled="busy"
-                @click="useLink(link)"
-              /><Button
-                v-if="active(link)"
-                label="Revoke"
-                severity="secondary"
-                :disabled="busy"
-                @click="confirmRemove({ kind: 'link', item: link })"
-              />
-            </div>
-          </div>
-          <form v-if="!result && modes.length" class="access-form" @submit.prevent="createLink">
             <h4>Create a link for {{ scope.name }}</h4>
-            <label :id="`${key}-mode-label`" :for="`${key}-mode`">Anyone with this link can</label
-            ><Select
-              v-model="linkMode"
-              :inputId="`${key}-mode`"
-              :ariaLabelledby="`${key}-mode-label`"
-              :options="modes"
-              optionLabel="label"
-              optionValue="value"
-              :disabled="busy"
-              fluid
-            />
-            <SharingExpiry v-model="linkExpiry" :disabled="busy" compact required />
+            <div class="link-settings">
+              <div class="link-setting">
+                <label :id="`${key}-mode-label`" :for="`${key}-mode`"
+                  >Anyone with this link can</label
+                >
+                <Select
+                  v-model="linkMode"
+                  :inputId="`${key}-mode`"
+                  :ariaLabelledby="`${key}-mode-label`"
+                  :options="modes"
+                  optionLabel="label"
+                  optionValue="value"
+                  :disabled="busy"
+                  fluid
+                />
+              </div>
+              <div class="link-setting">
+                <span class="setting-label">Link expiry</span>
+                <SharingExpiry v-model="linkExpiry" :disabled="busy" label="Link expiry" required />
+              </div>
+            </div>
             <p class="muted">
-              {{ scope.name }} · {{ modes.find((mode) => mode.value === linkMode)?.label }} · Anyone
-              with the link · {{ expirySummary(linkExpiry) }}
+              Anyone with the link can use it until it expires or you revoke it. Removing a person
+              from sharing won’t stop them using this link.
             </p>
             <Button
               type="submit"
@@ -935,6 +914,53 @@ async function remove() {
               @click="createAnotherLink"
             />
           </div>
+          <section v-if="links.length" class="existing-links" aria-label="Existing links">
+            <div class="links-heading">
+              <h4>Existing links</h4>
+              <label v-if="hasLinkHistory" class="history-toggle" :for="`${key}-history`">
+                <Checkbox v-model="history" binary :inputId="`${key}-history`" />
+                Show inactive links
+              </label>
+            </div>
+            <p v-if="history && hasLinkHistory" class="muted link-history-note">
+              Includes expired and revoked links. These links no longer work.
+            </p>
+            <p v-if="!visibleLinks.length" class="muted">No active links.</p>
+            <div v-for="link in visibleLinks" :key="link.id" class="access-row">
+              <div>
+                <strong>{{
+                  link.access_type === 'write'
+                    ? 'Upload only'
+                    : link.access_type === 'readwrite'
+                      ? 'View, download & upload'
+                      : 'View & download'
+                }}</strong>
+                <small>{{
+                  link.revoked_at
+                    ? 'Revoked'
+                    : active(link)
+                      ? `Expires ${date(link.expires_at)}`
+                      : `Expired ${date(link.expires_at)}`
+                }}</small>
+              </div>
+              <div class="row-buttons">
+                <Button
+                  v-if="active(link) && link.link_url"
+                  label="Use link"
+                  severity="secondary"
+                  :disabled="busy"
+                  @click="useLink(link)"
+                />
+                <Button
+                  v-if="active(link)"
+                  label="Revoke"
+                  severity="secondary"
+                  :disabled="busy"
+                  @click="confirmRemove({ kind: 'link', item: link })"
+                />
+              </div>
+            </div>
+          </section>
           <router-link
             v-if="scope.kind === 'client' && view.can_manage"
             :to="`/clients/${scope.id}/links`"
@@ -1068,6 +1094,55 @@ small {
   min-height: 44px;
   margin-top: 12px;
 }
+.link-settings {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 12px;
+}
+.link-setting {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+}
+.link-setting > label,
+.setting-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--p-text-muted-color);
+}
+.link-setting :deep(.p-select) {
+  min-width: 0;
+  min-height: 44px;
+}
+.link-composer > .muted,
+.link-history-note {
+  font-size: 12px;
+}
+.link-composer > .p-button {
+  justify-self: end;
+}
+.existing-links {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--p-content-border-color);
+}
+.links-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+.links-heading h4,
+.links-heading .history-toggle {
+  margin: 0;
+}
+.links-heading .history-toggle {
+  font-size: 12px;
+  color: var(--p-text-muted-color);
+  cursor: pointer;
+}
 .sharing-panel :deep(.p-button) {
   min-height: 44px;
 }
@@ -1199,6 +1274,9 @@ summary:focus-visible {
   margin-inline-start: auto;
 }
 @media (max-width: 480px) {
+  .link-settings {
+    grid-template-columns: minmax(0, 1fr);
+  }
   .recipient-settings {
     flex-wrap: wrap;
   }

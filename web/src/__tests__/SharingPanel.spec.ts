@@ -65,6 +65,52 @@ describe('exact-scope sharing panel', () => {
     wrapper.unmount();
   });
 
+  it.each([
+    { state: 'empty', links: [], hasHistory: false },
+    { state: 'active only', links: [{ id: 'active' }], hasHistory: false },
+    {
+      state: 'expired and revoked',
+      links: [
+        { id: 'active' },
+        { id: 'expired', expires_at: '2000-01-01T00:00:00Z' },
+        { id: 'revoked', revoked_at: '2020-01-01T00:00:00Z' },
+      ],
+      hasHistory: true,
+    },
+    {
+      state: 'history only',
+      links: [{ id: 'expired', expires_at: '2000-01-01T00:00:00Z' }],
+      hasHistory: true,
+    },
+  ])('only offers link history when it exists: $state', async ({ links, hasHistory }) => {
+    vi.mocked(axios.get).mockImplementation(async (url) => ({
+      data: String(url).endsWith('/access') ? access : links,
+    }));
+    const wrapper = mount(SharingPanel, { props: { scope }, global: { plugins: [OpenVue] } });
+    await flushPromises();
+    await wrapper.get('[aria-label="Sharing links"]').trigger('click');
+    expect(wrapper.find('[aria-label="Existing links"]').exists()).toBe(links.length > 0);
+    expect(wrapper.find('#item-file-history').exists()).toBe(hasHistory);
+    expect(wrapper.findAll('.existing-links .access-row')).toHaveLength(
+      links.filter((link) => link.id === 'active').length,
+    );
+    expect(wrapper.findComponent(SharingExpiry).props('compact')).toBe(false);
+    expect(wrapper.findComponent(SharingExpiry).props('label')).toBe('Link expiry');
+    expect(wrapper.get('.link-settings').text()).toContain('Link expiry');
+    if (hasHistory) {
+      await wrapper.get('#item-file-history').setValue(true);
+      expect(wrapper.findAll('.existing-links .access-row')).toHaveLength(links.length);
+      expect(wrapper.text()).toContain('These links no longer work.');
+      const inactive = wrapper
+        .findAll('.existing-links .access-row')
+        .filter((row) => /Expired|Revoked/.test(row.text()));
+      inactive.forEach((row) => expect(row.find('button').exists()).toBe(false));
+      await wrapper.get('#item-file-history').setValue(false);
+      expect(wrapper.text()).not.toContain('These links no longer work.');
+    }
+    wrapper.unmount();
+  });
+
   it('uses the server ceiling, keeps files read-only and reports disabled invitation delivery truthfully', async () => {
     const invitation = {
       id: 'invitation',
@@ -174,7 +220,9 @@ describe('exact-scope sharing panel', () => {
     const wrapper = mount(SharingPanel, { props: { scope }, global: { plugins: [OpenVue] } });
     await flushPromises();
     await wrapper.get('[aria-label="Change access for recipient@example.test"]').trigger('click');
-    expect(wrapper.get('.person-form').text()).toContain('Access through the client or another folder is unchanged.');
+    expect(wrapper.get('.person-form').text()).toContain(
+      'Access through the client or another folder is unchanged.',
+    );
     await wrapper.get('.person-form [aria-label="Back"]').trigger('click');
     await wrapper
       .findAll('button')
