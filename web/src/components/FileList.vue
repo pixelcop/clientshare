@@ -121,9 +121,7 @@ watch(() => fileManager.currentFolder, closePreview);
 
 <template>
   <Dropzone :canNotify @uploaded="emit('uploaded')">
-    <template #context>
-      <h2 id="collect-files" tabindex="-1" class="text-base font-semibold">Files</h2>
-    </template>
+    <template #context><slot name="context" /></template>
     <template #actions><slot name="actions" /></template>
     <p v-if="fileManager.loading && !presentation.loaded" role="status" class="py-12 text-center">
       Loading files…

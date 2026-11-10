@@ -101,18 +101,15 @@ onBeforeUnmount(() => {
 
 <template>
   <div>
-    <div class="flex flex-col gap-3 sm:flex-row sm:items-center mb-4">
-      <Breadcrumb heading class="min-w-0 flex-1" />
-      <div class="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-        <ClientWorkspaceSwitcher :clientId="presentation.context?.client_id" />
-      </div>
-    </div>
-
     <div v-if="destinationError" role="alert">
       <p>{{ destinationError }}</p>
       <Button label="Try again" severity="secondary" @click="openDestination()" />
     </div>
     <FileList v-else :canNotify>
+      <template #context>
+        <Breadcrumb heading class="min-w-0 flex-1" />
+        <ClientWorkspaceSwitcher :clientId="presentation.context?.client_id" />
+      </template>
       <template #actions>
         <Button
           v-if="displayCanShare"
