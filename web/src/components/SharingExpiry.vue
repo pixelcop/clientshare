@@ -113,8 +113,15 @@ function apply() {
   min-height: 44px;
 }
 .compact-expiry {
-  width: 44px;
-  flex: 0 0 44px;
+  width: 48px;
+  flex: 0 0 48px;
+  border-color: transparent;
+  background: transparent;
+}
+.compact-expiry:hover,
+.compact-expiry:focus-within {
+  border-color: var(--p-form-field-border-color);
+  background: var(--p-content-hover-background);
 }
 .timezone-hint {
   color: var(--p-text-muted-color);
