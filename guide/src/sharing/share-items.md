@@ -11,7 +11,9 @@
    Add more addresses in the input below the recipients.
 4. Choose a role for each person. Use the clock beside their role to choose an
    expiry: 7 days, 30 days, or **Custom date…**. Custom access ends at the end of
-   the selected day in your local timezone. The default is no expiry.
+    the selected day in your local timezone. The default is no expiry. A highlighted
+    clock means an expiry is set. Hover for the exact date and time, or tap the
+    clock to see it at the top of the expiry menu.
 5. Select **Send invitation** and check the email status. If sending fails, expand
    **Pending** beside the invitation and use **Email invitation** to try again.
 

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Button, DatePicker, Dialog, Select } from 'openvue';
+import vTooltip from 'openvue/tooltip';
 
 const value = defineModel<Date | null>({ required: true });
 const {
@@ -31,6 +32,18 @@ const summary = computed(() => {
   }
   return `Expires ${value.value.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`;
 });
+const expiryDetail = computed(() =>
+  value.value
+    ? `Access expires on ${value.value.toLocaleString(undefined, {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        timeZoneName: 'short',
+      })}.`
+    : 'No expiry is set.',
+);
 const zone = new Intl.DateTimeFormat(undefined, { timeZoneName: 'short' })
   .formatToParts(new Date())
   .find((part) => part.type === 'timeZoneName')?.value;
@@ -69,16 +82,19 @@ function apply() {
 
 <template>
   <Select
+    v-tooltip.top="{ value: expiryDetail, disabled: disabled }"
     :modelValue="choice"
     :options="options"
     optionLabel="label"
     optionValue="value"
     :ariaLabel="`${label}: ${summary}`"
-    :title="summary"
     :disabled="disabled"
     class="sharing-expiry"
     :class="{ 'compact-expiry': compact }"
-    :pt="{ dropdown: compact ? { style: { display: 'none' } } : undefined }"
+    :pt="{
+      label: { 'aria-description': expiryDetail },
+      dropdown: compact ? { style: { display: 'none' } } : undefined,
+    }"
     :labelStyle="{
       display: 'flex',
       alignItems: 'center',
@@ -88,8 +104,13 @@ function apply() {
     @update:modelValue="select"
   >
     <template #value>
-      <i class="oi oi-clock" aria-hidden="true" />
+      <span class="expiry-clock" :class="{ 'is-active': !!value }" aria-hidden="true"
+        ><i class="oi oi-clock"
+      /></span>
       <span v-if="!compact">{{ summary }}</span>
+    </template>
+    <template #header>
+      <p class="expiry-menu-summary">{{ expiryDetail }}</p>
     </template>
   </Select>
   <Dialog
@@ -122,6 +143,28 @@ function apply() {
 .compact-expiry:focus-within {
   border-color: var(--p-form-field-border-color);
   background: var(--p-content-hover-background);
+}
+.expiry-clock {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  border-radius: 50%;
+  font-size: 18px;
+  color: var(--p-text-muted-color);
+}
+.expiry-clock.is-active {
+  background: var(--p-highlight-background);
+  color: var(--p-highlight-color);
+}
+.expiry-menu-summary {
+  max-width: min(20rem, 80vw);
+  padding: 12px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--p-text-muted-color);
 }
 .timezone-hint {
   color: var(--p-text-muted-color);

@@ -611,9 +611,6 @@ async function remove() {
                 />
               </div>
             </div>
-            <p v-if="person.expiry" class="recipient-summary muted">
-              Expires {{ date(person.expiry.toISOString()) }}
-            </p>
           </div>
         </div>
         <form v-if="!editing" class="add-person" @submit.prevent="addPerson">
@@ -1128,10 +1125,6 @@ small {
 }
 .draft-person {
   padding: 8px 0;
-}
-.recipient-summary {
-  margin: 4px 0 0;
-  font-size: 12px;
 }
 .sharing-footer {
   position: sticky;

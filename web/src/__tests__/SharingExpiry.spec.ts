@@ -12,7 +12,10 @@ function control(modelValue: Date | null = null, required = false) {
     props: { modelValue, required },
     global: {
       stubs: {
-        Select: { props: ['modelValue', 'options', 'ariaLabel'], template: '<div />' },
+        Select: {
+          props: ['modelValue', 'options', 'ariaLabel', 'pt'],
+          template: '<div><slot name="value" /></div>',
+        },
         DatePicker: { props: ['modelValue'], template: '<div />' },
         Button: { props: ['label', 'disabled'], template: '<button />' },
         Dialog: { props: ['visible'], template: '<div><slot /><slot name="footer" /></div>' },
@@ -22,6 +25,18 @@ function control(modelValue: Date | null = null, required = false) {
 }
 
 describe('sharing expiry', () => {
+  it('highlights only a set expiry and exposes its exact date without a native title', async () => {
+    const wrapper = control();
+    expect(wrapper.find('.expiry-clock.is-active').exists()).toBe(false);
+    expect(wrapper.getComponent(Select).attributes('title')).toBeUndefined();
+    await wrapper.setProps({ modelValue: new Date(2027, 2, 14, 17, 30) });
+    expect(wrapper.find('.expiry-clock.is-active').exists()).toBe(true);
+    expect(wrapper.getComponent(Select).attributes('title')).toBeUndefined();
+    expect(wrapper.getComponent(Select).props('pt').label['aria-description']).toContain(
+      'Access expires on',
+    );
+    wrapper.unmount();
+  });
   it('offers only no expiry, 7 days, 30 days and custom, with no unlimited links', () => {
     const optional = control();
     expect(
