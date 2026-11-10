@@ -18,6 +18,7 @@ import { useFileManagerStore } from '../stores/fileManager';
 
 const { folderId } = defineProps<{ folderId?: string }>();
 const router = useRouter();
+const route = useRoute();
 
 const fileManager = useFileManagerStore();
 const presentation = useWorkspacePresentation();
@@ -77,7 +78,11 @@ async function openDestination(id = folderId) {
   try {
     const response = await axios.get<{ context: { folder: { id: string } } }>('/api/folders');
     if (version === destinationVersion) {
-      await router.replace(`/folder/${response.data.context.folder.id}`);
+      await router.replace({
+        name: 'FolderView',
+        params: { folderId: response.data.context.folder.id },
+        query: route.query,
+      });
     }
   } catch (error) {
     if (version !== destinationVersion) {

@@ -8,6 +8,7 @@ export function useWorkspacePresentation() {
   const read = () => ({
     context: files.context,
     breadcrumbs: files.breadcrumbs,
+    items: files.items,
     files: files.files,
     folders: files.folders,
     pagination: files.pagination,

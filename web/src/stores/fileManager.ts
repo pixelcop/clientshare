@@ -14,6 +14,12 @@ import { useAuthStore } from './auth';
 import { useClientsStore } from './clients';
 
 export type FileSortField = 'filename' | 'size' | 'uploaded_at';
+export interface FileListingOptions {
+  page: number;
+  pageSize: number;
+  sortField: FileSortField;
+  sortDirection: 'asc' | 'desc';
+}
 
 export const useFileManagerStore = defineStore('fileManager', () => {
   interface CreateFolderOptions {
@@ -34,8 +40,9 @@ export const useFileManagerStore = defineStore('fileManager', () => {
   const clientsStore = useClientsStore();
   const { clientId } = storeToRefs(clientsStore);
 
-  const files = ref<FileItem[]>([]);
-  const folders = ref<FileItem[]>([]);
+  const items = ref<FileItem[]>([]);
+  const files = computed(() => items.value.filter((item) => item.type !== 'folder'));
+  const folders = computed(() => items.value.filter((item) => item.type === 'folder'));
 
   /**
    * Folder hierarchy
@@ -47,12 +54,7 @@ export const useFileManagerStore = defineStore('fileManager', () => {
   const context = ref<WorkspaceContext | null>(null);
   const loaded = ref(false);
   const isEmpty = computed(
-    () =>
-      loaded.value &&
-      !loading.value &&
-      !error.value &&
-      files.value.length === 0 &&
-      folders.value.length === 0,
+    () => loaded.value && !loading.value && !error.value && items.value.length === 0,
   );
   let requestVersion = 0;
 
@@ -63,6 +65,8 @@ export const useFileManagerStore = defineStore('fileManager', () => {
   const pagination = ref<PaginationResponse>(defaultPagination());
   const sortField = ref<FileSortField>('uploaded_at');
   const sortDirection = ref<'asc' | 'desc'>('desc');
+  const requestedPage = ref(1);
+  const requestedPageSize = ref(20);
 
   const auth = useAuthStore();
   const noCapabilities: AccessCapabilities = {
@@ -82,7 +86,7 @@ export const useFileManagerStore = defineStore('fileManager', () => {
   async function listFoldersInFolder(
     folderId: string,
     page = 1,
-    items: FileItem[] = [],
+    collectedFolders: FileItem[] = [],
   ): Promise<FileItem[]> {
     const res = await axios.get<PaginatedResult<FileItem>>(`/api/folders/${folderId}`, {
       params: {
@@ -94,7 +98,7 @@ export const useFileManagerStore = defineStore('fileManager', () => {
       },
     });
 
-    const nextItems = items.concat(res.data.items || []);
+    const nextItems = collectedFolders.concat(res.data.items || []);
     const pageInfo = res.data.pagination || defaultPagination();
     if (!pageInfo.has_more || page >= pageInfo.total_pages) {
       return nextItems;
@@ -103,7 +107,7 @@ export const useFileManagerStore = defineStore('fileManager', () => {
     return listFoldersInFolder(folderId, page + 1, nextItems);
   }
 
-  async function fetchFiles(page = 1, pageSize = 20) {
+  async function fetchFiles(page = requestedPage.value, pageSize = requestedPageSize.value) {
     const folderId = currentFolder.value;
     if (!folderId) {
       return;
@@ -114,34 +118,26 @@ export const useFileManagerStore = defineStore('fileManager', () => {
     error.value = null;
     loaded.value = false;
     try {
-      const [res, childFolders, crumbs] = await Promise.all([
+      const [res, crumbs] = await Promise.all([
         axios.get<WorkspaceListing>(`/api/folders/${folderId}`, {
           params: {
+            type: 'all',
             page,
             page_size: pageSize,
             sort_by: sortField.value,
             sort_dir: sortDirection.value,
           },
         }),
-        listFoldersInFolder(folderId),
         axios.get<FileItem[]>(`/api/folders/${folderId}/breadcrumbs`),
       ]);
       if (version !== requestVersion || folderId !== currentFolder.value) {
         return;
       }
-      // Deleting the last item on the final page must not look like an empty
-      // workspace while earlier pages still contain files.
-      if (page > 1 && !res.data.items?.length && res.data.pagination?.total_items > 0) {
-        await fetchFiles(
-          Math.max(1, Math.min(page - 1, res.data.pagination.total_pages)),
-          pageSize,
-        );
-        return;
-      }
-      files.value = res.data.items || [];
-      folders.value = childFolders;
+      items.value = res.data.items || [];
       breadcrumbs.value = crumbs.data || [];
       pagination.value = res.data.pagination || defaultPagination();
+      requestedPage.value = pagination.value.page;
+      requestedPageSize.value = pagination.value.page_size;
       context.value = res.data.context;
       clientId.value = res.data.context?.client_id ?? null;
       loaded.value = true;
@@ -150,8 +146,7 @@ export const useFileManagerStore = defineStore('fileManager', () => {
         return;
       }
       error.value = e.response?.data?.error || 'Failed to fetch files';
-      files.value = [];
-      folders.value = [];
+      items.value = [];
       breadcrumbs.value = [];
       context.value = null;
       clientId.value = null;
@@ -159,6 +154,21 @@ export const useFileManagerStore = defineStore('fileManager', () => {
       if (version === requestVersion) {
         loading.value = false;
       }
+    }
+  }
+
+  function configureListing(options: FileListingOptions, refresh = true) {
+    const changed =
+      requestedPage.value !== options.page ||
+      requestedPageSize.value !== options.pageSize ||
+      sortField.value !== options.sortField ||
+      sortDirection.value !== options.sortDirection;
+    requestedPage.value = options.page;
+    requestedPageSize.value = options.pageSize;
+    sortField.value = options.sortField;
+    sortDirection.value = options.sortDirection;
+    if (changed && refresh) {
+      void fetchFiles(options.page, options.pageSize);
     }
   }
 
@@ -319,16 +329,15 @@ export const useFileManagerStore = defineStore('fileManager', () => {
     currentFolder,
     async () => {
       requestVersion += 1;
-      files.value = [];
-      folders.value = [];
+      items.value = [];
       breadcrumbs.value = [];
       context.value = null;
       clientId.value = null;
       loaded.value = false;
       loading.value = false;
       error.value = null;
-      pagination.value = { ...defaultPagination(), page_size: pagination.value.page_size };
-      await fetchFiles(1, pagination.value.page_size);
+      pagination.value = { ...defaultPagination(), page_size: requestedPageSize.value };
+      await fetchFiles();
     },
     {
       immediate: true,
@@ -349,19 +358,21 @@ export const useFileManagerStore = defineStore('fileManager', () => {
     () => {
       requestVersion += 1;
       currentFolder.value = null;
-      files.value = [];
-      folders.value = [];
+      items.value = [];
       breadcrumbs.value = [];
       context.value = null;
       clientId.value = null;
       loaded.value = false;
       error.value = null;
       loading.value = false;
+      requestedPage.value = 1;
+      requestedPageSize.value = 20;
     },
     { flush: 'sync' },
   );
 
   return {
+    items,
     folders,
     files,
     breadcrumbs,
@@ -380,6 +391,7 @@ export const useFileManagerStore = defineStore('fileManager', () => {
     capabilities,
 
     changeFolder,
+    configureListing,
     fetchFiles,
     fetchFile,
     createFolder,

@@ -59,7 +59,7 @@ describe('workspace listing state', () => {
     const store = useFileManagerStore();
     await store.changeFolder('old');
     await flushPromises();
-    store.files = [{ ...folder('document'), type: 'file' }];
+    store.items = [{ ...folder('document'), type: 'file' }];
     const scope = effectScope();
     const presentation = scope.run(useWorkspacePresentation)!;
     let finish!: () => void;
@@ -142,8 +142,7 @@ describe('workspace listing state', () => {
     const store = useFileManagerStore();
     await store.changeFolder('root');
     await flushPromises();
-    store.files = [{ ...folder('document'), type: 'file' }];
-    store.folders = [folder('child')];
+    store.items = [{ ...folder('document'), type: 'file' }, folder('child')];
     const { context, breadcrumbs, files, folders } = store;
     store.sortField = 'filename';
     vi.mocked(axios.get).mockResolvedValueOnce({ data: { ...auth.user, name: 'Updated name' } });
@@ -175,37 +174,36 @@ describe('workspace listing state', () => {
     },
   );
 
-  it('waits for both lists and does not treat folders-only content as empty', async () => {
+  it('waits for the listing and breadcrumbs and handles folders-only pages', async () => {
     let finish!: (value: unknown) => void;
-    vi.mocked(axios.get).mockImplementation(async (url, config) => {
-      if (config?.params?.type === 'folder') {
+    vi.mocked(axios.get).mockImplementation(async (url) => {
+      if (String(url).endsWith('/breadcrumbs')) {
         return new Promise((resolve) => {
           finish = resolve;
         });
       }
-      return response(String(url), config);
+      return { data: listing('root', [folder('child')]) };
     });
     const store = useFileManagerStore();
     await store.changeFolder('root');
     await flushPromises();
     expect(store.loading).toBe(true);
     expect(store.isEmpty).toBe(false);
-    finish({ data: listing('root', [folder('child')]) });
+    finish({ data: [folder('root')] });
     await flushPromises();
     expect(store.loading).toBe(false);
     expect(store.folders).toHaveLength(1);
     expect(store.isEmpty).toBe(false);
   });
 
-  it.each(['files', 'folders', 'breadcrumbs'])(
+  it.each(['items', 'breadcrumbs'])(
     'surfaces a failed %s query, never an empty state',
     async (surface) => {
       vi.mocked(axios.get).mockImplementation(async (url, config) => {
         if (
           String(url) !== '/api/clients' &&
           ((surface === 'breadcrumbs' && String(url).endsWith('/breadcrumbs')) ||
-            (surface === 'folders' && config?.params?.type === 'folder') ||
-            (surface === 'files' && !config?.params?.type && !String(url).endsWith('/breadcrumbs')))
+            (surface === 'items' && config?.params?.type === 'all'))
         ) {
           throw Object.assign(new Error('Query failed'), {
             response: { data: { error: `${surface} unavailable` } },
@@ -225,7 +223,7 @@ describe('workspace listing state', () => {
   it('discards late responses and errors after a folder switch', async () => {
     let finish!: (value: unknown) => void;
     vi.mocked(axios.get).mockImplementation(async (url, config) => {
-      if (String(url) === '/api/folders/old' && !config?.params?.type) {
+      if (String(url) === '/api/folders/old' && config?.params?.type === 'all') {
         return new Promise((resolve) => {
           finish = resolve;
         });
@@ -245,14 +243,14 @@ describe('workspace listing state', () => {
     expect(store.error).toBeNull();
   });
 
-  it('backs up from an emptied final pagination page', async () => {
+  it('accepts the server-corrected last page for an out-of-range request', async () => {
     const get = vi.mocked(axios.get);
     get.mockImplementation(async (url, config) => {
       const result = response(String(url), config);
-      if (String(url) === '/api/folders/root' && !config?.params?.type) {
+      if (String(url) === '/api/folders/root' && config?.params?.type === 'all') {
         return {
           data: {
-            ...listing('root', config?.params?.page === 2 ? [] : [folder('file')]),
+            ...listing('root', [{ ...folder('file'), type: 'file' }]),
             pagination: { ...defaultPagination(), total_items: 1, total_pages: 1 },
           },
         };
@@ -262,7 +260,7 @@ describe('workspace listing state', () => {
     const store = useFileManagerStore();
     await store.changeFolder('root');
     await flushPromises();
-    await store.fetchFiles(2, 20);
+    await store.fetchFiles(99, 20);
     expect(store.files[0]?.id).toBe('file');
     expect(store.isEmpty).toBe(false);
     expect(store.pagination.page).toBe(1);

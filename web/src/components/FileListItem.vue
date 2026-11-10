@@ -17,11 +17,16 @@ const emit = defineEmits<{ open: [item: FileItem] }>();
         :title="item.filename"
         @click.stop="emit('open', item)"
       >
-        <i :class="getFileIcon(item)" aria-hidden="true" />
+        <i
+          :class="item.type === 'folder' ? 'oi oi-folder' : getFileIcon(item)"
+          aria-hidden="true"
+        />
         <span>{{ item.filename }}</span>
       </button>
     </td>
-    <td class="file-metadata hidden sm:table-cell">{{ formatSize(item.size) }}</td>
+    <td class="file-metadata hidden sm:table-cell">
+      {{ item.type === 'folder' ? '—' : formatSize(item.size) }}
+    </td>
     <td class="file-metadata hidden sm:table-cell" :title="formatDate(item.uploaded_at)">
       {{ formatDateNatural(item.uploaded_at) }}
     </td>

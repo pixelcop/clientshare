@@ -10,6 +10,7 @@ import { usePublicLinkStore } from '@/stores/publicLink';
 
 const { folderId } = defineProps<{ folderId?: string }>();
 const router = useRouter();
+const route = useRoute();
 
 const publicLink = usePublicLinkStore();
 const fileManager = useFileManagerStore();
@@ -44,15 +45,23 @@ const expiresAt = computed(() => {
   return new Date(publicLink.link.expires_at).toLocaleString();
 });
 
+async function openFolder(id?: string) {
+  if (id && !folderId) {
+    await router.replace({ name: 'FolderView', params: { folderId: id }, query: route.query });
+    return;
+  }
+  await fileManager.changeFolder(id);
+}
+
 async function loadLink() {
   const token = localStorage.getItem('link');
   if (!token) {
     if (folderId || auth.user?.file_id) {
-      await fileManager.changeFolder(folderId || auth.user?.file_id);
+      await openFolder(folderId || auth.user?.file_id);
     } else {
       try {
         const response = await axios.get('/api/folders');
-        await fileManager.changeFolder(response.data.context.folder.id);
+        await openFolder(response.data.context.folder.id);
       } catch {
         fileManager.error = 'This link is unavailable. Open the original sharing link again.';
       }
@@ -65,7 +74,7 @@ async function loadLink() {
       await router.replace(`/files/${publicLink.target.id}`);
       return;
     }
-    await fileManager.changeFolder(
+    await openFolder(
       folderId || publicLink.target?.id || publicLink.client?.root_folder_id || undefined,
     );
   }

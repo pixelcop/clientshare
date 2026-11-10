@@ -9,21 +9,21 @@ import type { FileSortField } from '@/stores/fileManager';
 import { useFileManagerStore } from '@/stores/fileManager';
 import type { FileItem } from '@/types/models';
 import { canPreviewFile, getFileType, getFileURL } from '@/types/util';
+import { fileListingQuery, filePageSizes, parseFileListingQuery } from '@/utils/fileListingQuery';
 
 import Dropzone from './Dropzone.vue';
 import FileListItem from './FileListItem.vue';
 import FilePreviewModal from './FilePreviewModal.vue';
-import FolderList from './FolderList.vue';
 
 withDefaults(defineProps<{ canNotify?: boolean }>(), { canNotify: true });
 const emit = defineEmits<{ uploaded: [] }>();
 
 const router = useRouter();
+const route = useRoute();
 const fileManager = useFileManagerStore();
 const { sortField, sortDirection } = storeToRefs(fileManager);
 const presentation = useWorkspacePresentation();
-const files = computed(() => presentation.value.files);
-const folders = computed(() => presentation.value.folders);
+const items = computed(() => presentation.value.items);
 const pagination = computed(() => presentation.value.pagination);
 const canWrite = computed(() => presentation.value.canWrite);
 const canRead = computed(() => presentation.value.canRead);
@@ -31,7 +31,7 @@ const context = computed(() => presentation.value.context);
 const isEmpty = computed(() => presentation.value.isEmpty);
 const showPreview = ref(false);
 const previewItem = ref<FileItem | null>(null);
-const pageSizeOptions = [10, 20, 50];
+const pageSizeOptions = filePageSizes;
 const first = computed(() => Math.max(0, (pagination.value.page - 1) * pagination.value.page_size));
 const emptyHeading = computed(() => {
   if (!canRead.value && canWrite.value) {
@@ -59,24 +59,36 @@ function sortIconClass(field: FileSortField) {
 }
 
 function sortBy(field: FileSortField) {
-  if (sortField.value === field) {
-    sortDirection.value = sortDirection.value === 'desc' ? 'asc' : 'desc';
-  } else {
-    sortField.value = field;
-    sortDirection.value = defaultDirectionByField[field];
-  }
-  fileManager.fetchFiles(1, pagination.value.page_size);
+  void router.push({
+    query: fileListingQuery(
+      {
+        ...parseFileListingQuery(route.query),
+        page: 1,
+        sortField: field,
+        sortDirection:
+          sortField.value === field
+            ? sortDirection.value === 'desc'
+              ? 'asc'
+              : 'desc'
+            : defaultDirectionByField[field],
+      },
+      route.query,
+    ),
+  });
 }
 
 const handlePageChange = (event: PageState) => {
-  fileManager.fetchFiles(event.page + 1, event.rows);
+  void router.push({
+    query: fileListingQuery(
+      {
+        ...parseFileListingQuery(route.query),
+        page: event.rows === pagination.value.page_size ? event.page + 1 : 1,
+        pageSize: event.rows,
+      },
+      route.query,
+    ),
+  });
 };
-
-function enterFolder(item: FileItem) {
-  if (item.type === 'folder') {
-    router.push(`/folder/${item.id}`);
-  }
-}
 
 function handleDownload() {
   if (previewItem.value) {
@@ -84,8 +96,12 @@ function handleDownload() {
   }
 }
 
-function previewFile(item: FileItem) {
+function openItem(item: FileItem) {
   if (!fileManager.canRead) {
+    return;
+  }
+  if (item.type === 'folder') {
+    void router.push(`/folder/${item.id}`);
     return;
   }
   if (!canPreviewFile(item)) {
@@ -128,12 +144,8 @@ watch(() => fileManager.currentFolder, closePreview);
     </div>
     <template v-else-if="presentation.loaded">
       <div class="space-y-6">
-        <FolderList v-if="folders.length > 0" :items="folders" @open="enterFolder" />
-        <div v-if="files.length" class="space-y-2 overflow-x-auto">
-          <div class="flex items-center justify-between">
-            <h3 class="text-sm font-semibold text-slate-700">Files</h3>
-          </div>
-          <table v-if="files.length > 0" class="file-table">
+        <div v-if="items.length" class="overflow-x-auto">
+          <table class="file-table" aria-label="Files and folders">
             <thead>
               <tr>
                 <th
@@ -198,20 +210,29 @@ watch(() => fileManager.currentFolder, closePreview);
               </tr>
             </thead>
             <tbody>
-              <FileListItem v-for="item in files" :key="item.id" :item @open="previewFile(item)" />
+              <FileListItem v-for="item in items" :key="item.id" :item @open="openItem(item)" />
             </tbody>
           </table>
         </div>
       </div>
     </template>
-    <template v-if="!fileManager.loading && !fileManager.error && pagination.total_items > 0">
-      <div class="flex items-center justify-between pt-3 border-t border-slate-200">
-        <div class="text-sm text-slate-600">
+    <template v-if="!fileManager.error && pagination.total_items > 0">
+      <div
+        class="flex flex-col gap-3 sm:flex-row items-center justify-between pt-3 border-t border-slate-200"
+      >
+        <div class="text-sm text-slate-600 whitespace-nowrap">
           Showing {{ (pagination.page - 1) * pagination.page_size + 1 }} to
           {{ Math.min(pagination.page * pagination.page_size, pagination.total_items) }} of
           {{ pagination.total_items }}
         </div>
         <Paginator
+          :template="{
+            '640px': 'PrevPageLink CurrentPageReport NextPageLink RowsPerPageDropdown',
+            default:
+              'FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink RowsPerPageDropdown',
+          }"
+          currentPageReportTemplate="Page {currentPage} of {totalPages}"
+          aria-label="File list pages"
           :alwaysShow="false"
           :first="first"
           :rows="pagination.page_size"
