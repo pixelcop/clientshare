@@ -1,5 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { mount } from '@vue/test-utils';
+import OpenVue from 'openvue/config';
+import { createPinia, setActivePinia } from 'pinia';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createMemoryHistory, createRouter } from 'vue-router';
 
+import Breadcrumb from '@/components/Breadcrumb.vue';
+import { useClientsStore } from '@/stores/clients';
+import { useFileManagerStore } from '@/stores/fileManager';
+import type { Client, FileItem } from '@/types/models';
 import { breadcrumbHiddenCount } from '@/utils/breadcrumb';
 
 describe('breadcrumb overflow', () => {
@@ -21,5 +29,52 @@ describe('breadcrumb overflow', () => {
     expect(breadcrumbHiddenCount([], 100, 40)).toBe(0);
     expect(breadcrumbHiddenCount([80, 80, 80], 140, 40)).toBe(2);
     expect(breadcrumbHiddenCount([80, 80, 80], 240, 40)).toBe(0);
+  });
+});
+
+describe('breadcrumb client location', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    useFileManagerStore().breadcrumbs = [{ id: 'root', filename: 'Root' } as FileItem];
+    const clients = useClientsStore();
+    clients.clients = [{ id: 'client', name: 'Acme', root_folder_id: 'root' } as Client];
+    clients.clientId = 'client';
+  });
+
+  async function render() {
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/folder/:folderId', component: { template: '<div />' } }],
+    });
+    await router.push('/folder/child');
+    const wrapper = mount(Breadcrumb, {
+      props: { heading: true },
+      global: { plugins: [router, OpenVue] },
+    });
+    return { wrapper, router };
+  }
+
+  it('shows a plain visible heading without a pill or Home control at the root', async () => {
+    const { wrapper } = await render();
+    expect(wrapper.get('h1').text()).toBe('Acme');
+    expect(wrapper.get('h1').classes()).not.toContain('sr-only');
+    expect(wrapper.find('.client-pill').exists()).toBe(false);
+    expect(wrapper.find('.oi-home').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('combines Home and the client name into one link to the root in a subfolder', async () => {
+    useFileManagerStore().breadcrumbs.push({ id: 'child', filename: 'Taxes' } as FileItem);
+    const { wrapper, router } = await render();
+    const pill = wrapper.get('a.client-pill');
+    expect(pill.text()).toBe('Acme');
+    expect(pill.find('.oi-home').exists()).toBe(true);
+    expect(pill.attributes('href')).toBe('/folder/root');
+    expect(wrapper.findAll('a')).toHaveLength(1);
+    expect(wrapper.get('h1').text()).toBe('Taxes');
+    expect(wrapper.get('h1').classes()).toContain('sr-only');
+    await pill.trigger('click');
+    await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/folder/root'));
+    wrapper.unmount();
   });
 });

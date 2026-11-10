@@ -79,30 +79,21 @@ onMounted(measure);
 
 <template>
   <nav ref="container" class="file-breadcrumb" aria-label="Folder path">
-    <h1 v-if="heading" class="sr-only">{{ crumbs.at(-1)?.label || clientName }}</h1>
-    <ol class="breadcrumb-list">
+    <h1 v-if="heading" :class="crumbs.length ? 'sr-only' : 'root-heading'">
+      {{ crumbs.at(-1)?.label || clientName }}
+    </h1>
+    <ol v-if="crumbs.length || !heading" class="breadcrumb-list">
       <li ref="root" class="breadcrumb-root" :class="{ 'root-only': !crumbs.length }">
-        <router-link
-          v-if="rootRoute"
-          :to="rootRoute"
-          class="home-link"
-          aria-label="Home"
-          title="Home"
-        >
-          <i class="oi oi-home" aria-hidden="true" />
-        </router-link>
-        <span v-else class="home-link"
-          ><i class="oi oi-home" aria-hidden="true" /><span class="sr-only">Home</span></span
-        >
         <router-link
           v-if="rootRoute && crumbs.length"
           :to="rootRoute"
           class="client-pill"
           :title="clientName"
         >
-          {{ clientName }}
+          <i class="oi oi-home" aria-hidden="true" />
+          <span class="client-label">{{ clientName }}</span>
         </router-link>
-        <span v-else class="client-pill" :title="clientName" aria-current="page">{{
+        <span v-else class="crumb-label" :title="clientName" aria-current="page">{{
           clientName
         }}</span>
       </li>
@@ -184,7 +175,12 @@ onMounted(measure);
 .root-only {
   max-width: 100%;
 }
-.home-link,
+.root-heading {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
 .overflow-button {
   display: inline-flex;
   align-items: center;
@@ -194,19 +190,27 @@ onMounted(measure);
   flex-shrink: 0;
   border-radius: 0.375rem;
 }
-.home-link {
-  font-size: 1.25rem;
-}
 .client-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 40px;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
   border: 1px solid var(--p-content-border-color);
   border-radius: 9999px;
   padding: 0.25rem 0.75rem;
   background: var(--p-content-hover-background);
   font-size: 0.875rem;
   font-weight: 500;
+}
+.client-pill > i {
+  flex-shrink: 0;
+  font-size: 1rem;
+}
+.client-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .breadcrumb-segment {
   display: inline-flex;
