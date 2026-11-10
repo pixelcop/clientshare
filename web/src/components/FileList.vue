@@ -2,6 +2,7 @@
 import '@/assets/file-rows.css';
 
 import type { PageState } from 'openvue';
+import type { MenuItem } from 'openvue/menuitem';
 import { storeToRefs } from 'pinia';
 
 import { useWorkspacePresentation } from '@/composables/useWorkspacePresentation';
@@ -15,7 +16,10 @@ import Dropzone from './Dropzone.vue';
 import FileListItem from './FileListItem.vue';
 import FilePreviewModal from './FilePreviewModal.vue';
 
-withDefaults(defineProps<{ canNotify?: boolean }>(), { canNotify: true });
+withDefaults(defineProps<{ canNotify?: boolean; compactActions?: MenuItem[] }>(), {
+  canNotify: true,
+  compactActions: () => [],
+});
 const emit = defineEmits<{ uploaded: [] }>();
 
 const router = useRouter();
@@ -120,7 +124,7 @@ watch(() => fileManager.currentFolder, closePreview);
 </script>
 
 <template>
-  <Dropzone :canNotify @uploaded="emit('uploaded')">
+  <Dropzone :canNotify :compactActions @uploaded="emit('uploaded')">
     <template #context><slot name="context" /></template>
     <template #actions><slot name="actions" /></template>
     <p v-if="fileManager.loading && !presentation.loaded" role="status" class="py-12 text-center">

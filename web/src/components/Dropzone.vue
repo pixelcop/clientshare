@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { useMediaQuery } from '@vueuse/core';
 import { Button, Dialog, InputText, ProgressBar, SplitButton } from 'openvue';
+import type { MenuItem } from 'openvue/menuitem';
 
 import { useUploadController } from '@/composables/useUploadController';
 import { useWorkspacePresentation } from '@/composables/useWorkspacePresentation';
@@ -8,7 +10,11 @@ import { useFileManagerStore } from '@/stores/fileManager';
 import NewFolderModal from './NewFolderModal.vue';
 import PendingEmail from './PendingEmail.vue';
 
-const props = withDefaults(defineProps<{ canNotify?: boolean }>(), { canNotify: true });
+const props = withDefaults(defineProps<{ canNotify?: boolean; compactActions?: MenuItem[] }>(), {
+  canNotify: true,
+  compactActions: () => [],
+});
+const compact = useMediaQuery('(max-width: 639px)');
 const emit = defineEmits<{ uploaded: [] }>();
 const fileManager = useFileManagerStore();
 const presentation = useWorkspacePresentation();
@@ -49,7 +55,20 @@ const {
     emit('uploaded');
   },
 });
-const uploadActions = [{ label: 'Upload folder', icon: 'oi oi-folder', command: chooseDirectory }];
+const uploadActions = computed<MenuItem[]>(() => [
+  { label: 'Upload folder', icon: 'oi oi-folder', command: chooseDirectory },
+  ...(compact.value
+    ? [
+        {
+          label: 'New folder',
+          icon: 'oi oi-folder-plus',
+          disabled: fileManager.loading || !fileManager.canWrite,
+          command: () => (showNewFolder.value = true),
+        },
+        ...props.compactActions,
+      ]
+    : []),
+]);
 const destination = computed(() => fileManager.context?.folder.filename || 'this folder');
 </script>
 
@@ -77,12 +96,14 @@ const destination = computed(() => fileManager.context?.folder.filename || 'this
           <SplitButton
             label="Upload"
             icon="oi oi-upload"
+            class="workspace-upload"
             :model="uploadActions"
             :disabled="busy || fileManager.loading || !fileManager.canWrite"
-            :menuButtonProps="{ 'aria-label': 'More upload actions' }"
+            :menuButtonProps="{ 'aria-label': 'More file actions' }"
             @click="onClick"
           />
           <Button
+            v-if="!compact"
             label="New folder"
             icon="oi oi-folder-plus"
             severity="secondary"
@@ -90,7 +111,7 @@ const destination = computed(() => fileManager.context?.folder.filename || 'this
             @click="showNewFolder = true"
           />
         </template>
-        <slot name="actions" />
+        <slot v-if="!compact || !presentation.canWrite" name="actions" />
         <PendingEmail
           v-if="fileManager.context?.client_id && (canManageEmailQueue || canToggleNotifications)"
           ref="pending"
@@ -220,6 +241,25 @@ const destination = computed(() => fileManager.context?.folder.filename || 'this
 }
 .workspace-actions :deep(button) {
   min-height: 44px;
+}
+@media (max-width: 639px) {
+  .file-workspace {
+    padding: 16px;
+  }
+  .workspace-context {
+    flex-basis: 100%;
+    flex-wrap: wrap;
+  }
+  .workspace-actions {
+    width: 100%;
+  }
+  .workspace-upload {
+    flex: 1;
+    min-width: 0;
+  }
+  .workspace-upload :deep(.p-splitbutton-button) {
+    flex: 1;
+  }
 }
 .workspace-content {
   position: relative;

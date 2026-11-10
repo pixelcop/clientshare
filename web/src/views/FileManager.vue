@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import axios from 'axios';
 import { Button } from 'openvue';
+import type { MenuItem } from 'openvue/menuitem';
 import { storeToRefs } from 'pinia';
 
 import Breadcrumb from '@/components/Breadcrumb.vue';
@@ -54,6 +55,21 @@ const canShareCurrent = computed(() =>
   isClientRoot.value ? canManageAccess.value : !!fileManager.context?.capabilities.can_share,
 );
 const canNotify = computed(() => user.value?.role !== 'customer');
+const compactActions = computed<MenuItem[]>(() =>
+  displayCanShare.value
+    ? [
+        {
+          label: displayIsClientRoot.value ? 'Share workspace' : 'Share folder',
+          icon: 'oi oi-users',
+          disabled: fileManager.loading || !canShareCurrent.value,
+          command: () => {
+            if (isClientRoot.value) showAccess.value = true;
+            else showFolderShare.value = true;
+          },
+        },
+      ]
+    : [],
+);
 
 let destinationVersion = 0;
 async function openDestination(id = folderId) {
@@ -105,7 +121,7 @@ onBeforeUnmount(() => {
       <p>{{ destinationError }}</p>
       <Button label="Try again" severity="secondary" @click="openDestination()" />
     </div>
-    <FileList v-else :canNotify>
+    <FileList v-else :canNotify :compactActions>
       <template #context>
         <Breadcrumb heading class="min-w-0 flex-1" />
         <ClientWorkspaceSwitcher :clientId="presentation.context?.client_id" />
