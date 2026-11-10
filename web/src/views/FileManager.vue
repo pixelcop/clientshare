@@ -8,7 +8,6 @@ import ClientAccessDialog from '@/components/ClientAccessDialog.vue';
 import ClientWorkspaceSwitcher from '@/components/ClientWorkspaceSwitcher.vue';
 import CollectionInvitation from '@/components/CollectionInvitation.vue';
 import FileList from '@/components/FileList.vue';
-import PendingEmail from '@/components/PendingEmail.vue';
 import SharingDialog from '@/components/SharingDialog.vue';
 import { useWorkspacePresentation } from '@/composables/useWorkspacePresentation';
 import { useClientsStore } from '@/stores/clients';
@@ -39,7 +38,6 @@ const { clientId } = storeToRefs(useClientsStore());
 
 const { user } = storeToRefs(useAuthStore());
 
-const pending = ref<InstanceType<typeof PendingEmail> | null>(null);
 const showAccess = ref(false);
 const showFolderShare = ref(false);
 const destinationError = ref('');
@@ -55,13 +53,6 @@ const canShareCurrent = computed(() =>
   isClientRoot.value ? canManageAccess.value : !!fileManager.context?.capabilities.can_share,
 );
 const canNotify = computed(() => user.value?.role !== 'customer');
-const canManageEmailQueue = computed(() => !!fileManager.context?.can_manage_queue);
-
-function handleUploaded() {
-  if (canManageEmailQueue.value && pending.value) {
-    pending.value.fetchPendingEmails();
-  }
-}
 
 let destinationVersion = 0;
 async function openDestination(id = folderId) {
@@ -116,7 +107,7 @@ onBeforeUnmount(() => {
       <p>{{ destinationError }}</p>
       <Button label="Try again" severity="secondary" @click="openDestination()" />
     </div>
-    <FileList v-else :canNotify @uploaded="handleUploaded">
+    <FileList v-else :canNotify>
       <template #actions>
         <Button
           v-if="displayCanShare"
@@ -127,7 +118,6 @@ onBeforeUnmount(() => {
           :disabled="fileManager.loading || !canShareCurrent"
           @click="isClientRoot ? (showAccess = true) : (showFolderShare = true)"
         />
-        <PendingEmail v-if="canManageEmailQueue && clientId" :clientId ref="pending" />
       </template>
       <template #empty>
         <CollectionInvitation v-if="clientId && canManageAccess" :clientId="clientId" compact />

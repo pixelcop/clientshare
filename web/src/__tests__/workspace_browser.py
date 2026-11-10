@@ -36,6 +36,9 @@ with sync_playwright() as p:
     client = response.json()
     root = client["root_folder_id"]
     page = admin.new_page()
+    # Exercise queue counts without enabling real delivery in the preview.
+    queued_emails = [{"id": "fixture-one"}, {"id": "fixture-two"}]
+    page.route("**/api/email/queue?*", lambda route: route.fulfill(json={"pending": queued_emails}))
     errors = []
     page.on("pageerror", lambda error: errors.append(str(error)))
     page.goto(base + f"/folder/{root}")
@@ -44,7 +47,7 @@ with sync_playwright() as p:
     upload = page.get_by_role("button", name="Upload", exact=True)
     before_y = upload.bounding_box()["y"]
     expect(page.get_by_role("button", name="New folder", exact=True)).to_be_visible()
-    page.get_by_role('button', name='Share', exact=True).click()
+    page.get_by_role('button', name='Share workspace', exact=True).click()
     access_dialog = page.get_by_role('dialog', name=f"Share workspace: {client['name']}")
     expect(access_dialog.get_by_text('Entire client workspace', exact=False)).to_be_visible()
     expect(access_dialog.get_by_label('Add people', exact=True)).to_be_visible()
@@ -52,12 +55,35 @@ with sync_playwright() as p:
     access_dialog.get_by_role('tab', name='Links', exact=True).click()
     expect(access_dialog.get_by_role('link', name='Manage links')).to_be_visible()
     page.keyboard.press('Escape')
-    page.get_by_role('button', name='Pending email', exact=True).click()
+    email_options = page.get_by_role('button', name='Email options', exact=False)
+    expect(email_options).to_be_visible()
+    expect(email_options).to_have_accessible_name('Email options, 2 pending')
+    assert email_options.bounding_box()['height'] == upload.bounding_box()['height']
+    assert email_options.bounding_box()['width'] >= 44
+    expect(page.get_by_text('Upload options', exact=False)).to_have_count(0)
+    email_options.click()
+    email_dropdown = page.get_by_role('dialog', name='Email options', exact=True)
+    expect(email_dropdown.get_by_role('button', name='Pending emails', exact=False)).to_be_visible()
+    expect(email_dropdown.locator('.pending-email-count')).to_have_text('2')
+    expect(email_dropdown.get_by_role('switch', name='Email notifications')).to_be_checked()
+    expect(email_dropdown.get_by_role('button', name='Pending emails', exact=False)).to_be_focused()
+    page.screenshot(path=str(output / 'workspace-email-menu-desktop.png'))
+    queued_emails = []
+    email_dropdown.get_by_role('button', name='Pending emails', exact=False).click()
     expect(page.get_by_role('dialog', name='Pending email for this client')).to_be_visible()
+    expect(page.get_by_text('No pending emails for this client.', exact=True)).to_be_visible()
+    expect(email_options).to_have_accessible_name('Email options, 0 pending')
     page.keyboard.press('Escape')
+    expect(page.get_by_role('dialog', name='Pending email for this client')).not_to_be_visible()
+    expect(email_dropdown).not_to_be_visible()
+    expect(email_options).to_be_focused()
     page.screenshot(path=str(output / "workspace-empty-desktop.png"), full_page=True)
-    page.locator('input[type="file"]:not([webkitdirectory])').set_input_files({"name": "report.txt", "mimeType": "text/plain", "buffer": b"Workspace browser fixture"})
+    queued_emails = [{"id": "fixture-after-upload"}]
+    with page.expect_request(lambda request: request.url.endswith('/upload')) as initial_upload:
+        page.locator('input[type="file"]:not([webkitdirectory])').set_input_files({"name": "report.txt", "mimeType": "text/plain", "buffer": b"Workspace browser fixture"})
+    assert b'name="notify"\r\n\r\ntrue' in initial_upload.value.post_data_buffer
     expect(page.get_by_text("report.txt", exact=True)).to_be_visible()
+    expect(email_options).to_have_accessible_name('Email options, 1 pending')
     expect(page.get_by_role("heading", name="No files yet", exact=True)).to_have_count(0)
     assert abs(upload.bounding_box()["y"] - before_y) < 2
     # Returning to the window must not recheck auth or clear the workspace,
@@ -71,15 +97,20 @@ with sync_playwright() as p:
     expect(page.get_by_text('report.txt', exact=True)).to_be_visible()
     expect(upload).to_be_enabled()
     assert page.evaluate("document.querySelector('#app').__vue_app__.config.globalProperties.$pinia._s.get('fileManager').currentFolder") == root
-    page.get_by_text("Upload options", exact=False).click()
-    page.get_by_role("checkbox", name="Notify by email after upload").uncheck()
+    email_options.click()
+    expect(page.get_by_role('dialog', name='Email options', exact=True).locator('.pending-email-count')).to_have_text('1')
+    page.get_by_role('switch', name='Email notifications').uncheck()
+    page.keyboard.press('Escape')
+    expect(email_options).to_be_focused()
     # A second selection retains duplicate resolution rather than overwriting.
     expect(upload).to_be_enabled()
     page.locator('input[type="file"]:not([webkitdirectory])').set_input_files({"name": "report.txt", "mimeType": "text/plain", "buffer": b"Renamed fixture"})
     dialog = page.get_by_role("dialog", name="Rename duplicate files")
     expect(dialog).to_be_visible()
     dialog.get_by_role("textbox").fill("renamed.txt")
-    dialog.get_by_role("button", name="Upload", exact=True).click()
+    with page.expect_request(lambda request: request.url.endswith('/upload')) as quiet_upload:
+        dialog.get_by_role("button", name="Upload", exact=True).click()
+    assert b'name="notify"\r\n\r\nfalse' in quiet_upload.value.post_data_buffer
     expect(page.get_by_text("renamed.txt", exact=True)).to_be_visible()
     expect(dialog).not_to_be_visible()
     # Internal/text drags do not trigger file upload; a real file drag does.
@@ -137,6 +168,13 @@ with sync_playwright() as p:
     touch_page = touch.new_page()
     touch_page.goto(base + f'/folder/{root}')
     touch_page.wait_for_load_state('networkidle')
+    touch_page.get_by_role('button', name='Email options', exact=False).click()
+    touch_email_dropdown = touch_page.get_by_role('dialog', name='Email options', exact=True)
+    expect(touch_email_dropdown.get_by_role('button', name='Pending emails', exact=False)).to_be_in_viewport()
+    expect(touch_email_dropdown.get_by_role('switch', name='Email notifications')).to_be_in_viewport()
+    touch_page.screenshot(path=str(output / 'workspace-email-menu-mobile.png'), full_page=True)
+    touch_page.keyboard.press('Escape')
+    expect(touch_email_dropdown).not_to_be_visible()
     expect(touch_page.get_by_role('button', name='Preview report.txt', exact=True)).to_be_visible()
     touch_page.get_by_role('button', name='More actions for report.txt', exact=True).click()
     expect(touch_page.get_by_role('menuitem', name='Download', exact=True)).to_be_visible()
