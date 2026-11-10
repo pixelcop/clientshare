@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { useResizeObserver } from '@vueuse/core';
 import { Menu } from 'openvue';
-import { storeToRefs } from 'pinia';
 
+import { useWorkspacePresentation } from '@/composables/useWorkspacePresentation';
 import { useAuthStore } from '@/stores/auth';
 import { useClientsStore } from '@/stores/clients';
 import { useFileManagerStore } from '@/stores/fileManager';
@@ -11,7 +11,10 @@ import type { FileItem } from '@/types/models';
 import { breadcrumbHiddenCount } from '@/utils/breadcrumb';
 
 const { file, heading = false } = defineProps<{ file?: FileItem; heading?: boolean }>();
-const { breadcrumbs, context } = storeToRefs(useFileManagerStore());
+const fileManager = useFileManagerStore();
+const presentation = useWorkspacePresentation();
+const breadcrumbs = computed(() => presentation.value.breadcrumbs);
+const context = computed(() => presentation.value.context);
 const clients = useClientsStore();
 const auth = useAuthStore();
 const publicLink = usePublicLinkStore();
@@ -78,7 +81,12 @@ onMounted(measure);
 </script>
 
 <template>
-  <nav ref="container" class="file-breadcrumb" aria-label="Folder path">
+  <nav
+    ref="container"
+    class="file-breadcrumb"
+    aria-label="Folder path"
+    :aria-busy="fileManager.loading"
+  >
     <h1 v-if="heading" :class="crumbs.length ? 'sr-only' : 'root-heading'">
       {{ crumbs.at(-1)?.label || clientName }}
     </h1>

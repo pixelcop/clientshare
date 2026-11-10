@@ -4,7 +4,9 @@ import OpenVue from 'openvue/config';
 import Menu from 'openvue/menu';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { nextTick } from 'vue';
 
+import ConfirmDeleteModal from '@/components/ConfirmDeleteModal.vue';
 import FileListItem from '@/components/FileListItem.vue';
 import FileRowActions from '@/components/FileRowActions.vue';
 import { useAuthStore } from '@/stores/auth';
@@ -54,6 +56,25 @@ describe('file row actions', () => {
     await wrapper.get('button[aria-label="Download archive.zip"]').trigger('click');
     expect(download).toHaveBeenCalledExactlyOnceWith(document);
     expect(wrapper.emitted('open')).toBeUndefined();
+    wrapper.unmount();
+  });
+
+  it('closes stale row dialogs when navigation starts while the row remains displayed', async () => {
+    const store = useFileManagerStore();
+    const wrapper = mount(FileRowActions, {
+      props: { item },
+      global: { plugins: [OpenVue], stubs: { ConfirmDeleteModal: true } },
+    });
+    const deleteAction = wrapper
+      .findComponent(Menu)
+      .props('model')!
+      .find((action) => action.label === 'Delete')!;
+    deleteAction.command?.({ originalEvent: new Event('click'), item: deleteAction });
+    await nextTick();
+    expect(wrapper.findComponent(ConfirmDeleteModal).exists()).toBe(true);
+    store.loading = true;
+    await nextTick();
+    expect(wrapper.findComponent(ConfirmDeleteModal).exists()).toBe(false);
     wrapper.unmount();
   });
 

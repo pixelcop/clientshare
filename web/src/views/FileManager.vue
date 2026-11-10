@@ -10,6 +10,7 @@ import CollectionInvitation from '@/components/CollectionInvitation.vue';
 import FileList from '@/components/FileList.vue';
 import PendingEmail from '@/components/PendingEmail.vue';
 import SharingDialog from '@/components/SharingDialog.vue';
+import { useWorkspacePresentation } from '@/composables/useWorkspacePresentation';
 import { useClientsStore } from '@/stores/clients';
 
 import { useAuthStore } from '../stores/auth';
@@ -19,6 +20,21 @@ const { folderId } = defineProps<{ folderId?: string }>();
 const router = useRouter();
 
 const fileManager = useFileManagerStore();
+const presentation = useWorkspacePresentation();
+const displayIsClientRoot = computed(() => {
+  const context = presentation.value.context;
+  return (
+    !!context &&
+    Object.values(context.client_capabilities).some(Boolean) &&
+    context.folder.id === context.root_folder_id
+  );
+});
+const displayCanShare = computed(() => {
+  const context = presentation.value.context;
+  return displayIsClientRoot.value
+    ? !!context?.client_capabilities.can_share
+    : !!context?.capabilities.can_share;
+});
 const { clientId } = storeToRefs(useClientsStore());
 
 const { user } = storeToRefs(useAuthStore());
@@ -92,7 +108,7 @@ onBeforeUnmount(() => {
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center mb-4">
       <Breadcrumb heading class="min-w-0 flex-1" />
       <div class="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-        <ClientWorkspaceSwitcher :clientId="fileManager.context?.client_id" />
+        <ClientWorkspaceSwitcher :clientId="presentation.context?.client_id" />
       </div>
     </div>
 
@@ -103,11 +119,12 @@ onBeforeUnmount(() => {
     <FileList v-else :canNotify @uploaded="handleUploaded">
       <template #actions>
         <Button
-          v-if="canShareCurrent && fileManager.context"
+          v-if="displayCanShare"
           :id="`collect-links-${clientId}`"
-          :label="isClientRoot ? 'Share workspace' : 'Share folder'"
+          :label="displayIsClientRoot ? 'Share workspace' : 'Share folder'"
           icon="oi oi-users"
           severity="secondary"
+          :disabled="fileManager.loading || !canShareCurrent"
           @click="isClientRoot ? (showAccess = true) : (showFolderShare = true)"
         />
         <PendingEmail v-if="canManageEmailQueue && clientId" :clientId ref="pending" />

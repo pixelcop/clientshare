@@ -2,7 +2,9 @@ import { flushPromises } from '@vue/test-utils';
 import axios from 'axios';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { effectScope, nextTick } from 'vue';
 
+import { useWorkspacePresentation } from '@/composables/useWorkspacePresentation';
 import { useAuthStore } from '@/stores/auth';
 import { useFileManagerStore } from '@/stores/fileManager';
 import type { FileItem, User } from '@/types/models';
@@ -52,6 +54,87 @@ describe('workspace listing state', () => {
     expect(store.clientId).toBe('client-empty');
     expect(store.isEmpty).toBe(true);
   });
+
+  it('retains the settled view during navigation without retaining authority to mutate it', async () => {
+    const store = useFileManagerStore();
+    await store.changeFolder('old');
+    await flushPromises();
+    store.files = [{ ...folder('document'), type: 'file' }];
+    const scope = effectScope();
+    const presentation = scope.run(useWorkspacePresentation)!;
+    let finish!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    vi.mocked(axios.get).mockImplementation(async (url, config) => {
+      await pending;
+      return response(String(url), config);
+    });
+    const post = vi.spyOn(axios, 'post');
+
+    await store.changeFolder('new');
+    await nextTick();
+    expect(store.context).toBeNull();
+    expect(store.breadcrumbs).toEqual([]);
+    expect(store.canWrite).toBe(false);
+    expect(presentation.value.context?.folder.id).toBe('old');
+    expect(presentation.value.files[0].id).toBe('document');
+    expect(presentation.value.breadcrumbs[0].id).toBe('old');
+    expect(await store.createFolder('Not allowed')).toBeNull();
+    expect(post).not.toHaveBeenCalled();
+
+    finish();
+    await flushPromises();
+    expect(presentation.value.context?.folder.id).toBe('new');
+    expect(presentation.value.breadcrumbs[0].id).toBe('new');
+    expect(presentation.value.files).toEqual([]);
+    scope.stop();
+  });
+
+  it('discards the presentation after a failed destination request', async () => {
+    const store = useFileManagerStore();
+    await store.changeFolder('old');
+    await flushPromises();
+    const scope = effectScope();
+    const presentation = scope.run(useWorkspacePresentation)!;
+    vi.mocked(axios.get).mockRejectedValue(new Error('Access revoked'));
+    await store.changeFolder('denied');
+    await flushPromises();
+    expect(presentation.value.context).toBeNull();
+    expect(presentation.value.breadcrumbs).toEqual([]);
+    expect(presentation.value.loaded).toBe(false);
+    scope.stop();
+  });
+
+  it.each(['id', 'tenant_id', 'role', 'session_id', 'link_id'])(
+    'immediately clears the presentation when %s changes during a pending navigation',
+    async (field) => {
+      const store = useFileManagerStore();
+      await store.changeFolder('old');
+      await flushPromises();
+      const scope = effectScope();
+      const presentation = scope.run(useWorkspacePresentation)!;
+      let finish!: () => void;
+      const pending = new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      vi.mocked(axios.get).mockImplementation(async (url, config) => {
+        await pending;
+        return response(String(url), config);
+      });
+      await store.changeFolder('new');
+      await nextTick();
+      expect(presentation.value.context?.folder.id).toBe('old');
+      const auth = useAuthStore();
+      auth.user = { ...auth.user!, [field]: 'changed' };
+      expect(presentation.value.context).toBeNull();
+      expect(presentation.value.breadcrumbs).toEqual([]);
+      finish();
+      await flushPromises();
+      expect(presentation.value.context).toBeNull();
+      scope.stop();
+    },
+  );
 
   it('preserves the workspace when auth/me refreshes the same signed-in identity', async () => {
     const auth = useAuthStore();

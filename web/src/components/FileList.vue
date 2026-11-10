@@ -4,6 +4,7 @@ import '@/assets/file-rows.css';
 import type { PageState } from 'openvue';
 import { storeToRefs } from 'pinia';
 
+import { useWorkspacePresentation } from '@/composables/useWorkspacePresentation';
 import type { FileSortField } from '@/stores/fileManager';
 import { useFileManagerStore } from '@/stores/fileManager';
 import type { FileItem } from '@/types/models';
@@ -19,17 +20,15 @@ const emit = defineEmits<{ uploaded: [] }>();
 
 const router = useRouter();
 const fileManager = useFileManagerStore();
-const {
-  files,
-  folders,
-  pagination,
-  sortField,
-  sortDirection,
-  canWrite,
-  canRead,
-  context,
-  isEmpty,
-} = storeToRefs(fileManager);
+const { sortField, sortDirection } = storeToRefs(fileManager);
+const presentation = useWorkspacePresentation();
+const files = computed(() => presentation.value.files);
+const folders = computed(() => presentation.value.folders);
+const pagination = computed(() => presentation.value.pagination);
+const canWrite = computed(() => presentation.value.canWrite);
+const canRead = computed(() => presentation.value.canRead);
+const context = computed(() => presentation.value.context);
+const isEmpty = computed(() => presentation.value.isEmpty);
 const showPreview = ref(false);
 const previewItem = ref<FileItem | null>(null);
 const pageSizeOptions = [10, 20, 50];
@@ -101,6 +100,7 @@ function closePreview() {
   showPreview.value = false;
   previewItem.value = null;
 }
+watch(() => fileManager.currentFolder, closePreview);
 </script>
 
 <template>
@@ -109,13 +109,15 @@ function closePreview() {
       <h2 id="collect-files" tabindex="-1" class="text-base font-semibold">Files</h2>
     </template>
     <template #actions><slot name="actions" /></template>
-    <p v-if="fileManager.loading" role="status" class="py-12 text-center">Loading files…</p>
+    <p v-if="fileManager.loading && !presentation.loaded" role="status" class="py-12 text-center">
+      Loading files…
+    </p>
     <div v-else-if="fileManager.error" role="alert" class="py-8 space-y-3">
       <p>{{ fileManager.error }}</p>
       <Button label="Try again" severity="secondary" @click="fileManager.fetchFiles()" />
     </div>
     <div
-      v-else-if="isEmpty || (fileManager.loaded && !canRead && canWrite)"
+      v-else-if="isEmpty || (presentation.loaded && !canRead && canWrite)"
       class="workspace-empty"
     >
       <i class="oi oi-folder" aria-hidden="true" />
@@ -124,7 +126,7 @@ function closePreview() {
       <p v-else>Files will appear here when they’re added.</p>
       <slot v-if="canRead && isEmpty" name="empty" />
     </div>
-    <template v-else-if="fileManager.loaded">
+    <template v-else-if="presentation.loaded">
       <div class="space-y-6">
         <FolderList v-if="folders.length > 0" :items="folders" @open="enterFolder" />
         <div v-if="files.length" class="space-y-2 overflow-x-auto">

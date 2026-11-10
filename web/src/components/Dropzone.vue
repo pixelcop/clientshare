@@ -2,6 +2,7 @@
 import { Button, Dialog, InputText, ProgressBar, SplitButton } from 'openvue';
 
 import { useUploadController } from '@/composables/useUploadController';
+import { useWorkspacePresentation } from '@/composables/useWorkspacePresentation';
 import { useFileManagerStore } from '@/stores/fileManager';
 
 import NewFolderModal from './NewFolderModal.vue';
@@ -9,6 +10,7 @@ import NewFolderModal from './NewFolderModal.vue';
 const props = withDefaults(defineProps<{ canNotify?: boolean }>(), { canNotify: true });
 const emit = defineEmits<{ uploaded: [] }>();
 const fileManager = useFileManagerStore();
+const presentation = useWorkspacePresentation();
 const notifyClient = ref(true);
 const showNewFolder = ref(false);
 const {
@@ -54,14 +56,22 @@ const destination = computed(() => fileManager.context?.folder.filename || 'this
     @drop="onDrop"
   >
     <div class="workspace-toolbar">
-      <div class="workspace-context"><slot name="context" /></div>
+      <div class="workspace-context">
+        <slot name="context" />
+        <span
+          v-if="fileManager.loading && presentation.loaded"
+          class="workspace-status"
+          role="status"
+          >Loading…</span
+        >
+      </div>
       <div class="workspace-actions">
-        <template v-if="fileManager.canWrite">
+        <template v-if="presentation.canWrite">
           <SplitButton
             label="Upload"
             icon="oi oi-upload"
             :model="uploadActions"
-            :disabled="busy || !fileManager.context"
+            :disabled="busy || fileManager.loading || !fileManager.canWrite"
             :menuButtonProps="{ 'aria-label': 'More upload actions' }"
             @click="onClick"
           />
@@ -69,14 +79,18 @@ const destination = computed(() => fileManager.context?.folder.filename || 'this
             label="New folder"
             icon="oi oi-folder-plus"
             severity="secondary"
-            :disabled="!fileManager.context"
+            :disabled="fileManager.loading || !fileManager.canWrite"
             @click="showNewFolder = true"
           />
         </template>
         <slot name="actions" />
       </div>
     </div>
-    <div v-if="props.canNotify && fileManager.canWrite" class="upload-options">
+    <div
+      v-if="props.canNotify && presentation.canWrite"
+      class="upload-options"
+      :inert="fileManager.loading"
+    >
       <details>
         <summary>Upload options · Email notifications {{ notifyClient ? 'on' : 'off' }}</summary>
         <label class="upload-notification">
@@ -119,7 +133,7 @@ const destination = computed(() => fileManager.context?.folder.filename || 'this
       <ProgressBar :value="uploadProgress" :showValue="false" aria-label="Upload progress" />
     </div>
     <p v-if="uploadError" class="upload-error" role="alert">{{ uploadError }}</p>
-    <div class="workspace-content">
+    <div class="workspace-content" :aria-busy="fileManager.loading" :inert="fileManager.loading">
       <slot />
       <div v-if="dragging" class="upload-highlight" aria-live="polite">
         <i class="oi oi-upload" aria-hidden="true" />
@@ -187,8 +201,15 @@ const destination = computed(() => fileManager.context?.folder.filename || 'this
   gap: 12px;
 }
 .workspace-context {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   min-width: 0;
   flex: 1 1 180px;
+}
+.workspace-status {
+  color: var(--p-text-muted-color);
+  font-size: 12px;
 }
 .workspace-actions {
   flex-wrap: wrap;
@@ -200,6 +221,10 @@ const destination = computed(() => fileManager.context?.folder.filename || 'this
   position: relative;
   margin-top: 16px;
   min-height: 180px;
+  transition: opacity 160ms ease-out;
+}
+.workspace-content[aria-busy='true'] {
+  opacity: 0.6;
 }
 .upload-options {
   margin-top: 8px;

@@ -90,6 +90,16 @@ const actions = computed<MenuItem[]>(() => {
   }
   return result;
 });
+watch(
+  () => fileManager.loading,
+  (loading) => {
+    if (loading) {
+      menu.value?.hide();
+      showDelete.value = false;
+      showShare.value = false;
+    }
+  },
+);
 </script>
 
 <template>
