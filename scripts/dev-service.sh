@@ -41,6 +41,13 @@ case "$1" in
     export SERVER_BASE_URL="$(cat data/devcraft/api.url)"
     export DOCS_URL="/docs/"
     export EMAIL_ENABLED="${EMAIL_ENABLED:-false}"
+    # Explicit worktree-local opt-ins override Devcraft's shared defaults.
+    # This shell environment file is ignored by Git; never copy it to previews.
+    if [[ -f .env.devcraft ]]; then
+      set -a
+      source .env.devcraft
+      set +a
+    fi
     make migrate
     go run ./cmd/devpreview
     exec make run
