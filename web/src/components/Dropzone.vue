@@ -6,12 +6,16 @@ import { useWorkspacePresentation } from '@/composables/useWorkspacePresentation
 import { useFileManagerStore } from '@/stores/fileManager';
 
 import NewFolderModal from './NewFolderModal.vue';
+import PendingEmail from './PendingEmail.vue';
 
 const props = withDefaults(defineProps<{ canNotify?: boolean }>(), { canNotify: true });
 const emit = defineEmits<{ uploaded: [] }>();
 const fileManager = useFileManagerStore();
 const presentation = useWorkspacePresentation();
 const notifyClient = ref(true);
+const pending = ref<InstanceType<typeof PendingEmail> | null>(null);
+const canManageEmailQueue = computed(() => !!fileManager.context?.can_manage_queue);
+const canToggleNotifications = computed(() => props.canNotify && presentation.value.canWrite);
 const showNewFolder = ref(false);
 const {
   fileInput,
@@ -40,7 +44,10 @@ const {
 } = useUploadController({
   canNotify: () => props.canNotify,
   notifyClient: () => notifyClient.value,
-  onUploaded: () => emit('uploaded'),
+  onUploaded: () => {
+    void pending.value?.fetchPendingEmails();
+    emit('uploaded');
+  },
 });
 const uploadActions = [{ label: 'Upload folder', icon: 'oi oi-folder', command: chooseDirectory }];
 const destination = computed(() => fileManager.context?.folder.filename || 'this folder');
@@ -84,20 +91,17 @@ const destination = computed(() => fileManager.context?.folder.filename || 'this
           />
         </template>
         <slot name="actions" />
+        <PendingEmail
+          v-if="fileManager.context?.client_id && (canManageEmailQueue || canToggleNotifications)"
+          ref="pending"
+          v-model:notificationsEnabled="notifyClient"
+          :clientId="fileManager.context.client_id"
+          :canManageQueue="canManageEmailQueue"
+          :canNotify="canToggleNotifications"
+          :disabled="fileManager.loading"
+          :notificationsDisabled="busy"
+        />
       </div>
-    </div>
-    <div
-      v-if="props.canNotify && presentation.canWrite"
-      class="upload-options"
-      :inert="fileManager.loading"
-    >
-      <details>
-        <summary>Upload options · Email notifications {{ notifyClient ? 'on' : 'off' }}</summary>
-        <label class="upload-notification">
-          <input v-model="notifyClient" type="checkbox" :disabled="busy" />
-          Notify by email after upload
-        </label>
-      </details>
     </div>
     <input
       v-if="fileManager.canWrite"
@@ -225,21 +229,6 @@ const destination = computed(() => fileManager.context?.folder.filename || 'this
 }
 .workspace-content[aria-busy='true'] {
   opacity: 0.6;
-}
-.upload-options {
-  margin-top: 8px;
-  font-size: 12px;
-  color: var(--p-text-muted-color);
-}
-.upload-options summary {
-  cursor: pointer;
-  padding-block: 8px;
-}
-.upload-notification {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 44px;
 }
 .upload-progress {
   margin-top: 16px;

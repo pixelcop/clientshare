@@ -28,7 +28,7 @@ Do not assume uploading another file with the same name silently replaces the ol
 
 ## Email notifications
 
-Where the notification option is available, enable it before uploading if you want the client notified. Upload emails may be grouped and queued instead of arriving immediately. Staff can review [pending email notifications](../activity/email-notifications.md).
+Where the notification option is available, open the mail button beside the upload actions and enable **Email notifications** before uploading if you want the client notified. Upload emails may be grouped and queued instead of arriving immediately. Staff can review [pending email notifications](../activity/email-notifications.md) from the same dropdown.
 
 ## If the upload fails
 

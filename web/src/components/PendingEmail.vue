@@ -1,19 +1,48 @@
 <script setup lang="ts">
 import axios from 'axios';
-import { Button, Dialog, InputText } from 'openvue';
+import { Button, Dialog, InputText, Popover, ToggleSwitch } from 'openvue';
 import { storeToRefs } from 'pinia';
 
 import { useAuthStore } from '@/stores/auth';
 import type { QueuedEmail } from '@/types/models';
 import { formatDate, formatDateNatural } from '@/types/util';
 
-const { clientId } = defineProps<{ clientId: string }>();
+const {
+  clientId,
+  canManageQueue,
+  canNotify = false,
+  disabled = false,
+  notificationsDisabled = false,
+} = defineProps<{
+  clientId: string;
+  canManageQueue: boolean;
+  canNotify?: boolean;
+  disabled?: boolean;
+  notificationsDisabled?: boolean;
+}>();
+const notificationsEnabled = defineModel<boolean>('notificationsEnabled', { default: true });
+const emailOptions = ref<InstanceType<typeof Popover> | null>(null);
+const notificationId = useId();
+let emailTrigger: HTMLElement | null = null;
+
+function toggleEmailOptions(event: MouseEvent) {
+  emailTrigger = event.currentTarget as HTMLElement;
+  emailOptions.value?.toggle(event);
+}
 
 const { user } = storeToRefs(useAuthStore());
 
 const showPending = ref(false);
 
-const canManageEmailQueue = computed(() => ['admin', 'manager'].includes(user.value?.role ?? ''));
+const canManageEmailQueue = computed(
+  () => canManageQueue && ['admin', 'manager'].includes(user.value?.role ?? ''),
+);
+
+function openPendingEmails() {
+  emailOptions.value?.hide();
+  showPending.value = true;
+  void fetchPendingEmails();
+}
 
 const pendingEmails = ref<QueuedEmail[]>([]);
 const pendingCount = computed(() => pendingEmails.value.length);
@@ -75,16 +104,22 @@ async function fetchPendingEmails() {
     const res = await axios.get('/api/email/queue', {
       params: { client_id: clientId },
     });
-    if (version === requestVersion) {pendingEmails.value = res.data?.pending ?? [];}
+    if (version === requestVersion) {
+      pendingEmails.value = res.data?.pending ?? [];
+    }
   } catch (err) {
-    if (version !== requestVersion) {return;}
+    if (version !== requestVersion) {
+      return;
+    }
     if (axios.isAxiosError(err)) {
       pendingError.value = err.response?.data?.error || 'Failed to load pending emails.';
     } else {
       pendingError.value = 'Failed to load pending emails.';
     }
   } finally {
-    if (version === requestVersion) {pendingLoading.value = false;}
+    if (version === requestVersion) {
+      pendingLoading.value = false;
+    }
   }
 }
 
@@ -97,11 +132,12 @@ const timeLeft = computed(() => {
 });
 
 watch(
-  () => clientId,
+  () => [clientId, canManageEmailQueue.value],
   () => {
     requestVersion += 1;
     pendingEmails.value = [];
     showPending.value = false;
+    emailOptions.value?.hide();
     void fetchPendingEmails();
   },
   { immediate: true },
@@ -112,14 +148,42 @@ defineExpose({ fetchPendingEmails });
 
 <template>
   <Button
-    v-if="canManageEmailQueue"
-    label="Pending email"
+    v-if="canManageEmailQueue || canNotify"
+    type="button"
     icon="oi oi-envelope"
     severity="secondary"
-    variant="text"
+    class="email-options-button"
+    :aria-label="canManageEmailQueue ? `Email options, ${pendingCount} pending` : 'Email options'"
+    :disabled
     :badge="pendingCount ? String(pendingCount) : undefined"
-    @click="showPending = true"
+    @click="toggleEmailOptions"
   />
+
+  <Popover ref="emailOptions" aria-label="Email options">
+    <div class="email-options">
+      <Button
+        v-if="canManageEmailQueue"
+        type="button"
+        autofocus
+        severity="secondary"
+        variant="text"
+        class="pending-email-action"
+        @click="openPendingEmails"
+      >
+        <i class="oi oi-envelope" aria-hidden="true" />
+        <span>Pending emails</span>
+        <span class="pending-email-count">{{ pendingCount }}</span>
+      </Button>
+      <div v-if="canNotify" class="notification-option">
+        <label :for="notificationId">Email notifications</label>
+        <ToggleSwitch
+          v-model="notificationsEnabled"
+          :inputId="notificationId"
+          :disabled="notificationsDisabled || disabled"
+        />
+      </div>
+    </div>
+  </Popover>
 
   <Dialog
     v-model:visible="showPending"
@@ -129,6 +193,7 @@ defineExpose({ fetchPendingEmails });
     blockScroll
     aria-label="Pending email for this client"
     class="shadow w-[calc(100%-2rem)] max-w-4xl"
+    @after-hide="emailTrigger?.focus()"
   >
     <template #header>
       <div class="flex flex-row items-stretch w-full">
@@ -203,3 +268,41 @@ defineExpose({ fetchPendingEmails });
     </div>
   </Dialog>
 </template>
+
+<style scoped>
+.email-options-button {
+  min-width: 44px;
+  min-height: 44px;
+  font-variant-numeric: tabular-nums;
+}
+.email-options {
+  min-width: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.pending-email-action,
+.notification-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 8px 12px;
+  font-size: 14px;
+}
+.pending-email-action {
+  justify-content: flex-start;
+  width: 100%;
+}
+.pending-email-count {
+  margin-left: auto;
+  color: var(--p-text-muted-color);
+  font-variant-numeric: tabular-nums;
+}
+.notification-option {
+  justify-content: space-between;
+}
+.notification-option label {
+  cursor: pointer;
+}
+</style>
