@@ -74,11 +74,12 @@ export function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleString();
 }
 
-export function formatDateNatural(dateStr: string) {
+export function formatDateNatural(dateStr: string | Date) {
   if (!dateStr) {
     return '-';
   }
-  return formatTimeAgoIntl(new Date(dateStr), {
+  const d = typeof dateStr === 'string' ? new Date(dateStr) : dateStr;
+  return formatTimeAgoIntl(d, {
     insertSpace: false,
     relativeTimeFormatOptions: { style: 'narrow', numeric: 'auto' },
   });

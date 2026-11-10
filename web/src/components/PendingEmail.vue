@@ -1,12 +1,11 @@
 <script setup lang="ts">
 import axios from 'axios';
-import { formatDistance } from 'date-fns';
 import { Button, Dialog, InputText } from 'openvue';
 import { storeToRefs } from 'pinia';
 
 import { useAuthStore } from '@/stores/auth';
 import type { QueuedEmail } from '@/types/models';
-import { formatDate } from '@/types/util';
+import { formatDate, formatDateNatural } from '@/types/util';
 
 const { clientId } = defineProps<{ clientId: string }>();
 
@@ -94,7 +93,7 @@ const timeLeft = computed(() => {
     return '15 minutes';
   }
   const scheduledFor = new Date(pendingEmails.value[0].scheduled_for);
-  return formatDistance(scheduledFor, new Date(), { addSuffix: true });
+  return formatDateNatural(scheduledFor);
 });
 
 watch(
