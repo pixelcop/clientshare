@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import axios from 'axios';
 
+import Breadcrumb from '@/components/Breadcrumb.vue';
 import FileList from '@/components/FileList.vue';
 import PublicLinkSignup from '@/components/PublicLinkSignup.vue';
 import { useAuthStore } from '@/stores/auth';
@@ -14,14 +15,6 @@ const publicLink = usePublicLinkStore();
 const fileManager = useFileManagerStore();
 const auth = useAuthStore();
 
-const clientName = computed(
-  () =>
-    publicLink.target?.filename ||
-    publicLink.client?.name ||
-    fileManager.context?.client_name ||
-    fileManager.context?.folder.filename ||
-    'Shared files',
-);
 const accessType = computed(() => publicLink.link?.access_type || auth.user?.access_type || 'read');
 
 const accessLabel = computed(() => {
@@ -94,11 +87,8 @@ watch(
   <div class="space-y-6">
     <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
       <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <h1 class="text-2xl font-semibold text-slate-900">{{ clientName }}</h1>
-          <p class="text-sm text-slate-500">Secure link access</p>
-        </div>
-        <div class="flex items-center gap-3">
+        <Breadcrumb heading class="min-w-0 flex-1" />
+        <div class="flex shrink-0 items-center gap-3">
           <span
             class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium"
             :class="

@@ -3,6 +3,7 @@ import axios from 'axios';
 import { Button } from 'openvue';
 import { storeToRefs } from 'pinia';
 
+import Breadcrumb from '@/components/Breadcrumb.vue';
 import ClientAccessDialog from '@/components/ClientAccessDialog.vue';
 import ClientWorkspaceSwitcher from '@/components/ClientWorkspaceSwitcher.vue';
 import CollectionInvitation from '@/components/CollectionInvitation.vue';
@@ -88,22 +89,8 @@ onBeforeUnmount(() => {
 
 <template>
   <div>
-    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-      <div class="min-w-0">
-        <h1 class="text-2xl md:text-[28px] font-semibold min-w-0 break-words">
-          {{
-            (isClientRoot
-              ? fileManager.context?.client_name
-              : fileManager.context?.folder.filename) || 'File Manager'
-          }}
-        </h1>
-        <p v-if="fileManager.context" class="workspace-context">
-          {{ isClientRoot ? 'Client workspace' : 'Folder' }}
-          <template v-if="!isClientRoot && fileManager.context.client_name">
-            · {{ fileManager.context.client_name }}
-          </template>
-        </p>
-      </div>
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-center mb-4">
+      <Breadcrumb heading class="min-w-0 flex-1" />
       <div class="flex flex-wrap items-center gap-3 w-full sm:w-auto">
         <ClientWorkspaceSwitcher :clientId="fileManager.context?.client_id" />
       </div>
@@ -151,11 +138,6 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.workspace-context {
-  color: var(--p-text-muted-color);
-  font-size: 14px;
-  margin-top: 4px;
-}
 table {
   border-collapse: collapse;
   background-color: var(--p-dialog-background);

@@ -9,7 +9,6 @@ import { useFileManagerStore } from '@/stores/fileManager';
 import type { FileItem } from '@/types/models';
 import { canPreviewFile, getFileType, getFileURL } from '@/types/util';
 
-import Breadcrumb from './Breadcrumb.vue';
 import Dropzone from './Dropzone.vue';
 import FileListItem from './FileListItem.vue';
 import FilePreviewModal from './FilePreviewModal.vue';
@@ -23,7 +22,6 @@ const fileManager = useFileManagerStore();
 const {
   files,
   folders,
-  breadcrumbs,
   pagination,
   sortField,
   sortDirection,
@@ -108,8 +106,7 @@ function closePreview() {
 <template>
   <Dropzone :canNotify @uploaded="emit('uploaded')">
     <template #context>
-      <Breadcrumb v-if="breadcrumbs.length > 1" />
-      <h2 v-else id="collect-files" tabindex="-1" class="text-base font-semibold">Files</h2>
+      <h2 id="collect-files" tabindex="-1" class="text-base font-semibold">Files</h2>
     </template>
     <template #actions><slot name="actions" /></template>
     <p v-if="fileManager.loading" role="status" class="py-12 text-center">Loading files…</p>
