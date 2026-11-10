@@ -45,7 +45,7 @@ with sync_playwright() as p:
     before_y = upload.bounding_box()["y"]
     expect(page.get_by_role("button", name="New folder", exact=True)).to_be_visible()
     page.get_by_role('button', name='Share', exact=True).click()
-    access_dialog = page.get_by_role('dialog', name=f"Share: {client['name']}")
+    access_dialog = page.get_by_role('dialog', name=f"Share workspace: {client['name']}")
     expect(access_dialog.get_by_text('Entire client workspace', exact=False)).to_be_visible()
     expect(access_dialog.get_by_label('Add people', exact=True)).to_be_visible()
     expect(access_dialog.get_by_role('link', name='Manage people')).to_have_count(0)

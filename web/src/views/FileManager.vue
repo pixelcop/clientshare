@@ -106,21 +106,6 @@ onBeforeUnmount(() => {
       </div>
       <div class="flex flex-wrap items-center gap-3 w-full sm:w-auto">
         <ClientWorkspaceSwitcher :clientId="fileManager.context?.client_id" />
-        <Button
-          v-if="!isClientRoot && canManageAccess && clientId"
-          label="Share client"
-          severity="secondary"
-          variant="text"
-          @click="showAccess = true"
-        />
-        <Button
-          v-if="canShareCurrent && fileManager.context"
-          :id="`collect-links-${clientId}`"
-          label="Share"
-          icon="oi oi-users"
-          severity="secondary"
-          @click="isClientRoot ? (showAccess = true) : (showFolderShare = true)"
-        />
       </div>
     </div>
 
@@ -130,6 +115,14 @@ onBeforeUnmount(() => {
     </div>
     <FileList v-else :canNotify @uploaded="handleUploaded">
       <template #actions>
+        <Button
+          v-if="canShareCurrent && fileManager.context"
+          :id="`collect-links-${clientId}`"
+          :label="isClientRoot ? 'Share workspace' : 'Share folder'"
+          icon="oi oi-users"
+          severity="secondary"
+          @click="isClientRoot ? (showAccess = true) : (showFolderShare = true)"
+        />
         <PendingEmail v-if="canManageEmailQueue && clientId" :clientId ref="pending" />
       </template>
       <template #empty>

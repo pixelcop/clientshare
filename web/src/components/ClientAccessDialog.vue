@@ -11,8 +11,8 @@ const composing = ref(false);
 <template>
   <Dialog
     :visible="visible"
-    :header="`Share: ${clientName}`"
-    :aria-label="`Share: ${clientName}`"
+    :header="`Share workspace: ${clientName}`"
+    :aria-label="`Share workspace: ${clientName}`"
     modal
     blockScroll
     :draggable="false"

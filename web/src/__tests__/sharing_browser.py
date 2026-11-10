@@ -61,6 +61,8 @@ def login(context, account):
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=True, channel="chrome")
     admin = browser.new_context(viewport={"width": 1280, "height": 900}, reduced_motion="reduce")
+    # Keep delivery tests deterministic and prevent outbound invitation emails from this suite.
+    admin.route("**/api/invitations/*/email", lambda route: route.fulfill(status=503, json={"error": "Email is unavailable"}))
     login(admin, accounts["admin"])
     response = admin.request.post(base + "/api/clients", data={"name": f"Private client {run}"})
     assert response.status == 201, response.text()
@@ -81,13 +83,15 @@ with sync_playwright() as p:
     page.on("pageerror", lambda error: errors.append(str(error)))
     page.goto(base + f"/folder/{root}")
     page.wait_for_load_state("networkidle")
-    expect(page.get_by_role("button", name="Share", exact=True)).to_be_visible()
+    expect(page.locator('.workspace-actions').get_by_role("button", name="Share workspace", exact=True)).to_be_visible()
+    page.screenshot(path=str(database.parent / "workspace-share-toolbar-desktop.png"))
 
     def open_share(target):
         row = page.get_by_role("row").filter(has=page.get_by_role("button", name=target["filename"], exact=True))
         row.hover()
         row.get_by_role("button", name="Share " + target["filename"], exact=True).click()
-        dialog = page.get_by_role("dialog", name="Share: " + target["filename"], exact=True)
+        prefix = "Share folder: " if target["type"] == "folder" else "Share: "
+        dialog = page.get_by_role("dialog", name=prefix + target["filename"], exact=True)
         expect(dialog.get_by_label("Add people", exact=True)).to_be_visible()
         expect(dialog.get_by_role("combobox", name="Role", exact=True)).to_have_count(0)
         return dialog
@@ -121,6 +125,7 @@ with sync_playwright() as p:
 
     def accept(account, invitation):
         context = browser.new_context(viewport={"width": 1280, "height": 900}, reduced_motion="reduce")
+        context.route("**/api/invitations/*/email", lambda route: route.fulfill(status=503, json={"error": "Email is unavailable"}))
         login(context, account)
         recipient = context.new_page()
         recipient.on("pageerror", lambda error: errors.append(str(error)))
@@ -170,8 +175,8 @@ with sync_playwright() as p:
     expect(folder_page.get_by_role("button", name="Upload", exact=True)).to_be_visible()
     expect(folder_page.get_by_role("button", name="Share client", exact=True)).to_have_count(0)
     expect(folder_page.get_by_role("heading", name="Shared folder", exact=True)).to_be_visible()
-    folder_page.get_by_role("button", name="Share", exact=True).click()
-    folder_only_dialog = folder_page.get_by_role("dialog", name="Share: Shared folder", exact=True)
+    folder_page.locator('.workspace-actions').get_by_role("button", name="Share folder", exact=True).click()
+    folder_only_dialog = folder_page.get_by_role("dialog", name="Share folder: Shared folder", exact=True)
     expect(folder_only_dialog.get_by_text("This folder and everything inside", exact=True)).to_be_visible()
     expect(folder_only_dialog.get_by_role("tab", name="People", exact=True)).to_have_attribute("aria-selected", "true")
     folder_only_dialog.get_by_role("tab", name="Links", exact=True).click()
@@ -195,14 +200,14 @@ with sync_playwright() as p:
     assert named_upload.value.status == 201
 
     # Whole-client invitations remain a separate, explicitly named scope.
-    page.get_by_role("button", name="Share", exact=True).click()
-    client_dialog = page.get_by_role("dialog", name="Share: " + client["name"], exact=True)
+    page.get_by_role("button", name="Share workspace", exact=True).click()
+    client_dialog = page.get_by_role("dialog", name="Share workspace: " + client["name"], exact=True)
     expect(client_dialog.get_by_text("Entire client workspace", exact=False)).to_be_visible()
     member_invite = invite(client_dialog, accounts["member"], reshare=True, upload_access=True)
     client_dialog.get_by_role("button", name="Done", exact=True).click()
     member_context, member_page = accept(accounts["member"], member_invite)
     expect(member_page).to_have_url(base + "/folder/" + root)
-    expect(member_page.get_by_role("button", name="Share", exact=True)).to_be_visible()
+    expect(member_page.get_by_role("button", name="Share workspace", exact=True)).to_be_visible()
     assert member_context.request.get(base + "/api/files/" + private["id"]).ok
 
     # Legacy multi-client navigation coexists with direct item-only discovery.
@@ -275,18 +280,28 @@ with sync_playwright() as p:
         db.execute("update secure_links set expires_at='2000-01-01T00:00:00Z' where id=?", (file_link["id"],))
     assert file_visitor.request.get(base + "/api/files/" + file["id"] + "/download").status in (401, 403, 404)
 
-    # The toolbar shares the open folder, with a separate whole-client action.
+    # One contextual toolbar action; workspace sharing is only available at the client root.
     page.goto(base + "/folder/" + folder["id"])
     expect(page.get_by_role("heading", name="Shared folder", exact=True)).to_be_visible()
-    page.get_by_role("button", name="Share", exact=True).click()
-    dialog = page.get_by_role("dialog", name="Share: Shared folder", exact=True)
+    expect(page.get_by_role("button", name="Share client", exact=True)).to_have_count(0)
+    expect(page.get_by_role("button", name="Share workspace", exact=True)).to_have_count(0)
+    page.set_viewport_size({"width": 390, "height": 844})
+    expect(page.locator('.workspace-actions').get_by_role("button", name="Share folder", exact=True)).to_be_in_viewport()
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    page.screenshot(path=str(database.parent / "folder-share-toolbar-mobile.png"), full_page=True)
+    page.set_viewport_size({"width": 1280, "height": 900})
+    page.locator('.workspace-actions').get_by_role("button", name="Share folder", exact=True).click()
+    dialog = page.get_by_role("dialog", name="Share folder: Shared folder", exact=True)
     expect(dialog.get_by_text("This folder and everything inside", exact=True)).to_be_visible()
     dialog.get_by_role("button", name="Done", exact=True).click()
-    page.get_by_role("button", name="Share client", exact=True).click()
-    whole_client_dialog = page.get_by_role("dialog", name="Share: " + client["name"], exact=True)
+    page.goto(base + "/folder/" + root)
+    expect(page.get_by_role("button", name="Share folder", exact=True)).to_have_count(0)
+    page.locator('.workspace-actions').get_by_role("button", name="Share workspace", exact=True).click()
+    whole_client_dialog = page.get_by_role("dialog", name="Share workspace: " + client["name"], exact=True)
     expect(whole_client_dialog.get_by_text("Entire client workspace", exact=False)).to_be_visible()
     whole_client_dialog.get_by_role("button", name="Done", exact=True).click()
-    page.get_by_role("button", name="Share", exact=True).click()
+    page.goto(base + "/folder/" + folder["id"])
+    page.get_by_role("button", name="Share folder", exact=True).click()
     dialog.get_by_role("tab", name="People", exact=True).focus()
     page.keyboard.press("ArrowRight")
     page.keyboard.press("Enter")
@@ -311,6 +326,8 @@ with sync_playwright() as p:
     expect(dialog.get_by_role("heading", name="Link ready: Shared folder", exact=True)).to_be_visible()
     assert dialog.get_by_label("Link address", exact=True).input_value() == link["link_url"]
     dialog.get_by_label("Email link to", exact=True).fill("link-recipient@example.invalid")
+    # Exercise the unavailable-email state without depending on preview email settings or sending mail.
+    page.route("**/api/links/*/email", lambda route: route.fulfill(status=503, json={"error": "Email is unavailable"}))
     for _ in range(2):
         dialog.get_by_role("button", name="Email link", exact=True).click()
         expect(dialog.get_by_role("alert").filter(has_text="Email is unavailable")).to_be_visible()

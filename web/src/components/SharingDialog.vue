@@ -12,7 +12,7 @@ const composing = ref(false);
   <Dialog
     :id="`sharing-${scope.kind}-${scope.id}`"
     :visible="visible"
-    :header="`Share: ${scope.name}`"
+    :header="`Share${scope.kind === 'item' && scope.itemType === 'folder' ? ' folder' : ''}: ${scope.name}`"
     modal
     blockScroll
     :draggable="false"
