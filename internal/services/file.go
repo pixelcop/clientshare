@@ -195,7 +195,12 @@ func (s *FileService) ListFilesInFolder(ctx context.Context, tenantID string, cl
 	if err != nil {
 		return nil, nil, err
 	}
-	q := s.DB.WithContext(ctx).Model(&models.File{}).Where("tenant_id = ? AND client_id = ? AND folder_id = ? AND type = ? AND deleted_at IS NULL AND disk_deleted_at IS NULL", tenantID, clientID, folderID, fileType)
+	q := s.DB.WithContext(ctx).Model(&models.File{}).Where("tenant_id = ? AND client_id = ? AND folder_id = ? AND deleted_at IS NULL AND disk_deleted_at IS NULL", tenantID, clientID, folderID)
+	if fileType == "all" {
+		q = q.Where("type IN ?", []string{"file", "folder"})
+	} else {
+		q = q.Where("type = ?", fileType)
+	}
 
 	var totalItems int64
 	if err := q.Count(&totalItems).Error; err != nil {
@@ -207,6 +212,9 @@ func (s *FileService) ListFilesInFolder(ctx context.Context, tenantID string, cl
 	if int(totalItems%int64(pageSize)) > 0 {
 		totalPages++
 	}
+	// A bookmarked page can disappear after deletion. Return the new last page
+	// (page one for an empty folder) together with its corrected pagination.
+	page = max(1, min(page, max(1, totalPages)))
 
 	var dbFiles []models.File
 	offset := (page - 1) * pageSize
@@ -221,6 +229,16 @@ func (s *FileService) ListFilesInFolder(ctx context.Context, tenantID string, cl
 		orderBy = "filename " + orderDirection + ", id " + orderDirection
 	case "size":
 		orderBy = "size " + orderDirection + ", filename " + orderDirection + ", id " + orderDirection
+	}
+	if fileType == "all" {
+		if strings.EqualFold(strings.TrimSpace(sortBy), "size") {
+			// Folders have no meaningful size: keep them alphabetical regardless
+			// of direction, then order files by size with deterministic ties.
+			orderBy = "CASE WHEN type = 'folder' THEN LOWER(filename) END ASC, CASE WHEN type = 'file' THEN size END " + orderDirection + ", LOWER(filename) " + orderDirection + ", id " + orderDirection
+		} else if strings.EqualFold(strings.TrimSpace(sortBy), "filename") {
+			orderBy = "LOWER(filename) " + orderDirection + ", filename " + orderDirection + ", id " + orderDirection
+		}
+		orderBy = "CASE WHEN type = 'folder' THEN 0 ELSE 1 END ASC, " + orderBy
 	}
 
 	if err := q.Order(orderBy).Limit(pageSize).Offset(offset).Find(&dbFiles).Error; err != nil {

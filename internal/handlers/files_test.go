@@ -129,6 +129,29 @@ func TestEmptyFolderListingReturnsAuthorizedDestinationContext(t *testing.T) {
 	}
 }
 
+func TestUnifiedFolderListingIncludesFoldersAndFiles(t *testing.T) {
+	env := setupFileTestEnv(t)
+	folder := &models.File{TenantID: env.client.TenantID, ClientID: env.client.ID, FolderID: &env.rootFolder.ID, Filename: "Zulu", Path: filepath.Join(env.rootFolder.Path, "Zulu"), Type: "folder"}
+	require.NoError(t, env.db.Create(folder).Error)
+	file := createFileRecord(t, env, env.rootFolder, "Alpha.txt", "content")
+	for _, token := range []string{env.adminToken, env.linkToken} {
+		resp, err := env.app.Test(newAuthRequest(http.MethodGet, "/api/folders/"+env.rootFolder.ID+"?type=all&sort_by=filename&sort_dir=asc&page=99&page_size=1", token, nil))
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		var result struct {
+			Items      []models.File             `json:"items"`
+			Pagination models.PaginationResponse `json:"pagination"`
+		}
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
+		resp.Body.Close()
+		require.Equal(t, 2, result.Pagination.Page)
+		require.Equal(t, int64(2), result.Pagination.TotalItems)
+		require.Len(t, result.Items, 1)
+		require.Equal(t, file.ID, result.Items[0].ID)
+		require.NotNil(t, result.Items[0].Capabilities)
+	}
+}
+
 func TestFileAuthorizationValidatesBoundedAncestryAtEveryDepth(t *testing.T) {
 	env := setupFileTestEnv(t)
 	shallow := createFileRecord(t, env, env.rootFolder, "shallow.txt", "hello")

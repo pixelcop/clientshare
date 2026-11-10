@@ -359,7 +359,7 @@ func (h *FileHandler) ListFolderFiles(c fiber.Ctx) error {
 	}
 
 	fileType := fiber.Query[string](c, "type", "file")
-	if fileType != "file" && fileType != "folder" {
+	if fileType != "file" && fileType != "folder" && fileType != "all" {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid item type"})
 	}
 	// Context belongs to the authorized destination, not the first child. Empty
