@@ -87,7 +87,7 @@ onMounted(measure);
         <router-link
           v-if="rootRoute && crumbs.length"
           :to="rootRoute"
-          class="client-link"
+          class="client-link breadcrumb-link"
           :title="clientName"
         >
           <span class="client-label">{{ clientName }}</span>
@@ -123,7 +123,7 @@ onMounted(measure);
           aria-current="page"
           >{{ item.label }}</span
         >
-        <router-link v-else :to="item.to" class="crumb-label" :title="item.label">{{
+        <router-link v-else :to="item.to" class="crumb-label breadcrumb-link" :title="item.label">{{
           item.label
         }}</router-link>
       </li>
@@ -187,20 +187,20 @@ onMounted(measure);
   width: 40px;
   height: 40px;
   flex-shrink: 0;
-  border-radius: 0.375rem;
+  border-radius: 9999px;
 }
 .client-link {
   display: inline-flex;
   align-items: center;
   min-height: 40px;
   min-width: 0;
+  padding: 4px 12px;
   text-decoration: underline;
   text-decoration-thickness: 1px;
   text-decoration-color: color-mix(in srgb, var(--p-text-muted-color) 55%, transparent);
   text-underline-offset: 0.22em;
 }
 .client-link:hover {
-  background: transparent;
   text-decoration-color: currentColor;
 }
 .client-label {
@@ -211,8 +211,8 @@ onMounted(measure);
 .breadcrumb-segment {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  padding-left: 0.5rem;
+  gap: 0.25rem;
+  padding-left: 0.25rem;
   flex-shrink: 0;
 }
 .separator {
@@ -225,8 +225,16 @@ onMounted(measure);
   flex-shrink: 1;
 }
 .crumb-label {
+  min-width: 0;
+  min-height: 40px;
+  padding: 4px 12px;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.breadcrumb-link,
+.overflow-button {
+  border-radius: 9999px;
+  transition: background-color 140ms ease-out;
 }
 .overflow-button {
   cursor: pointer;
@@ -234,9 +242,15 @@ onMounted(measure);
   background: transparent;
   border: 0;
 }
-a:hover,
-.overflow-button:hover {
-  background: var(--p-content-hover-background);
+.breadcrumb-link:hover,
+.breadcrumb-link:focus-visible,
+.overflow-button:hover,
+.overflow-button:focus-visible {
+  background: color-mix(in srgb, var(--p-text-color) 8%, transparent);
+}
+.breadcrumb-link:active,
+.overflow-button:active {
+  background: color-mix(in srgb, var(--p-text-color) 12%, transparent);
 }
 a:focus-visible,
 button:focus-visible {
