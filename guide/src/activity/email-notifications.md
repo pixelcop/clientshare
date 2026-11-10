@@ -6,15 +6,17 @@ ClientShare sends emails for account invitations, password resets, secure links,
 
 ## Upload notifications
 
-When staff upload files, **Notify client by email after upload** controls the optional client notification where shown. Upload emails can be queued and grouped so a batch of documents does not produce a separate immediate message for each file.
+When staff upload files, the **Email notifications** switch controls the optional client notification where available. Open the mail button beside the upload and sharing actions to change it before uploading. Turning it off affects upcoming uploads; it does not cancel messages already queued.
+
+Upload emails can be queued and grouped so a batch of documents does not produce a separate immediate message for each file.
 
 A successful upload and delivery of its notification are separate events. Confirm the file list if someone is waiting for a document.
 
 ## Review pending email for a client
 
-Administrators and managers can open the pending-email indicator in the client workspace when messages are queued.
+Administrators and authorized managers can open the mail button in the client workspace. Its badge shows the pending count when messages are queued.
 
-1. Select the envelope indicator or **View pending email**.
+1. Select the mail button, then **Pending emails** at the top of the dropdown. This option also shows the pending count.
 2. Review the recipient, subject, message preview, and scheduled time.
 3. Correct the recipient or subject if necessary.
 4. Select **Send now** to send the message without waiting, or close the dialog to leave it scheduled.
