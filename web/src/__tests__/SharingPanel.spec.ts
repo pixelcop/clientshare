@@ -85,7 +85,7 @@ describe('exact-scope sharing panel', () => {
     await wrapper.get('input#item-file-email').setValue('recipient@example.test');
     await wrapper.get('.add-person').trigger('submit');
     expect(wrapper.findComponent(Select).props('options')).toHaveLength(1);
-    expect(wrapper.text()).toContain('This file only');
+    expect(wrapper.text()).not.toContain('This file only');
     await wrapper.get('[aria-label="Send invitation"]').trigger('click');
     await flushPromises();
     expect(post).toHaveBeenNthCalledWith(
@@ -173,7 +173,9 @@ describe('exact-scope sharing panel', () => {
     const patch = vi.spyOn(axios, 'patch').mockResolvedValue({ data: grant });
     const wrapper = mount(SharingPanel, { props: { scope }, global: { plugins: [OpenVue] } });
     await flushPromises();
-    expect(wrapper.text()).toContain('People may also have access through the client');
+    await wrapper.get('[aria-label="Change access for recipient@example.test"]').trigger('click');
+    expect(wrapper.get('.person-form').text()).toContain('Access through the client or another folder is unchanged.');
+    await wrapper.get('.person-form [aria-label="Back"]').trigger('click');
     await wrapper
       .findAll('button')
       .find(
@@ -297,7 +299,7 @@ describe('exact-scope sharing panel', () => {
     ]);
     select.vm.$emit('update:modelValue', 'uploader');
     await flushPromises();
-    expect(wrapper.get('.draft-people').text()).toContain('existing files stay private');
+    expect(wrapper.get('.draft-people').text()).not.toContain('existing files stay private');
     wrapper.unmount();
   });
 });

@@ -92,15 +92,15 @@ with sync_playwright() as p:
         row.get_by_role("button", name="Share " + target["filename"], exact=True).click()
         prefix = "Share folder: " if target["type"] == "folder" else "Share: "
         dialog = page.get_by_role("dialog", name=prefix + target["filename"], exact=True)
-        expect(dialog.get_by_label("Add people", exact=True)).to_be_visible()
+        expect(dialog.get_by_placeholder("Enter an email address")).to_be_visible()
         expect(dialog.get_by_role("combobox", name="Role", exact=True)).to_have_count(0)
         return dialog
 
     def invite(dialog, account, reshare=False, upload_access=False, read_access=True):
         page.screenshot(path=str(database.parent / "sharing-people-opening.png"), animations="disabled")
-        dialog.get_by_label("Add people", exact=True).fill(account["email"])
-        dialog.get_by_label("Add people", exact=True).press("Enter")
-        expect(dialog.get_by_label("Add people", exact=True)).to_be_focused()
+        dialog.locator('input[type="email"]').fill(account["email"])
+        dialog.locator('input[type="email"]').press("Enter")
+        expect(dialog.locator('input[type="email"]')).to_be_focused()
         expect(dialog.get_by_role("button", name="Sharing links", exact=True)).to_have_count(0)
         role = "Manager" if reshare else "Uploader" if not read_access else "Contributor" if upload_access else "Viewer"
         role_select = dialog.get_by_role("combobox", name="Role for " + account["email"], exact=True)
@@ -137,7 +137,7 @@ with sync_playwright() as p:
     # Multiple recipients stay in one composer, with independent roles and expiry.
     first = f"batch-{run}-one@example.invalid"
     second = f"batch-{run}-two@example.invalid"
-    entry = dialog.get_by_label("Add people", exact=True)
+    entry = dialog.locator('input[type="email"]')
     for email in [first, second]:
         entry.fill(email)
         entry.press("Enter")
@@ -156,8 +156,8 @@ with sync_playwright() as p:
     calendar.locator('.p-datepicker-day:not(.p-disabled)').last.click()
     calendar.get_by_role("button", name="Set expiry", exact=True).click()
     expect(calendar).not_to_be_visible()
-    expect(dialog.locator(".draft-person").filter(has_text=first)).to_contain_text("Expires in 7 days")
-    expect(dialog.locator(".draft-person").filter(has_text=second)).to_contain_text("View, download, delete and share")
+    expect(dialog.locator(".draft-person").filter(has_text=first).locator(".recipient-summary")).to_contain_text("Expires in 7 days")
+    expect(dialog.locator(".draft-person").filter(has_text=second).locator(".recipient-summary")).to_contain_text("Expires")
     page.screenshot(path=str(database.parent / "sharing-multiple-recipients.png"), animations="disabled")
     page.set_viewport_size({"width": 390, "height": 844})
     assert dialog.evaluate("el => el.scrollWidth <= el.clientWidth")
@@ -194,8 +194,8 @@ with sync_playwright() as p:
     assert named.request.get(base + "/api/clients/" + client["id"] + "/access").status == 404
     named_page.get_by_role("button", name="Share", exact=True).click()
     onward_dialog = named_page.get_by_role("dialog", name="Share: selected.txt", exact=True)
-    onward_dialog.get_by_label("Add people", exact=True).fill(accounts["B"]["email"])
-    onward_dialog.get_by_label("Add people", exact=True).press("Enter")
+    onward_dialog.locator('input[type="email"]').fill(accounts["B"]["email"])
+    onward_dialog.locator('input[type="email"]').press("Enter")
     with named_page.expect_response(lambda response: response.url.endswith("/invitations") and response.request.method == "POST") as onward:
         onward_dialog.get_by_role("button", name="Send invitation", exact=True).click()
     assert onward.value.status == 201, onward.value.text()
@@ -428,7 +428,7 @@ with sync_playwright() as p:
     with page.expect_response(lambda response: "/grants/" in response.url and response.request.method == "PATCH") as changed:
         dialog.get_by_role("button", name="Save changes", exact=True).click()
     assert changed.value.ok, changed.value.text()
-    expect(dialog.get_by_label("Add people", exact=True)).to_be_focused()
+    expect(dialog.locator('input[type="email"]')).to_be_focused()
     refreshed = admin.request.get(base + "/api/files/" + folder["id"] + "/access").json()
     grant = next(grant for grant in refreshed["grants"] if grant["user_id"] == accounts["folder"]["id"])
     assert grant["can_read"] and grant["can_upload"] and not grant["can_delete"] and not grant["can_share"]

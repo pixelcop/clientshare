@@ -611,14 +611,12 @@ async function remove() {
                 />
               </div>
             </div>
-            <p class="recipient-summary muted">
-              {{ roleOptions.find((role) => role.value === person.role)?.description }} ·
-              {{ scopeSummary }} · {{ expirySummary(person.expiry) }}
+            <p v-if="person.expiry" class="recipient-summary muted">
+              Expires {{ date(person.expiry.toISOString()) }}
             </p>
           </div>
         </div>
         <form v-if="!editing" class="add-person" @submit.prevent="addPerson">
-          <label :for="`${key}-email`">Add people</label>
           <div class="recipient-entry">
             <InputText
               :id="`${key}-email`"
@@ -819,9 +817,6 @@ async function remove() {
               </div>
             </details>
           </div>
-          <p v-if="scope.kind === 'item'" class="muted inheritance-note">
-            People may also have access through the client or a containing folder.
-          </p>
           <details v-if="pastPeople.length" class="past-access">
             <summary>Past invitations & access ({{ pastPeople.length }})</summary>
             <div v-for="person in pastPeople" :key="person.id" class="access-row">
@@ -891,7 +886,7 @@ async function remove() {
               :disabled="busy"
               fluid
             />
-            <SharingExpiry v-model="linkExpiry" :disabled="busy" required />
+            <SharingExpiry v-model="linkExpiry" :disabled="busy" compact required />
             <p class="muted">
               {{ scope.name }} · {{ modes.find((mode) => mode.value === linkMode)?.label }} · Anyone
               with the link · {{ expirySummary(linkExpiry) }}
@@ -1135,7 +1130,7 @@ small {
   padding: 8px 0;
 }
 .recipient-summary {
-  margin-top: 8px;
+  margin: 4px 0 0;
   font-size: 12px;
 }
 .sharing-footer {
