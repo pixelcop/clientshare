@@ -72,12 +72,12 @@ describe('client access entry', () => {
       wrapper.findAll('a').some((link) => link.text() === 'Manage links' && link.isVisible()),
     ).toBe(false);
     if (people) {
-      await wrapper.findAll('[role="tab"]')[1].trigger('click');
+      await wrapper.get('[aria-label="Sharing links"]').trigger('click');
     }
     expect(
       wrapper.findAll('a').some((link) => link.text() === 'Manage links' && link.isVisible()),
     ).toBe(people);
-    expect(wrapper.find('input[type="email"]').exists()).toBe(role !== 'link');
+    expect(wrapper.find('input[type="email"]').exists()).toBe(role !== 'link' && !people);
     wrapper.unmount();
   });
 });

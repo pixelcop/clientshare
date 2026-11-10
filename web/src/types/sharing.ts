@@ -3,7 +3,8 @@ import type { AccessCapabilities, AccessInvitation, ItemGrant, SecureLink } from
 export type SharingScope =
   | { kind: 'client'; id: string; name: string }
   | { kind: 'item'; id: string; name: string; itemType: string };
-export interface GrantAccess extends ItemGrant {
+// Go embeds these fields directly in the JSON response.
+export interface GrantAccess extends Omit<ItemGrant, 'AccessCapabilities'>, AccessCapabilities {
   recipient_name: string;
   recipient_email: string;
 }

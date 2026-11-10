@@ -7,8 +7,11 @@
 1. Find the file or folder and select **Share** on its row or in **More**. On a
    narrow screen, use **More → Share**. File detail pages also have **Share**.
 2. Check the name. Sharing a folder includes everything inside it.
-3. Under **Add people**, enter an email address and select **Continue**.
-4. Choose a role. To limit access duration, expand **Add expiry** and check the timezone.
+3. Under **Add people**, enter an email address and press **Enter** or select **Add**.
+   Add more addresses in the input below the recipients.
+4. Choose a role for each person. Use the clock beside their role to choose an
+   expiry: 7 days, 30 days, or **Custom date…**. Custom access ends at the end of
+   the selected day in your local timezone. The default is no expiry.
 5. Select **Send invitation** and check the email status. If sending fails, expand
    **Pending** beside the invitation and use **Email invitation** to try again.
 
@@ -49,7 +52,8 @@ that combination. Access inherited from elsewhere is not reduced by a role here.
 
 ## Share a link
 
-In **Links**, choose permissions and an expiry, then select **Create link**.
+Select **Sharing links** at the bottom of the dialog, choose permissions and an
+expiry, then select **Create link**. Use **Back to sharing** to return to people.
 Anyone with the link can use it. File links allow viewing and downloading;
 folder links can also allow uploads. **Upload only** hides existing files and folders.
 
@@ -64,5 +68,5 @@ someone already has it open. Select **Include expired and revoked links** to see
 
 Inside a folder, the top **Share** button shares that folder. To invite someone
 to the whole client, use **Share client**, or return to the client workspace root
-and select **Share**. Check the scope below the dialog title
+and select **Share**. Check the dialog title and each recipient's summary
 to confirm what is included.

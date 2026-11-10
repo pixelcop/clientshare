@@ -1,18 +1,6 @@
 <script setup lang="ts">
 import axios from 'axios';
-import {
-  Button,
-  Checkbox,
-  DatePicker,
-  Dialog,
-  InputText,
-  Select,
-  Tab,
-  TabList,
-  TabPanel,
-  TabPanels,
-  Tabs,
-} from 'openvue';
+import { Button, Checkbox, Dialog, InputText, Select } from 'openvue';
 
 import type { AccessCapabilities, AccessInvitation, SecureLink } from '@/types/models';
 import {
@@ -29,8 +17,9 @@ import {
   withinCeiling,
 } from '@/types/sharingRoles';
 
+import SharingExpiry from './SharingExpiry.vue';
+
 const { scope } = defineProps<{ scope: SharingScope }>();
-const emit = defineEmits<{ composing: [value: boolean] }>();
 const base = computed(() => `/api/${scope.kind === 'item' ? 'files' : 'clients'}/${scope.id}`);
 const key = computed(() => `${scope.kind}-${scope.id}`);
 const view = ref<SharingAccess | null>(null);
@@ -45,7 +34,6 @@ watch(activeTab, () => {
   error.value = '';
   status.value = '';
 });
-const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 const blank = (): AccessCapabilities => ({
   can_read: false,
   can_upload: false,
@@ -54,13 +42,28 @@ const blank = (): AccessCapabilities => ({
 });
 const rights = ref<AccessCapabilities>(blank());
 const email = ref('');
+type DraftPerson = {
+  id: string;
+  requestKey: string;
+  email: string;
+  role: string;
+  expiry: Date | null;
+};
+const drafts = ref<DraftPerson[]>([]);
+const scopeSummary = computed(() =>
+  scope.kind === 'client'
+    ? 'Entire client workspace'
+    : scope.itemType === 'folder'
+      ? 'This folder and everything inside'
+      : 'This file only',
+);
 const expiry = ref<Date | null>(null);
 const editing = ref<GrantAccess | null>(null);
 const composing = ref(false);
-watch(composing, (value) => emit('composing', value), { immediate: true });
-const emailControl = ref<InstanceType<typeof InputText> | null>(null);
+function focusEmail() {
+  document.getElementById(`${key.value}-email`)?.focus();
+}
 const editTrigger = ref<string | null>(null);
-const creationKey = ref(crypto.randomUUID());
 const deliveryKeys = new Map<string, string>();
 const linkMode = ref('read');
 const linkExpiry = ref<Date | null>(new Date(Date.now() + 7 * 86400000));
@@ -71,6 +74,7 @@ const linkEmailKey = ref(crypto.randomUUID());
 const copied = ref(false);
 const resultHeading = ref<HTMLElement | null>(null);
 let version = 0;
+let disposed = false;
 const isFile = computed(() => scope.kind === 'item' && scope.itemType !== 'folder');
 const roleOptions = computed(() => {
   const roles = sharingRoles(isFile.value).filter((role) =>
@@ -153,7 +157,21 @@ const visibleGrants = computed(() => (view.value?.grants || []).filter(active));
 const visibleInvitations = computed(() => (view.value?.invitations || []).filter(active));
 const visibleLinks = computed(() => links.value.filter((link) => history.value || active(link)));
 function date(value?: string) {
-  return value ? new Date(value).toLocaleString(undefined, { timeZoneName: 'short' }) : 'No expiry';
+  if (!value) {
+    return 'No expiry';
+  }
+  const days = Math.ceil((Date.parse(value) - Date.now()) / 86400000);
+  if (days > 0 && days <= 30) {
+    return `in ${days} ${days === 1 ? 'day' : 'days'}`;
+  }
+  return new Date(value).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+function expirySummary(value: Date | null) {
+  return value ? `Expires ${date(value.toISOString())}` : 'No expiry';
 }
 function failure(e: unknown, fallback: string) {
   return axios.isAxiosError(e) && typeof e.response?.data?.error === 'string'
@@ -164,21 +182,41 @@ function resetForm() {
   composing.value = false;
   editing.value = null;
   email.value = '';
+  drafts.value = [];
   expiry.value = null;
   rights.value = { ...(roleOptions.value[0]?.capabilities || blank()) };
-  creationKey.value = crypto.randomUUID();
 }
-async function continuePerson() {
+async function addPerson() {
   if (!email.value.trim() || !selectedRole.value || busy.value) {
     return;
   }
-  email.value = email.value.trim();
+  const address = email.value.trim();
+  if (drafts.value.some((person) => person.email.toLowerCase() === address.toLowerCase())) {
+    error.value = 'This person is already in your invitation list.';
+    return;
+  }
+  drafts.value.push({
+    id: crypto.randomUUID(),
+    requestKey: crypto.randomUUID(),
+    email: address,
+    role: roleOptions.value[0]!.value,
+    expiry: null,
+  });
+  email.value = '';
   error.value = '';
   status.value = '';
   editTrigger.value = null;
   composing.value = true;
   await nextTick();
-  document.getElementById(`${key.value}-role`)?.focus();
+  focusEmail();
+}
+function removeDraft(id: string) {
+  drafts.value = drafts.value.filter((person) => person.id !== id);
+  composing.value = drafts.value.length > 0;
+  void nextTick(focusEmail);
+}
+function updateDraft(person: DraftPerson) {
+  person.requestKey = crypto.randomUUID();
 }
 async function backToPeople(keepEmail = false) {
   const trigger = editTrigger.value;
@@ -189,7 +227,7 @@ async function backToPeople(keepEmail = false) {
   if (trigger && document.getElementById(trigger)) {
     document.getElementById(trigger)?.focus();
   } else {
-    emailControl.value?.$el.focus();
+    focusEmail();
   }
 }
 async function load() {
@@ -208,7 +246,7 @@ async function load() {
     }
     view.value = access.data;
     links.value = list.data;
-    if (!editing.value) {
+    if (!editing.value && !drafts.value.length) {
       resetForm();
     }
     if (!modes.value.some((mode) => mode.value === linkMode.value)) {
@@ -244,14 +282,8 @@ watch(
 );
 onBeforeUnmount(() => {
   version += 1;
+  disposed = true;
 });
-watch(
-  [email, rights, expiry],
-  () => {
-    creationKey.value = crypto.randomUUID();
-  },
-  { deep: true },
-);
 watch([linkMode, linkExpiry], () => {
   linkKey.value = crypto.randomUUID();
 });
@@ -278,11 +310,66 @@ async function sendInvitation(invitation: AccessInvitation) {
     status.value = `Invitation saved. ${failure(e, 'We could not confirm the email was sent. Try Email invitation again.')}`;
   }
 }
+async function sendPeople() {
+  if (busy.value || !drafts.value.length || email.value.trim()) {
+    return;
+  }
+  busy.value = true;
+  error.value = '';
+  status.value = '';
+  const messages: string[] = [];
+  const target = key.value;
+  const endpoint = base.value;
+  try {
+    for (const person of [...drafts.value]) {
+      if (disposed || target !== key.value) {
+        return;
+      }
+      const role = roleOptions.value.find((option) => option.value === person.role);
+      if (!role || !view.value || !withinCeiling(role.capabilities, view.value.capabilities)) {
+        throw new Error('Invalid role');
+      }
+      const response = await axios.post<AccessInvitation>(
+        `${endpoint}/invitations`,
+        {
+          email: person.email,
+          capabilities: role.capabilities,
+          expires_at: person.expiry?.toISOString() || null,
+        },
+        { headers: { 'Idempotency-Key': person.requestKey } },
+      );
+      await sendInvitation(response.data);
+      if (disposed || target !== key.value) {
+        return;
+      }
+      messages.push(`${person.email}: ${status.value}`);
+      drafts.value = drafts.value.filter((draft) => draft.id !== person.id);
+    }
+    resetForm();
+    await load();
+  } catch (e) {
+    if (disposed || target !== key.value) {
+      return;
+    }
+    if (messages.length) {
+      await load();
+    }
+    error.value = failure(e, 'Some invitations could not be saved. Retry the remaining people.');
+  } finally {
+    if (!disposed && target === key.value) {
+      status.value = messages.join(' ');
+      busy.value = false;
+      await nextTick();
+      focusEmail();
+    }
+  }
+}
 async function savePerson() {
   if (
     !view.value ||
     busy.value ||
     !composing.value ||
+    !editing.value ||
     !selectedRole.value ||
     !withinCeiling(rights.value, view.value.capabilities)
   ) {
@@ -297,21 +384,12 @@ async function savePerson() {
       capabilities: { ...rights.value },
       expires_at: expiry.value?.toISOString() || null,
     };
-    if (editing.value) {
-      await axios.patch(`${base.value}/grants/${editing.value.id}`, {
-        ...settings,
-        version: editing.value.version,
-        user_id: editing.value.user_id,
-      });
-      status.value = 'Access updated. Access through the client or another folder is unchanged.';
-    } else {
-      const response = await axios.post<AccessInvitation>(
-        `${base.value}/invitations`,
-        { email: email.value, ...settings },
-        { headers: { 'Idempotency-Key': creationKey.value } },
-      );
-      await sendInvitation(response.data);
-    }
+    await axios.patch(`${base.value}/grants/${editing.value.id}`, {
+      ...settings,
+      version: editing.value.version,
+      user_id: editing.value.user_id,
+    });
+    status.value = 'Access updated. Access through the client or another folder is unchanged.';
     if (target !== key.value) {
       return;
     }
@@ -325,7 +403,7 @@ async function savePerson() {
     busy.value = false;
     if (target === key.value && !composing.value && view.value) {
       await nextTick();
-      emailControl.value?.$el.focus();
+      focusEmail();
     }
   }
 }
@@ -476,12 +554,8 @@ async function remove() {
 
 <template>
   <div class="sharing-panel" :class="{ 'is-composing': composing }">
-    <p class="scope-label muted">
-      {{
-        scope.kind === 'client'
-          ? 'Entire client workspace · all files and folders'
-          : `${scope.itemType === 'folder' ? 'This folder and everything inside' : 'This file only'}`
-      }}
+    <p v-if="scope.kind === 'client'" class="scope-label muted">
+      {{ scope.kind === 'client' ? 'Entire client workspace · all files and folders' : '' }}
     </p>
     <p v-if="loading" role="status">Loading access…</p>
     <div v-if="error" role="alert">
@@ -490,62 +564,27 @@ async function remove() {
     </div>
     <p v-if="status" role="status" class="delivery-status">{{ status }}</p>
     <template v-if="view && !loading">
-      <Tabs v-model:value="activeTab">
-        <TabList v-if="!composing" aria-label="Sharing options">
-          <Tab value="people">People</Tab>
-          <Tab value="links">Links</Tab>
-        </TabList>
-        <TabPanels>
-          <TabPanel value="people">
-            <form v-if="!composing" class="add-person" @submit.prevent="continuePerson">
-              <label :for="`${key}-email`">Add people</label>
-              <div class="recipient-entry">
-                <InputText
-                  ref="emailControl"
-                  :id="`${key}-email`"
-                  v-model="email"
-                  type="email"
-                  autocomplete="email"
-                  placeholder="Enter an email address"
-                  autofocus
-                  required
-                  :disabled="busy || !roleOptions.length"
-                  fluid
-                />
-                <Button
-                  v-if="email.trim()"
-                  type="submit"
-                  label="Continue"
-                  :disabled="busy || !selectedRole"
-                />
+      <div v-if="activeTab === 'people'">
+        <div v-if="drafts.length" class="draft-people" aria-label="People to invite">
+          <div v-for="person in drafts" :key="person.id" class="draft-person">
+            <div class="recipient-settings">
+              <div class="recipient-identity">
+                <span class="person-avatar" aria-hidden="true">{{
+                  person.email[0]?.toUpperCase()
+                }}</span>
+                <strong>{{ person.email }}</strong>
               </div>
-              <p v-if="!roleOptions.length" class="muted">
-                You don’t have a shareable role for this item.
-              </p>
-            </form>
-            <form v-else class="person-form" @submit.prevent="savePerson">
-              <Button
-                label="Back"
-                severity="secondary"
-                variant="text"
-                class="back-button"
-                :disabled="busy"
-                @click="backToPeople(true)"
-              />
-              <div class="recipient-settings">
-                <div class="recipient-identity">
-                  <span class="person-avatar" aria-hidden="true">{{ email[0]?.toUpperCase() }}</span
-                  ><strong>{{ email }}</strong>
-                </div>
+              <div class="recipient-controls">
                 <Select
-                  v-model="selectedRole"
-                  :inputId="`${key}-role`"
-                  ariaLabel="Role"
+                  v-model="person.role"
+                  :ariaLabel="`Role for ${person.email}`"
                   :options="roleOptions"
                   optionLabel="label"
                   optionValue="value"
                   :disabled="busy"
                   class="role-select"
+                  :labelStyle="{ display: 'flex', alignItems: 'center', textAlign: 'start' }"
+                  @update:modelValue="updateDraft(person)"
                 >
                   <template #option="{ option }"
                     ><div class="role-option">
@@ -554,292 +593,376 @@ async function remove() {
                     </div></template
                   >
                 </Select>
-              </div>
-              <p class="muted">{{ roleDescription }}</p>
-              <details
-                v-if="scope.kind === 'item'"
-                :open="!!editing?.expires_at"
-                class="optional-setting"
-              >
-                <summary>
-                  {{ expiry ? `Access expires ${date(expiry.toISOString())}` : 'Add expiry' }}
-                </summary>
-                <div class="expiry-control">
-                  <label :for="`${key}-expiry`">Access ends · {{ timezone }}</label
-                  ><DatePicker
-                    v-model="expiry"
-                    :inputId="`${key}-expiry`"
-                    showTime
-                    hourFormat="24"
-                    showClear
-                    :minDate="new Date()"
-                    :disabled="busy"
-                    fluid
-                  />
-                </div>
-              </details>
-              <p v-if="editing" class="muted">
-                Changes apply to access added here. Access through the client or another folder is
-                unchanged.
-              </p>
-              <p v-else class="muted">An invitation will be emailed to this address.</p>
-              <div class="person-actions">
+                <SharingExpiry
+                  v-if="scope.kind === 'item'"
+                  v-model="person.expiry"
+                  compact
+                  :label="`Expiry for ${person.email}`"
+                  :disabled="busy"
+                  @update:modelValue="updateDraft(person)"
+                />
                 <Button
-                  v-if="editing"
-                  label="Remove access"
-                  severity="danger"
+                  icon="oi oi-times"
+                  :aria-label="`Remove ${person.email}`"
+                  severity="secondary"
                   variant="text"
                   :disabled="busy"
-                  @click="confirmRemove({ kind: 'grant', item: editing })"
+                  @click="removeDraft(person.id)"
                 />
-                <div class="row-buttons">
-                  <Button
-                    label="Cancel"
-                    severity="secondary"
-                    variant="text"
-                    :disabled="busy"
-                    @click="backToPeople()"
-                  /><Button
-                    type="submit"
-                    :label="editing ? 'Save changes' : 'Send invitation'"
-                    :loading="busy"
-                    :disabled="!selectedRole"
-                  />
-                </div>
               </div>
-            </form>
-            <section v-if="!composing" aria-label="People with access" class="people-section">
-              <h3>People with access</h3>
-              <p
-                v-if="!view.people?.length && !visibleGrants.length && !visibleInvitations.length"
-                class="muted"
+            </div>
+            <p class="recipient-summary muted">
+              {{ roleOptions.find((role) => role.value === person.role)?.description }} ·
+              {{ scopeSummary }} · {{ expirySummary(person.expiry) }}
+            </p>
+          </div>
+        </div>
+        <form v-if="!editing" class="add-person" @submit.prevent="addPerson">
+          <label :for="`${key}-email`">Add people</label>
+          <div class="recipient-entry">
+            <InputText
+              :id="`${key}-email`"
+              v-model="email"
+              type="email"
+              autocomplete="email"
+              :placeholder="drafts.length ? 'Add another email address' : 'Enter an email address'"
+              autofocus
+              required
+              :disabled="busy || !roleOptions.length"
+              fluid
+            />
+            <Button
+              v-if="email.trim()"
+              type="submit"
+              label="Add"
+              :disabled="busy || !selectedRole"
+            />
+          </div>
+          <p v-if="!roleOptions.length" class="muted">
+            You don’t have a shareable role for this item.
+          </p>
+        </form>
+        <div v-if="drafts.length" class="person-actions">
+          <Button
+            label="Cancel"
+            severity="secondary"
+            variant="text"
+            :disabled="busy"
+            @click="backToPeople()"
+          />
+          <Button
+            label="Send invitation"
+            :loading="busy"
+            :disabled="!!email.trim()"
+            @click="sendPeople"
+          />
+        </div>
+        <form v-if="editing" class="person-form" @submit.prevent="savePerson">
+          <Button
+            label="Back"
+            severity="secondary"
+            variant="text"
+            class="back-button"
+            :disabled="busy"
+            @click="backToPeople(true)"
+          />
+          <div class="recipient-settings">
+            <div class="recipient-identity">
+              <span class="person-avatar" aria-hidden="true">{{ email[0]?.toUpperCase() }}</span
+              ><strong>{{ email }}</strong>
+            </div>
+            <Select
+              v-model="selectedRole"
+              :inputId="`${key}-role`"
+              ariaLabel="Role"
+              :options="roleOptions"
+              optionLabel="label"
+              optionValue="value"
+              :disabled="busy"
+              class="role-select"
+              :labelStyle="{ display: 'flex', alignItems: 'center', textAlign: 'start' }"
+            >
+              <template #option="{ option }"
+                ><div class="role-option">
+                  <strong>{{ option.label }}</strong
+                  ><small>{{ option.description }}</small>
+                </div></template
               >
-                No people added here yet.
-              </p>
-              <p v-if="view.people && !view.can_manage" class="muted">
-                You can remove people you invited. Other people’s access is managed by the portal
-                team.
-              </p>
-              <div v-for="person in view.people" :key="person.user_id" class="access-row">
-                <div>
-                  <strong>{{ person.name || person.email }}</strong
-                  ><small>{{ person.email }}</small>
-                </div>
-                <div class="row-buttons">
-                  <span class="role-label" :title="describeCapabilities(person.capabilities)">{{
-                    sharingRoleLabel(person.capabilities, isFile)
-                  }}</span
-                  ><Button
-                    v-if="person.can_remove"
-                    label="Remove"
-                    severity="secondary"
-                    variant="text"
-                    :disabled="busy"
-                    @click="confirmRemove({ kind: 'member', item: person })"
-                  />
-                </div>
-              </div>
-              <div v-for="grant in visibleGrants" :key="grant.id" class="access-row">
-                <div>
-                  <strong>{{ grant.recipient_name || grant.recipient_email }}</strong
-                  ><small
-                    >{{ grant.recipient_email
-                    }}<template v-if="grant.expires_at">
-                      · Expires {{ date(grant.expires_at) }}</template
-                    ></small
-                  >
-                </div>
-                <div class="row-buttons">
-                  <Button
-                    v-if="canEdit(grant)"
-                    :id="`${key}-grant-${grant.id}`"
-                    :label="sharingRoleLabel(grant, isFile)"
-                    :aria-label="`Change access for ${grant.recipient_email}`"
-                    :aria-description="`Current role: ${sharingRoleLabel(grant, isFile)}`"
-                    icon="oi oi-chevron-down"
-                    iconPos="right"
-                    severity="secondary"
-                    :disabled="busy"
-                    variant="text"
-                    @click="edit(grant)"
-                  /><span v-else class="role-label" :title="describeCapabilities(grant)">{{
-                    sharingRoleLabel(grant, isFile)
-                  }}</span>
-                </div>
-              </div>
-              <div v-for="invitation in visibleInvitations" :key="invitation.id" class="access-row">
-                <div>
-                  <strong>{{ invitation.email }}</strong
-                  ><small
-                    >{{
-                      invitation.accepted_at
-                        ? 'Accepted'
-                        : invitation.revoked_at
-                          ? 'Removed'
-                          : active(invitation)
-                            ? 'Awaiting acceptance'
-                            : 'Expired'
-                    }}
-                    · {{ sharingRoleLabel(invitation, isFile)
-                    }}<template v-if="invitation.grant_expires_at">
-                      · Access expires {{ date(invitation.grant_expires_at) }}</template
-                    ></small
-                  >
-                </div>
-                <details v-if="active(invitation)" class="invitation-actions">
-                  <summary :aria-label="`Invitation options for ${invitation.email}`">
-                    Pending
-                  </summary>
-                  <div class="row-buttons">
-                    <Button
-                      label="Email invitation"
-                      severity="secondary"
-                      variant="text"
-                      :disabled="busy"
-                      @click="sendInvitation(invitation)"
-                    /><Button
-                      label="Revoke"
-                      severity="secondary"
-                      variant="text"
-                      :disabled="busy"
-                      @click="confirmRemove({ kind: 'invitation', item: invitation })"
-                    />
-                  </div>
-                </details>
-              </div>
-              <p v-if="scope.kind === 'item'" class="muted inheritance-note">
-                People may also have access through the client or a containing folder.
-              </p>
-              <details v-if="pastPeople.length" class="past-access">
-                <summary>Past invitations & access ({{ pastPeople.length }})</summary>
-                <div v-for="person in pastPeople" :key="person.id" class="access-row">
-                  <div>
-                    <strong>{{ person.email }}</strong
-                    ><small>{{ person.state }}</small>
-                  </div>
-                </div>
-              </details>
-            </section>
-          </TabPanel>
-          <TabPanel value="links">
-            <section aria-label="Sharing links">
-              <label class="history-toggle"
-                ><Checkbox v-model="history" binary :inputId="`${key}-history`" /> Include expired
-                and revoked links</label
+            </Select>
+          </div>
+          <p class="muted">{{ roleDescription }}</p>
+          <SharingExpiry v-if="scope.kind === 'item'" v-model="expiry" :disabled="busy" />
+          <p class="muted">{{ scopeSummary }} · {{ expirySummary(expiry) }}</p>
+          <p v-if="editing" class="muted">
+            Changes apply to access added here. Access through the client or another folder is
+            unchanged.
+          </p>
+          <p v-else class="muted">An invitation will be emailed to this address.</p>
+          <div class="person-actions">
+            <Button
+              v-if="editing"
+              label="Remove access"
+              severity="danger"
+              variant="text"
+              :disabled="busy"
+              @click="confirmRemove({ kind: 'grant', item: editing })"
+            />
+            <div class="row-buttons">
+              <Button
+                label="Cancel"
+                severity="secondary"
+                variant="text"
+                :disabled="busy"
+                @click="backToPeople()"
+              /><Button
+                type="submit"
+                :label="editing ? 'Save changes' : 'Send invitation'"
+                :loading="busy"
+                :disabled="!selectedRole"
+              />
+            </div>
+          </div>
+        </form>
+        <section v-if="!composing" aria-label="People with access" class="people-section">
+          <h3>People with access</h3>
+          <p
+            v-if="!view.people?.length && !visibleGrants.length && !visibleInvitations.length"
+            class="muted"
+          >
+            No people added here yet.
+          </p>
+          <p v-if="view.people && !view.can_manage" class="muted">
+            You can remove people you invited. Other people’s access is managed by the portal team.
+          </p>
+          <div v-for="person in view.people" :key="person.user_id" class="access-row">
+            <div>
+              <strong>{{ person.name || person.email }}</strong
+              ><small>{{ person.email }}</small>
+            </div>
+            <div class="row-buttons">
+              <span class="role-label" :title="describeCapabilities(person.capabilities)">{{
+                sharingRoleLabel(person.capabilities, isFile)
+              }}</span
+              ><Button
+                v-if="person.can_remove"
+                label="Remove"
+                severity="secondary"
+                variant="text"
+                :disabled="busy"
+                @click="confirmRemove({ kind: 'member', item: person })"
+              />
+            </div>
+          </div>
+          <div v-for="grant in visibleGrants" :key="grant.id" class="access-row">
+            <div>
+              <strong>{{ grant.recipient_name || grant.recipient_email }}</strong
+              ><small
+                >{{ grant.recipient_email
+                }}<template v-if="grant.expires_at">
+                  · Expires {{ date(grant.expires_at) }}</template
+                ></small
               >
-              <p class="muted">
-                Anyone with a link gets the permissions you choose. Removing a person won’t stop
-                them using a link they already have.
-              </p>
-              <div v-for="link in visibleLinks" :key="link.id" class="access-row">
-                <div>
-                  <strong>{{
-                    link.access_type === 'write'
-                      ? 'Upload only'
-                      : link.access_type === 'readwrite'
-                        ? 'View, download & upload'
-                        : 'View & download'
-                  }}</strong
-                  ><small>{{ link.revoked_at ? 'Revoked' : date(link.expires_at) }}</small>
-                </div>
-                <div class="row-buttons">
-                  <Button
-                    v-if="active(link) && link.link_url"
-                    label="Use link"
-                    severity="secondary"
-                    :disabled="busy"
-                    @click="useLink(link)"
-                  /><Button
-                    v-if="active(link)"
-                    label="Revoke"
-                    severity="secondary"
-                    :disabled="busy"
-                    @click="confirmRemove({ kind: 'link', item: link })"
-                  />
-                </div>
-              </div>
-              <form v-if="!result && modes.length" class="access-form" @submit.prevent="createLink">
-                <h4>Create a link for {{ scope.name }}</h4>
-                <label :id="`${key}-mode-label`" :for="`${key}-mode`"
-                  >Anyone with this link can</label
-                ><Select
-                  v-model="linkMode"
-                  :inputId="`${key}-mode`"
-                  :ariaLabelledby="`${key}-mode-label`"
-                  :options="modes"
-                  optionLabel="label"
-                  optionValue="value"
-                  :disabled="busy"
-                  fluid
-                />
-                <label :for="`${key}-link-expiry`">Expires · {{ timezone }}</label
-                ><DatePicker
-                  v-model="linkExpiry"
-                  :inputId="`${key}-link-expiry`"
-                  showTime
-                  hourFormat="24"
-                  :minDate="new Date()"
-                  :disabled="busy"
-                  required
-                  fluid
-                />
-                <p class="muted">
-                  {{ scope.name }} · Anyone with the link · Expires
-                  {{ date(linkExpiry?.toISOString()) }}
-                </p>
+            </div>
+            <div class="row-buttons">
+              <Button
+                v-if="canEdit(grant)"
+                :id="`${key}-grant-${grant.id}`"
+                :label="sharingRoleLabel(grant, isFile)"
+                :aria-label="`Change access for ${grant.recipient_email}`"
+                :aria-description="`Current role: ${sharingRoleLabel(grant, isFile)}`"
+                icon="oi oi-chevron-down"
+                iconPos="right"
+                severity="secondary"
+                :disabled="busy"
+                variant="text"
+                @click="edit(grant)"
+              /><span v-else class="role-label" :title="describeCapabilities(grant)">{{
+                sharingRoleLabel(grant, isFile)
+              }}</span>
+            </div>
+          </div>
+          <div v-for="invitation in visibleInvitations" :key="invitation.id" class="access-row">
+            <div>
+              <strong>{{ invitation.email }}</strong
+              ><small
+                >{{
+                  invitation.accepted_at
+                    ? 'Accepted'
+                    : invitation.revoked_at
+                      ? 'Removed'
+                      : active(invitation)
+                        ? 'Awaiting acceptance'
+                        : 'Expired'
+                }}
+                · {{ sharingRoleLabel(invitation, isFile)
+                }}<template v-if="invitation.grant_expires_at">
+                  · Access expires {{ date(invitation.grant_expires_at) }}</template
+                ></small
+              >
+            </div>
+            <details v-if="active(invitation)" class="invitation-actions">
+              <summary :aria-label="`Invitation options for ${invitation.email}`">Pending</summary>
+              <div class="row-buttons">
                 <Button
-                  type="submit"
-                  label="Create link"
-                  :loading="busy"
-                  :disabled="!linkMode || !linkExpiry"
-                />
-              </form>
-              <div v-if="result && active(result)" class="access-form" aria-label="Created link">
-                <h4 ref="resultHeading" tabindex="-1">Link ready: {{ scope.name }}</h4>
-                <p class="muted">Copy the link to share it yourself, or send it by email below.</p>
-                <label :for="`${key}-url`">Link address</label
-                ><InputText :id="`${key}-url`" :modelValue="result.link_url" readonly fluid />
-                <div class="row-buttons">
-                  <Button
-                    :label="copied ? 'Copied' : 'Copy link'"
-                    :disabled="!result.link_url"
-                    @click="copy(result)"
-                  /><Button
-                    as="a"
-                    :href="result.link_url"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    label="Open recipient view"
-                    severity="secondary"
-                  />
-                </div>
-                <form class="access-form" @submit.prevent="emailLink">
-                  <label :for="`${key}-link-email`">Email link to</label
-                  ><InputText
-                    :id="`${key}-link-email`"
-                    v-model="recipient"
-                    type="email"
-                    required
-                    fluid
-                  /><Button type="submit" label="Email link" :loading="busy" />
-                </form>
-                <Button
-                  label="Create another link"
+                  label="Email invitation"
                   severity="secondary"
+                  variant="text"
                   :disabled="busy"
-                  @click="createAnotherLink"
+                  @click="sendInvitation(invitation)"
+                /><Button
+                  label="Revoke"
+                  severity="secondary"
+                  variant="text"
+                  :disabled="busy"
+                  @click="confirmRemove({ kind: 'invitation', item: invitation })"
                 />
               </div>
-              <router-link
-                v-if="scope.kind === 'client' && view.can_manage"
-                :to="`/clients/${scope.id}/links`"
-                class="management-link"
-                >Manage links</router-link
-              >
-            </section>
-          </TabPanel>
-        </TabPanels>
-      </Tabs>
+            </details>
+          </div>
+          <p v-if="scope.kind === 'item'" class="muted inheritance-note">
+            People may also have access through the client or a containing folder.
+          </p>
+          <details v-if="pastPeople.length" class="past-access">
+            <summary>Past invitations & access ({{ pastPeople.length }})</summary>
+            <div v-for="person in pastPeople" :key="person.id" class="access-row">
+              <div>
+                <strong>{{ person.email }}</strong
+                ><small>{{ person.state }}</small>
+              </div>
+            </div>
+          </details>
+        </section>
+      </div>
+      <div v-else>
+        <Button
+          label="Back to sharing"
+          icon="oi oi-arrow-left"
+          severity="secondary"
+          variant="text"
+          :disabled="busy"
+          @click="activeTab = 'people'"
+        />
+        <section aria-label="Sharing links">
+          <label class="history-toggle"
+            ><Checkbox v-model="history" binary :inputId="`${key}-history`" /> Include expired and
+            revoked links</label
+          >
+          <p class="muted">
+            Anyone with a link gets the permissions you choose. Removing a person won’t stop them
+            using a link they already have.
+          </p>
+          <div v-for="link in visibleLinks" :key="link.id" class="access-row">
+            <div>
+              <strong>{{
+                link.access_type === 'write'
+                  ? 'Upload only'
+                  : link.access_type === 'readwrite'
+                    ? 'View, download & upload'
+                    : 'View & download'
+              }}</strong
+                ><small>{{ link.revoked_at ? 'Revoked' : `Expires ${date(link.expires_at)}` }}</small>
+            </div>
+            <div class="row-buttons">
+              <Button
+                v-if="active(link) && link.link_url"
+                label="Use link"
+                severity="secondary"
+                :disabled="busy"
+                @click="useLink(link)"
+              /><Button
+                v-if="active(link)"
+                label="Revoke"
+                severity="secondary"
+                :disabled="busy"
+                @click="confirmRemove({ kind: 'link', item: link })"
+              />
+            </div>
+          </div>
+          <form v-if="!result && modes.length" class="access-form" @submit.prevent="createLink">
+            <h4>Create a link for {{ scope.name }}</h4>
+            <label :id="`${key}-mode-label`" :for="`${key}-mode`">Anyone with this link can</label
+            ><Select
+              v-model="linkMode"
+              :inputId="`${key}-mode`"
+              :ariaLabelledby="`${key}-mode-label`"
+              :options="modes"
+              optionLabel="label"
+              optionValue="value"
+              :disabled="busy"
+              fluid
+            />
+            <SharingExpiry v-model="linkExpiry" :disabled="busy" required />
+            <p class="muted">
+              {{ scope.name }} · {{ modes.find((mode) => mode.value === linkMode)?.label }} · Anyone
+              with the link · {{ expirySummary(linkExpiry) }}
+            </p>
+            <Button
+              type="submit"
+              label="Create link"
+              :loading="busy"
+              :disabled="!linkMode || !linkExpiry"
+            />
+          </form>
+          <div v-if="result && active(result)" class="access-form" aria-label="Created link">
+            <h4 ref="resultHeading" tabindex="-1">Link ready: {{ scope.name }}</h4>
+            <p class="muted">
+              {{ modes.find((mode) => mode.value === result?.access_type)?.label }} ·
+              {{ scopeSummary }} · Expires {{ date(result.expires_at) }}
+            </p>
+            <p class="muted">Copy the link to share it yourself, or send it by email below.</p>
+            <label :for="`${key}-url`">Link address</label
+            ><InputText :id="`${key}-url`" :modelValue="result.link_url" readonly fluid />
+            <div class="row-buttons">
+              <Button
+                :label="copied ? 'Copied' : 'Copy link'"
+                :disabled="!result.link_url"
+                @click="copy(result)"
+              /><Button
+                as="a"
+                :href="result.link_url"
+                target="_blank"
+                rel="noopener noreferrer"
+                label="Open recipient view"
+                severity="secondary"
+              />
+            </div>
+            <form class="access-form" @submit.prevent="emailLink">
+              <label :for="`${key}-link-email`">Email link to</label
+              ><InputText
+                :id="`${key}-link-email`"
+                v-model="recipient"
+                type="email"
+                required
+                fluid
+              /><Button type="submit" label="Email link" :loading="busy" />
+            </form>
+            <Button
+              label="Create another link"
+              severity="secondary"
+              :disabled="busy"
+              @click="createAnotherLink"
+            />
+          </div>
+          <router-link
+            v-if="scope.kind === 'client' && view.can_manage"
+            :to="`/clients/${scope.id}/links`"
+            class="management-link"
+            >Manage links</router-link
+          >
+        </section>
+      </div>
+      <div v-if="!composing" class="sharing-footer">
+        <Button
+          v-if="activeTab === 'people'"
+          label="Sharing links"
+          icon="oi oi-link"
+          severity="secondary"
+          variant="text"
+          @click="activeTab = 'links'"
+        />
+        <span v-else />
+        <slot name="done" />
+      </div>
     </template>
     <Dialog
       :visible="!!removal"
@@ -887,7 +1010,7 @@ async function remove() {
 <style scoped>
 .sharing-panel {
   display: grid;
-  gap: 16px;
+  gap: 8px;
   color: var(--p-text-color);
   font-size: 14px;
 }
@@ -900,15 +1023,6 @@ h4 {
 .scope-label {
   font-size: 12px;
   font-weight: 400;
-}
-.sharing-panel :deep(.p-tabpanels) {
-  padding: 20px 0 0;
-}
-.sharing-panel.is-composing :deep(.p-tabpanels) {
-  padding-top: 0;
-}
-.sharing-panel :deep(.p-tab) {
-  min-height: 44px;
 }
 h3 {
   font-size: 18px;
@@ -970,8 +1084,7 @@ small {
   border-inline-start: 3px solid var(--p-primary-color);
 }
 .add-person,
-.person-form,
-.expiry-control {
+.person-form {
   display: grid;
   gap: 12px;
 }
@@ -1010,6 +1123,32 @@ small {
   min-width: 144px;
   min-height: 44px;
 }
+.recipient-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.draft-people {
+  margin: 0 0 12px;
+}
+.draft-person {
+  padding: 8px 0;
+}
+.recipient-summary {
+  margin-top: 8px;
+  font-size: 12px;
+}
+.sharing-footer {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 8px;
+  background: var(--p-content-background);
+}
 .role-option {
   max-width: min(320px, 70vw);
   white-space: normal;
@@ -1024,7 +1163,7 @@ small {
   justify-self: start;
 }
 .people-section {
-  margin-top: 28px;
+  margin-top: 20px;
 }
 .people-section h3 {
   font-size: 16px;
@@ -1038,7 +1177,6 @@ small {
   margin-top: 16px;
   font-size: 12px;
 }
-.optional-setting,
 .past-access {
   color: var(--p-text-muted-color);
   font-size: 12px;
@@ -1064,9 +1202,6 @@ summary:focus-visible {
   outline-offset: 2px;
   border-radius: 4px;
 }
-.expiry-control {
-  padding: 8px 0 16px;
-}
 .person-actions {
   justify-content: space-between;
   flex-wrap: wrap;
@@ -1079,8 +1214,11 @@ summary:focus-visible {
   .recipient-settings {
     flex-wrap: wrap;
   }
-  .role-select {
+  .recipient-controls {
     width: 100%;
+  }
+  .recipient-controls .role-select {
+    flex: 1;
   }
 }
 </style>
