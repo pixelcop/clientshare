@@ -56,7 +56,7 @@ function sortIconClass(field: FileSortField) {
   if (sortField.value !== field) {
     return 'oi oi-sort-alt text-xs text-slate-400';
   }
-  return sortDirection.value === 'desc' ? 'oi oi-arrow-down' : 'oi oi-arrow-up';
+  return sortDirection.value === 'desc' ? 'oi oi-arrow-down text-xs' : 'oi oi-arrow-up text-xs';
 }
 
 function sortBy(field: FileSortField) {

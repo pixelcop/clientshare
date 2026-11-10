@@ -58,22 +58,22 @@ describe('breadcrumb client location', () => {
     const { wrapper } = await render();
     expect(wrapper.get('h1').text()).toBe('Acme');
     expect(wrapper.get('h1').classes()).not.toContain('sr-only');
-    expect(wrapper.find('.client-pill').exists()).toBe(false);
+    expect(wrapper.find('.client-link').exists()).toBe(false);
     expect(wrapper.find('.oi-home').exists()).toBe(false);
     wrapper.unmount();
   });
 
-  it('combines Home and the client name into one link to the root in a subfolder', async () => {
+  it('shows the client as a text link to the root without a Home icon in a subfolder', async () => {
     useFileManagerStore().breadcrumbs.push({ id: 'child', filename: 'Taxes' } as FileItem);
     const { wrapper, router } = await render();
-    const pill = wrapper.get('a.client-pill');
-    expect(pill.text()).toBe('Acme');
-    expect(pill.find('.oi-home').exists()).toBe(true);
-    expect(pill.attributes('href')).toBe('/folder/root');
+    const clientLink = wrapper.get('a.client-link');
+    expect(clientLink.text()).toBe('Acme');
+    expect(wrapper.find('.oi-home').exists()).toBe(false);
+    expect(clientLink.attributes('href')).toBe('/folder/root');
     expect(wrapper.findAll('a')).toHaveLength(1);
     expect(wrapper.get('h1').text()).toBe('Taxes');
     expect(wrapper.get('h1').classes()).toContain('sr-only');
-    await pill.trigger('click');
+    await clientLink.trigger('click');
     await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/folder/root'));
     wrapper.unmount();
   });

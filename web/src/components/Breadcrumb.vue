@@ -87,10 +87,9 @@ onMounted(measure);
         <router-link
           v-if="rootRoute && crumbs.length"
           :to="rootRoute"
-          class="client-pill"
+          class="client-link"
           :title="clientName"
         >
-          <i class="oi oi-home" aria-hidden="true" />
           <span class="client-label">{{ clientName }}</span>
         </router-link>
         <span v-else class="crumb-label" :title="clientName" aria-current="page">{{
@@ -190,22 +189,19 @@ onMounted(measure);
   flex-shrink: 0;
   border-radius: 0.375rem;
 }
-.client-pill {
+.client-link {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
   min-height: 40px;
   min-width: 0;
-  border: 1px solid var(--p-content-border-color);
-  border-radius: 9999px;
-  padding: 0.25rem 0.75rem;
-  background: var(--p-content-hover-background);
-  font-size: 0.875rem;
-  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in srgb, var(--p-text-muted-color) 55%, transparent);
+  text-underline-offset: 0.22em;
 }
-.client-pill > i {
-  flex-shrink: 0;
-  font-size: 1rem;
+.client-link:hover {
+  background: transparent;
+  text-decoration-color: currentColor;
 }
 .client-label {
   min-width: 0;
