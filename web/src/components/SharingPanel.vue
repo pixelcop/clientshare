@@ -3,6 +3,8 @@ import axios from 'axios';
 import { Button, Checkbox, Dialog, InputText } from 'openvue';
 
 import AccessSelect from '@/components/AccessSelect.vue';
+import { GROUPS_UI_ENABLED } from '@/features';
+import { useAuthStore } from '@/stores/auth';
 import type { TenantAccessRole } from '@/types/accessRoles';
 import {
   applicableRole,
@@ -25,6 +27,8 @@ import ScopedGroupAccess from './ScopedGroupAccess.vue';
 import SharingExpiry from './SharingExpiry.vue';
 
 const { scope } = defineProps<{ scope: SharingScope }>();
+const emit = defineEmits<{ close: [] }>();
+const auth = useAuthStore();
 const base = computed(() => `/api/${scope.kind === 'item' ? 'files' : 'clients'}/${scope.id}`);
 const key = computed(() => `${scope.kind}-${scope.id}`);
 const view = ref<SharingAccess | null>(null);
@@ -45,7 +49,6 @@ const blank = (): AccessCapabilities => ({
   can_delete: false,
   can_share: false,
 });
-const rights = ref<AccessCapabilities>(blank());
 const email = ref('');
 const recipientType = ref<'internal' | 'external'>('external');
 type DraftPerson = {
@@ -64,13 +67,10 @@ const scopeSummary = computed(() =>
       ? 'This folder and everything inside'
       : 'This file only',
 );
-const expiry = ref<Date | null>(null);
-const editing = ref<GrantAccess | null>(null);
 const composing = ref(false);
 function focusEmail() {
   document.getElementById(`${key.value}-email`)?.focus();
 }
-const editTrigger = ref<string | null>(null);
 const deliveryKeys = new Map<string, string>();
 const linkMode = ref('read');
 const linkExpiry = ref<Date | null>(new Date(Date.now() + 7 * 86400000));
@@ -78,6 +78,74 @@ const linkKey = ref(crypto.randomUUID());
 const result = ref<SecureLink | null>(null);
 const recipient = ref('');
 const memberEdits = ref<Record<string, string>>({});
+type EditableGrant = Pick<
+  GrantAccess,
+  | 'id'
+  | 'role_id'
+  | 'user_id'
+  | 'version'
+  | 'expires_at'
+  | 'revoked_at'
+  | 'recipient_name'
+  | 'recipient_email'
+  | 'recipient_user_type'
+  | 'can_manage'
+> &
+  AccessCapabilities & { assignment?: boolean };
+const grantEdits = ref<Record<string, { role: string; expiry: Date | null }>>({});
+const memberRevokeLinks = ref<Record<string, boolean>>({});
+const removeRole = '__remove__';
+const removeOption = {
+  id: removeRole,
+  name: 'Remove access',
+  description: 'Remove access added here. Other access is unchanged.',
+  destructive: true,
+};
+const changedMembers = computed(() =>
+  (view.value?.people || []).filter(
+    (p) => memberEdits.value[p.user_id] && memberEdits.value[p.user_id] !== p.role_id,
+  ),
+);
+const changedGrants = computed(() =>
+  visibleGrants.value.filter((g) => {
+    const edit = grantEdits.value[g.id];
+    return (
+      edit &&
+      (edit.role !== g.role_id ||
+        (edit.expiry?.getTime() ?? null) !== (g.expires_at ? Date.parse(g.expires_at) : null))
+    );
+  }),
+);
+const pendingChanges = computed(() => changedMembers.value.length + changedGrants.value.length > 0);
+const dirty = computed(
+  () =>
+    pendingChanges.value ||
+    (!view.value &&
+      (Object.keys(memberEdits.value).length > 0 || Object.keys(grantEdits.value).length > 0)) ||
+    drafts.value.length > 0 ||
+    !!email.value.trim(),
+);
+const discardAction = ref<(() => void) | null>(null);
+function requestClose() {
+  if (busy.value || removal.value || discardAction.value) {
+    return;
+  }
+  if (dirty.value) {
+    discardAction.value = () => emit('close');
+  } else {
+    emit('close');
+  }
+}
+function discardChanges() {
+  const action = discardAction.value;
+  discardAction.value = null;
+  memberEdits.value = {};
+  grantEdits.value = {};
+  memberRevokeLinks.value = {};
+  resetForm();
+  action?.();
+}
+defineExpose({ requestClose });
 function memberRoles(person: MemberAccess) {
   return catalog.value.filter(
     (r) =>
@@ -85,23 +153,35 @@ function memberRoles(person: MemberAccess) {
       withinCeiling(roleCapabilities(r), view.value?.capabilities || blank()),
   );
 }
-async function saveMember(person: MemberAccess) {
-  if (!memberEdits.value[person.user_id] || busy.value) {
-    return;
+function grantRoles(grant: EditableGrant) {
+  const target = isFile.value ? 'file' : scope.kind === 'client' ? 'workspace' : 'folder';
+  return catalog.value.filter(
+    (r) =>
+      (applicableRole(r, grant.recipient_user_type || 'external', target) ||
+        r.id === grant.role_id) &&
+      withinCeiling(roleCapabilities(r, isFile.value), view.value?.capabilities || blank()),
+  );
+}
+function grantEdit(grant: EditableGrant) {
+  return (
+    grantEdits.value[grant.id] || {
+      role: grant.role_id || '',
+      expiry: grant.expires_at ? new Date(grant.expires_at) : null,
+    }
+  );
+}
+function setGrantRole(grant: EditableGrant, role: string) {
+  if (role === removeRole) {
+    confirmRemove({ kind: 'grant', item: grant });
+  } else {
+    grantEdits.value[grant.id] = { ...grantEdit(grant), role };
   }
-  busy.value = true;
-  error.value = '';
-  try {
-    await axios.put(`${base.value}/members/${person.user_id}/role`, {
-      role_id: memberEdits.value[person.user_id],
-      expected_role_id: person.role_id || '',
-    });
-    status.value = 'Workspace role updated. Other access is unchanged.';
-    await load();
-  } catch (e) {
-    error.value = failure(e, 'Workspace role could not be updated.');
-  } finally {
-    busy.value = false;
+}
+function setMemberRole(person: MemberAccess, role: string) {
+  if (role === removeRole) {
+    confirmRemove({ kind: 'member', item: person });
+  } else {
+    memberEdits.value[person.user_id] = role;
   }
 }
 const linkEmailKey = ref(crypto.randomUUID());
@@ -123,12 +203,12 @@ const canCreateLinks = computed(
   () => view.value?.capabilities.sharing?.create_links ?? view.value?.capabilities.can_share,
 );
 const roleOptions = computed(() => {
-  const kind = editing.value?.recipient_user_type || recipientType.value;
+  const kind = recipientType.value;
   const target = isFile.value ? 'file' : scope.kind === 'client' ? 'workspace' : 'folder';
   return catalog.value
     .filter(
       (r) =>
-        (applicableRole(r, kind, target) || (r.id === editing.value?.role_id && r.archived_at)) &&
+        applicableRole(r, kind, target) &&
         withinCeiling(roleCapabilities(r, isFile.value), view.value?.capabilities || blank()),
     )
     .map((r) => ({
@@ -144,19 +224,13 @@ const selectedRole = computed({
     const role = roleOptions.value.find((role) => role.value === value);
     if (role) {
       selectedRoleId.value = role.value;
-      rights.value = { ...role.capabilities };
     }
   },
 });
-const roleDescription = computed(
-  () => roleOptions.value.find((role) => role.value === selectedRole.value)?.description,
-);
 watch(recipientType, () => {
   selectedRoleId.value = defaultAccessRole(
     catalog.value.filter((r) => roleOptions.value.some((o) => o.value === r.id)),
   );
-  rights.value =
-    roleOptions.value.find((r) => r.value === selectedRoleId.value)?.capabilities || blank();
 });
 function active(item: { revoked_at?: string; expires_at?: string; accepted_at?: string }) {
   return (
@@ -208,7 +282,24 @@ const modes = computed(() =>
     },
   ].filter((mode) => mode.allowed),
 );
-const visibleGrants = computed(() => (view.value?.grants || []).filter(active));
+const visibleGrants = computed<EditableGrant[]>(() =>
+  [
+    ...(view.value?.grants || []),
+    ...(view.value?.additional_access || [])
+      .filter((a) => !a.group_id && a.user_id)
+      .map((a) => ({
+        ...a,
+        user_id: a.user_id!,
+        assignment: true,
+        ...(catalog.value.find((r) => r.id === a.role_id)
+          ? roleCapabilities(
+              catalog.value.find((r) => r.id === a.role_id)!,
+              isFile.value,
+            )
+          : blank()),
+      })),
+  ].filter(active),
+);
 const visibleInvitations = computed(() => (view.value?.invitations || []).filter(active));
 const hasLinkHistory = computed(() => links.value.some((link) => !active(link)));
 const visibleLinks = computed(() => links.value.filter((link) => history.value || active(link)));
@@ -226,9 +317,6 @@ function date(value?: string) {
     year: 'numeric',
   });
 }
-function expirySummary(value: Date | null) {
-  return value ? `Expires ${date(value.toISOString())}` : 'No expiry';
-}
 function failure(e: unknown, fallback: string) {
   return axios.isAxiosError(e) && typeof e.response?.data?.error === 'string'
     ? e.response.data.error
@@ -236,16 +324,11 @@ function failure(e: unknown, fallback: string) {
 }
 function resetForm() {
   composing.value = false;
-  editing.value = null;
   email.value = '';
   drafts.value = [];
-  expiry.value = null;
-  rights.value = { ...(roleOptions.value[0]?.capabilities || blank()) };
   selectedRoleId.value = defaultAccessRole(
     catalog.value.filter((r) => roleOptions.value.some((o) => o.value === r.id)),
   );
-  const safe = roleOptions.value.find((r) => r.value === selectedRoleId.value);
-  rights.value = safe?.capabilities || blank();
 }
 async function addPerson() {
   if (!email.value.trim() || !selectedRole.value || busy.value) {
@@ -267,7 +350,6 @@ async function addPerson() {
   email.value = '';
   error.value = '';
   status.value = '';
-  editTrigger.value = null;
   composing.value = true;
   await nextTick();
   focusEmail();
@@ -280,17 +362,10 @@ function removeDraft(id: string) {
 function updateDraft(person: DraftPerson) {
   person.requestKey = crypto.randomUUID();
 }
-async function backToPeople(keepEmail = false) {
-  const trigger = editTrigger.value;
-  const draft = !editing.value && keepEmail ? email.value : '';
+async function backToPeople() {
   resetForm();
-  email.value = draft;
   await nextTick();
-  if (trigger && document.getElementById(trigger)) {
-    document.getElementById(trigger)?.focus();
-  } else {
-    focusEmail();
-  }
+  focusEmail();
 }
 async function load() {
   const current = ++version;
@@ -329,7 +404,7 @@ async function load() {
     if (current !== version) {
       return;
     }
-    if (!editing.value && !drafts.value.length) {
+    if (!drafts.value.length && !email.value.trim()) {
       resetForm();
     }
     if (!modes.value.some((mode) => mode.value === linkMode.value)) {
@@ -349,7 +424,10 @@ watch(
   key,
   () => {
     resetForm();
-    editTrigger.value = null;
+    memberEdits.value = {};
+    grantEdits.value = {};
+    memberRevokeLinks.value = {};
+    discardAction.value = null;
     result.value = null;
     recipient.value = '';
     status.value = '';
@@ -458,15 +536,8 @@ async function sendPeople() {
     }
   }
 }
-async function savePerson() {
-  if (
-    !view.value ||
-    busy.value ||
-    !composing.value ||
-    !editing.value ||
-    !selectedRole.value ||
-    !withinCeiling(rights.value, view.value.capabilities)
-  ) {
+async function saveChanges() {
+  if (!view.value || busy.value || !pendingChanges.value) {
     return;
   }
   const target = key.value;
@@ -474,54 +545,113 @@ async function savePerson() {
   error.value = '';
   status.value = '';
   try {
-    const settings = {
-      capabilities: { ...rights.value },
-      role_id: selectedRole.value,
-      expires_at: expiry.value?.toISOString() || null,
-    };
-    await axios.patch(`${base.value}/grants/${editing.value.id}`, {
-      ...settings,
-      version: editing.value.version,
-      user_id: editing.value.user_id,
-    });
-    status.value = 'Access updated. Access through the client or another folder is unchanged.';
-    if (target !== key.value) {
+    for (const person of [...changedMembers.value]) {
+      if (disposed || target !== key.value) {
+        return;
+      }
+      const role = memberEdits.value[person.user_id]!;
+      if (role === removeRole) {
+        await axios.delete(`${base.value}/members/${person.user_id}`, {
+          data: { revoke_links: memberRevokeLinks.value[person.user_id] || false },
+        });
+        if (disposed || target !== key.value) {
+          return;
+        }
+        view.value.people = view.value.people?.filter((p) => p.user_id !== person.user_id);
+      } else {
+        if (!memberRoles(person).some((r) => r.id === role)) {
+          throw new Error('Choose an available workspace role.');
+        }
+        await axios.put(`${base.value}/members/${person.user_id}/role`, {
+          role_id: role,
+          expected_role_id: person.role_id || '',
+        });
+        if (disposed || target !== key.value) {
+          return;
+        }
+        person.role_id = role;
+      }
+      delete memberEdits.value[person.user_id];
+    }
+    for (const grant of [...changedGrants.value]) {
+      if (disposed || target !== key.value) {
+        return;
+      }
+      const edit = grantEdits.value[grant.id]!;
+      const endpoint = grant.assignment
+        ? `/api/role-assignments/${grant.id}`
+        : `${base.value}/grants/${grant.id}`;
+      if (edit.role === removeRole) {
+        await axios.delete(endpoint, { data: { version: grant.version } });
+        if (disposed || target !== key.value) {
+          return;
+        }
+        view.value.grants = view.value.grants?.filter((g) => g.id !== grant.id);
+        view.value.additional_access = view.value.additional_access?.filter(
+          (g) => g.id !== grant.id,
+        );
+      } else {
+        const role = grantRoles(grant).find((r) => r.id === edit.role);
+        if (!role || !canEdit(grant)) {
+          throw new Error('Choose an available access role.');
+        }
+        // Changing only expiry must not round an existing permission bundle up or down.
+        const capabilities =
+          edit.role === grant.role_id
+            ? {
+                can_read: grant.can_read,
+                can_upload: grant.can_upload,
+                can_delete: grant.can_delete,
+                can_share: grant.can_share,
+                ...(grant.sharing ? { sharing: grant.sharing } : {}),
+              }
+            : roleCapabilities(role, isFile.value);
+        const response = await axios.patch(endpoint, {
+          role_id: edit.role,
+          expires_at:
+            (edit.expiry?.getTime() ?? null) ===
+            (grant.expires_at ? Date.parse(grant.expires_at) : null)
+              ? grant.expires_at || null
+              : edit.expiry?.toISOString() || null,
+          version: grant.version,
+          ...(!grant.assignment ? { capabilities, user_id: grant.user_id } : {}),
+        });
+        if (disposed || target !== key.value) {
+          return;
+        }
+        const source = grant.assignment
+          ? view.value.additional_access?.find((a) => a.id === grant.id)
+          : grant;
+        if (source) {
+          Object.assign(source, capabilities, {
+            role_id: edit.role,
+            expires_at: edit.expiry?.toISOString() || undefined,
+            version: response.data?.version ?? grant.version + 1,
+          });
+        }
+      }
+      delete grantEdits.value[grant.id];
+    }
+    if (disposed || target !== key.value) {
       return;
     }
-    resetForm();
+    status.value = 'Access updated. Access through the client or another folder is unchanged.';
     await load();
+    if (!error.value && !dirty.value) {
+      emit('close');
+    }
   } catch (e) {
     if (target === key.value) {
-      error.value = failure(e, 'Access could not be saved. Refresh before retrying.');
+      error.value = failure(
+        e,
+        'Some changes could not be saved. Saved changes are kept; retry the remaining changes.',
+      );
     }
   } finally {
     busy.value = false;
-    if (target === key.value && !composing.value && view.value) {
-      await nextTick();
-      focusEmail();
-    }
   }
 }
-async function edit(grant: GrantAccess) {
-  error.value = '';
-  status.value = '';
-  editTrigger.value = `${key.value}-grant-${grant.id}`;
-  composing.value = true;
-  editing.value = grant;
-  selectedRoleId.value = grant.role_id || '';
-  email.value = grant.recipient_email;
-  expiry.value = grant.expires_at ? new Date(grant.expires_at) : null;
-  rights.value = {
-    can_read: grant.can_read,
-    can_upload: grant.can_upload,
-    can_delete: grant.can_delete,
-    can_share: grant.can_share,
-    sharing: grant.sharing,
-  };
-  await nextTick();
-  document.getElementById(`${key.value}-role`)?.focus();
-}
-function canEdit(grant: GrantAccess) {
+function canEdit(grant: EditableGrant) {
   const ceiling = view.value?.capabilities;
   return ceiling && grant.can_manage !== false && withinCeiling(grant, ceiling);
 }
@@ -594,7 +724,7 @@ async function emailLink() {
   }
 }
 type Removal =
-  | { kind: 'grant'; item: GrantAccess }
+  | { kind: 'grant'; item: EditableGrant }
   | { kind: 'invitation'; item: AccessInvitation }
   | { kind: 'member'; item: MemberAccess }
   | { kind: 'link'; item: SecureLink };
@@ -609,21 +739,22 @@ async function remove() {
   if (!selected) {
     return;
   }
+  if (selected.kind === 'grant') {
+    grantEdits.value[selected.item.id] = { ...grantEdit(selected.item), role: removeRole };
+    removal.value = null;
+    return;
+  }
+  if (selected.kind === 'member') {
+    memberEdits.value[selected.item.user_id] = removeRole;
+    memberRevokeLinks.value[selected.item.user_id] = revokeLinks.value;
+    removal.value = null;
+    return;
+  }
   busy.value = true;
   error.value = '';
   try {
-    if (selected.kind === 'grant') {
-      await axios.delete(`${base.value}/grants/${selected.item.id}`, {
-        data: { version: selected.item.version },
-      });
-    }
     if (selected.kind === 'invitation') {
       await axios.delete(`/api/invitations/${selected.item.id}`);
-    }
-    if (selected.kind === 'member') {
-      await axios.delete(`${base.value}/members/${selected.item.user_id}`, {
-        data: { revoke_links: revokeLinks.value },
-      });
     }
     if (selected.kind === 'link') {
       await axios.delete(`/api/links/${selected.item.id}`);
@@ -705,7 +836,7 @@ async function remove() {
             </div>
           </div>
         </div>
-        <form v-if="!editing && canInvite" class="add-person" @submit.prevent="addPerson">
+        <form v-if="canInvite" class="add-person" @submit.prevent="addPerson">
           <label
             v-if="
               !drafts.length &&
@@ -791,74 +922,16 @@ async function remove() {
             @click="sendPeople"
           />
         </div>
-        <form v-if="editing" class="person-form" @submit.prevent="savePerson">
-          <Button
-            label="Back"
-            severity="secondary"
-            variant="text"
-            class="back-button"
-            :disabled="busy"
-            @click="backToPeople(true)"
-          />
-          <div class="recipient-settings">
-            <div class="recipient-identity">
-              <span class="person-avatar" aria-hidden="true">{{ email[0]?.toUpperCase() }}</span
-              ><strong>{{ email }}</strong>
-            </div>
-            <AccessSelect
-              v-model="selectedRole"
-              :inputId="`${key}-role`"
-              ariaLabel="Role"
-              :options="roleOptions"
-              optionLabel="label"
-              optionValue="value"
-              :disabled="busy"
-              class="role-select"
-              :labelStyle="{ display: 'flex', alignItems: 'center', textAlign: 'start' }"
-            />
-          </div>
-          <p class="muted">{{ roleDescription }}</p>
-          <SharingExpiry v-if="scope.kind === 'item'" v-model="expiry" :disabled="busy" />
-          <p class="muted">{{ scopeSummary }} · {{ expirySummary(expiry) }}</p>
-          <p v-if="editing" class="muted">
-            Changes apply to access added here. Access through the client or another folder is
-            unchanged.
-          </p>
-          <p v-else class="muted">An invitation will be emailed to this address.</p>
-          <div class="person-actions">
-            <Button
-              v-if="editing"
-              label="Remove access"
-              severity="danger"
-              variant="text"
-              :disabled="busy"
-              @click="confirmRemove({ kind: 'grant', item: editing })"
-            />
-            <div class="row-buttons">
-              <Button
-                label="Cancel"
-                severity="secondary"
-                variant="text"
-                :disabled="busy"
-                @click="backToPeople()"
-              /><Button
-                type="submit"
-                :label="editing ? 'Save changes' : 'Send invitation'"
-                :loading="busy"
-                :disabled="!selectedRole"
-              />
-            </div>
-          </div>
-        </form>
         <section v-if="!composing" aria-label="People with access" class="people-section">
           <ScopedGroupAccess
+            v-if="GROUPS_UI_ENABLED"
             :key="key"
             :scope="scope"
             :clientId="view.client_id || (scope.kind === 'client' ? scope.id : '')"
             :roles="
               catalog.filter((r) => withinCeiling(roleCapabilities(r, isFile), view!.capabilities))
             "
-            :assignments="view.additional_access || []"
+            :assignments="(view.additional_access || []).filter((a) => a.group_id)"
             @changed="load"
           />
           <h3>People with access</h3>
@@ -871,64 +944,86 @@ async function remove() {
           <p v-if="view.people && !view.can_manage" class="muted">
             You can remove people you invited. Other people’s access is managed by the portal team.
           </p>
-          <div v-for="person in view.people" :key="person.user_id" class="access-row">
-            <div>
-              <strong>{{ person.name || person.email }}</strong
-              ><small>{{ person.email }}</small>
+          <div
+            v-for="person in view.people"
+            :key="person.user_id"
+            class="access-row person-row"
+            :class="{ 'pending-removal': memberEdits[person.user_id] === removeRole }"
+          >
+            <div class="person-identity">
+              <span class="person-avatar" aria-hidden="true">{{
+                (person.name || person.email)[0]?.toUpperCase()
+              }}</span>
+              <div>
+                <strong
+                  >{{ person.name || person.email
+                  }}{{ person.user_id === auth.user?.id ? ' (you)' : '' }}</strong
+                ><small>{{ person.email }}</small>
+              </div>
             </div>
-            <div class="row-buttons">
-              <span class="role-label" :title="describeCapabilities(person.capabilities)">{{
-                roleLabel(person.role_id)
-              }}</span
-              ><template v-if="person.can_remove"
-                ><AccessSelect
-                  v-model="memberEdits[person.user_id]"
-                  :options="memberRoles(person)"
-                  optionLabel="name"
-                  optionValue="id"
-                  :ariaLabel="`Workspace role for ${person.email}`"
-                  :placeholder="roleLabel(person.role_id)"
-                  :disabled="busy" /><Button
-                  label="Save role"
-                  severity="secondary"
-                  :disabled="busy || !memberEdits[person.user_id]"
-                  @click="saveMember(person)" /></template
-              ><Button
+            <div class="recipient-controls">
+              <AccessSelect
                 v-if="person.can_remove"
-                label="Remove"
-                severity="secondary"
-                variant="text"
+                :modelValue="memberEdits[person.user_id] || person.role_id"
+                :options="[...memberRoles(person), removeOption]"
+                optionLabel="name"
+                optionValue="id"
+                :ariaLabel="`Workspace role for ${person.email}`"
+                :placeholder="roleLabel(person.role_id)"
                 :disabled="busy"
-                @click="confirmRemove({ kind: 'member', item: person })"
+                class="inline-role-select"
+                @update:modelValue="setMemberRole(person, $event)"
               />
+              <span v-else class="role-label" :title="describeCapabilities(person.capabilities)">{{
+                person.role === 'admin' ? 'Administrator' : roleLabel(person.role_id)
+              }}</span>
             </div>
           </div>
-          <div v-for="grant in visibleGrants" :key="grant.id" class="access-row">
-            <div>
-              <strong>{{ grant.recipient_name || grant.recipient_email }}</strong
-              ><small
-                >{{ grant.recipient_email
-                }}<template v-if="grant.expires_at">
-                  · Expires {{ date(grant.expires_at) }}</template
-                ></small
-              >
+          <div
+            v-for="grant in visibleGrants"
+            :key="grant.id"
+            class="access-row person-row"
+            :class="{ 'pending-removal': grantEdit(grant).role === removeRole }"
+          >
+            <div class="person-identity">
+              <span class="person-avatar" aria-hidden="true">{{
+                (grant.recipient_name || grant.recipient_email)[0]?.toUpperCase()
+              }}</span>
+              <div>
+                <strong>{{ grant.recipient_name || grant.recipient_email }}</strong
+                ><small
+                  >{{ grant.recipient_email
+                  }}<template v-if="grant.assignment"> · Additional access</template
+                  ><template v-if="grantEdit(grant).expiry">
+                    · Expires {{ date(grantEdit(grant).expiry!.toISOString()) }}</template
+                  ></small
+                >
+              </div>
             </div>
-            <div class="row-buttons">
-              <Button
+            <div class="recipient-controls">
+              <AccessSelect
                 v-if="canEdit(grant)"
                 :id="`${key}-grant-${grant.id}`"
-                :label="roleLabel(grant.role_id)"
-                :aria-label="`Change access for ${grant.recipient_email}`"
-                :aria-description="`Current role: ${roleLabel(grant.role_id)}`"
-                icon="oi oi-chevron-down"
-                iconPos="right"
-                severity="secondary"
+                :modelValue="grantEdit(grant).role"
+                :options="[...grantRoles(grant), removeOption]"
+                optionLabel="name"
+                optionValue="id"
+                :isFile="isFile"
+                :ariaLabel="`Role for ${grant.recipient_email}`"
                 :disabled="busy"
-                variant="text"
-                @click="edit(grant)"
+                class="inline-role-select"
+                @update:modelValue="setGrantRole(grant, $event)"
               /><span v-else class="role-label" :title="describeCapabilities(grant)">{{
                 roleLabel(grant.role_id)
               }}</span>
+              <SharingExpiry
+                v-if="canEdit(grant) && scope.kind === 'item'"
+                :modelValue="grantEdit(grant).expiry"
+                compact
+                :label="`Expiry for ${grant.recipient_email}`"
+                :disabled="busy || grantEdit(grant).role === removeRole"
+                @update:modelValue="grantEdits[grant.id] = { ...grantEdit(grant), expiry: $event }"
+              />
             </div>
           </div>
           <div v-for="invitation in visibleInvitations" :key="invitation.id" class="access-row">
@@ -1134,13 +1229,24 @@ async function remove() {
           @click="activeTab = 'links'"
         />
         <span v-else />
-        <slot name="done" />
+        <div class="footer-actions">
+          <span v-if="pendingChanges" class="muted pending-label" role="status"
+            >Pending changes</span
+          >
+          <Button
+            :label="pendingChanges ? 'Save' : 'Done'"
+            :loading="busy"
+            :disabled="busy"
+            @click="pendingChanges ? saveChanges() : requestClose()"
+          />
+        </div>
       </div>
     </template>
     <Dialog
       :visible="!!removal"
       header="Remove access?"
       modal
+      :dismissableMask="!busy"
       :draggable="false"
       :style="{ width: '30rem', maxWidth: '95vw' }"
       :closable="!busy"
@@ -1160,6 +1266,9 @@ async function remove() {
         This removes the invitation or access added here. The person may still have access through
         the client, another folder or a link.
       </p>
+      <p v-if="removal?.kind === 'member' || removal?.kind === 'grant'" class="muted">
+        Removal takes effect when you save.
+      </p>
       <label v-if="removal?.kind === 'member'" class="history-toggle"
         ><Checkbox v-model="revokeLinks" binary :inputId="`${key}-revoke-links`" /> Also turn off
         every sharing link for this client</label
@@ -1176,6 +1285,27 @@ async function remove() {
           :loading="busy"
           @click="remove"
       /></template>
+    </Dialog>
+    <Dialog
+      :visible="!!discardAction"
+      header="Discard unsaved changes?"
+      modal
+      dismissableMask
+      :draggable="false"
+      :style="{ width: '28rem', maxWidth: '95vw' }"
+      @update:visible="(value) => !value && (discardAction = null)"
+    >
+      <p>Your unsaved sharing changes will be lost.</p>
+      <template #footer>
+        <Button
+          label="Cancel"
+          severity="secondary"
+          variant="text"
+          autofocus
+          @click="discardAction = null"
+        />
+        <Button label="Discard" severity="danger" @click="discardChanges" />
+      </template>
     </Dialog>
   </div>
 </template>
@@ -1224,6 +1354,60 @@ section {
   flex: 1;
   min-width: 160px;
   overflow-wrap: anywhere;
+}
+.person-row {
+  flex-wrap: nowrap;
+  border-radius: var(--p-border-radius-md);
+  padding: 8px;
+  margin-inline: -8px;
+}
+.person-row:hover,
+.person-row:focus-within {
+  background: var(--p-content-hover-background);
+}
+.person-row > .person-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.person-identity > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.pending-removal .person-identity {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+.inline-role-select {
+  max-width: 13rem;
+  min-height: 44px;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+.inline-role-select:deep(.p-select-label) {
+  text-align: end;
+}
+.inline-role-select:has(:focus-visible) {
+  outline: 2px solid var(--p-primary-color);
+  outline-offset: 2px;
+}
+.footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.pending-label {
+  font-style: italic;
+}
+@media (max-width: 480px) {
+  .person-row {
+    flex-wrap: wrap;
+  }
+  .person-row > .recipient-controls {
+    margin-inline-start: auto;
+  }
 }
 strong,
 small {
@@ -1311,8 +1495,7 @@ small {
   padding: 12px;
   border-inline-start: 3px solid var(--p-primary-color);
 }
-.add-person,
-.person-form {
+.add-person {
   display: grid;
   gap: 12px;
 }
@@ -1372,9 +1555,6 @@ small {
   margin-top: 16px;
   padding-top: 8px;
   background: var(--p-content-background);
-}
-.back-button {
-  justify-self: start;
 }
 .people-section {
   margin-top: 20px;
@@ -1436,6 +1616,10 @@ summary:focus-visible {
   }
   .recipient-controls .role-select {
     flex: 1;
+  }
+  .person-row > .recipient-controls {
+    width: auto;
+    margin-inline-start: auto;
   }
 }
 </style>

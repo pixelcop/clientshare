@@ -21,7 +21,7 @@ function description(option: Record<string, unknown>) {
 <template>
   <Select v-bind="attrs" overlayClass="access-select-overlay" scrollHeight="24rem" checkmark>
     <template #option="{ option }">
-      <div class="access-select-option">
+      <div class="access-select-option" :class="{ 'access-select-remove': option.destructive }">
         <strong>{{ label(option) }}</strong>
         <small v-if="description(option)">{{ description(option) }}</small>
       </div>
@@ -56,5 +56,10 @@ function description(option: Record<string, unknown>) {
   color: var(--p-text-muted-color);
   font-size: 12px;
   line-height: 1.5;
+}
+.access-select-remove {
+  border-top: 1px solid var(--p-content-border-color);
+  padding-top: 12px;
+  margin-top: 4px;
 }
 </style>

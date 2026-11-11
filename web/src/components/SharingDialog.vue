@@ -1,11 +1,16 @@
 <script setup lang="ts">
-import { Button, Dialog } from 'openvue';
+import { Dialog } from 'openvue';
 
 import type { SharingScope } from '@/types/sharing';
 
 import SharingPanel from './SharingPanel.vue';
 const { visible, scope } = defineProps<{ visible: boolean; scope: SharingScope }>();
 const emit = defineEmits<{ close: [] }>();
+const panel = ref<InstanceType<typeof SharingPanel> | null>(null);
+function requestClose() {
+  if (panel.value) {panel.value.requestClose();}
+  else {emit('close');}
+}
 </script>
 <template>
   <Dialog
@@ -13,20 +18,19 @@ const emit = defineEmits<{ close: [] }>();
     :visible="visible"
     :header="`Share${scope.kind === 'item' && scope.itemType === 'folder' ? ' folder' : ''}: ${scope.name}`"
     modal
+    dismissableMask
     blockScroll
     :draggable="false"
     :pt="{ header: { style: { paddingBottom: '12px' } } }"
     :style="{ width: '36rem', maxWidth: '95vw' }"
-    @update:visible="(value) => !value && emit('close')"
+    @update:visible="(value) => !value && requestClose()"
   >
-    <SharingPanel v-if="visible" :key="`${scope.kind}-${scope.id}`" :scope>
-      <template #done
-        ><Button
-          label="Done"
-          severity="secondary"
-          :style="{ minHeight: '44px' }"
-          @click="emit('close')"
-      /></template>
-    </SharingPanel>
+    <SharingPanel
+      v-if="visible"
+      ref="panel"
+      :key="`${scope.kind}-${scope.id}`"
+      :scope
+      @close="emit('close')"
+    />
   </Dialog>
 </template>

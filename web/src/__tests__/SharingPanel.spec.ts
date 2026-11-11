@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import SharingExpiry from '@/components/SharingExpiry.vue';
 import SharingPanel from '@/components/SharingPanel.vue';
 import type { AccessInvitation, SecureLink } from '@/types/models';
+
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ user: null }) }));
 
 const capabilities = { can_read: true, can_upload: false, can_delete: false, can_share: true };
@@ -254,25 +255,26 @@ describe('exact-scope sharing panel', () => {
     const patch = vi.spyOn(axios, 'patch').mockResolvedValue({ data: grant });
     const wrapper = mount(SharingPanel, { props: { scope }, global: { plugins: [OpenVue] } });
     await flushPromises();
-    await wrapper.get('[aria-label="Change access for recipient@example.test"]').trigger('click');
-    expect(wrapper.get('.person-form').text()).toContain(
-      'Access through the client or another folder is unchanged.',
-    );
-    await wrapper.get('.person-form [aria-label="Back"]').trigger('click');
-    await wrapper
-      .findAll('button')
-      .find(
-        (button) => button.attributes('aria-label') === 'Change access for recipient@example.test',
-      )!
-      .trigger('click');
-    await wrapper.findAll('form')[0].trigger('submit');
+    expect(wrapper.find('.person-form').exists()).toBe(false);
+    expect(wrapper.get('[aria-label="Done"]').exists()).toBe(true);
+    const expiry = new Date('2027-01-01T00:00:00Z');
+    wrapper.findComponent(SharingExpiry).vm.$emit('update:modelValue', expiry);
+    await flushPromises();
+    expect(patch).not.toHaveBeenCalled();
+    expect(wrapper.text()).toContain('Pending changes');
+    wrapper.findComponent(SharingExpiry).vm.$emit('update:modelValue', null);
+    await flushPromises();
+    expect(wrapper.get('[aria-label="Done"]').exists()).toBe(true);
+    wrapper.findComponent(SharingExpiry).vm.$emit('update:modelValue', expiry);
+    await flushPromises();
+    await wrapper.get('[aria-label="Save"]').trigger('click');
     await flushPromises();
     expect(patch).toHaveBeenCalledExactlyOnceWith('/api/files/file/grants/grant', {
       version: 7,
       user_id: 'recipient',
       role_id: 'viewer',
       capabilities: { can_read: true, can_upload: false, can_share: false, can_delete: false },
-      expires_at: null,
+      expires_at: expiry.toISOString(),
     });
     expect(wrapper.text()).toContain('Access through the client or another folder is unchanged.');
     wrapper.unmount();
@@ -344,17 +346,24 @@ describe('exact-scope sharing panel', () => {
     const patch = vi.spyOn(axios, 'patch').mockResolvedValue({ data: grant });
     const wrapper = mount(SharingPanel, { props: { scope }, global: { plugins: [OpenVue] } });
     await flushPromises();
-    await wrapper.get('[aria-label="Change access for custom@example.test"]').trigger('click');
     expect(wrapper.findComponent(SharingExpiry).props('modelValue')?.toISOString()).toBe(
       grant.expires_at,
     );
-    expect(wrapper.findAllComponents(Select)[0].props('modelValue')).toBe('legacy-delete');
-    await wrapper.get('.person-form').trigger('submit');
+    expect(
+      wrapper
+        .findAllComponents(Select)
+        .find((s) => s.props('ariaLabel') === 'Role for custom@example.test')
+        ?.props('modelValue'),
+    ).toBe('legacy-delete');
+    const expiry = new Date('2027-02-01T00:00:00Z');
+    wrapper.findComponent(SharingExpiry).vm.$emit('update:modelValue', expiry);
+    await flushPromises();
+    await wrapper.get('[aria-label="Save"]').trigger('click');
     await flushPromises();
     expect(patch.mock.calls[0][1]).toEqual(
       expect.objectContaining({
         capabilities: { can_read: false, can_upload: false, can_delete: true, can_share: false },
-        expires_at: grant.expires_at,
+        expires_at: expiry.toISOString(),
         version: 3,
       }),
     );
