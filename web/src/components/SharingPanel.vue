@@ -70,6 +70,33 @@ const scopeSummary = computed(() =>
 );
 const composing = ref(false);
 const isMobile = useMediaQuery('(max-width: 639px)');
+const mobileScreen = ref<'share' | 'manage'>('share');
+type MobilePerson = Exclude<Removal, { kind: 'link' }>;
+const mobilePerson = ref<MobilePerson | null>(null);
+const mobileTitle = computed(() =>
+  activeTab.value === 'links'
+    ? 'Sharing links'
+    : mobileScreen.value === 'manage'
+      ? 'Manage access'
+      : 'Share',
+);
+function mobileBack() {
+  if (activeTab.value === 'links') {
+    activeTab.value = 'people';
+    mobileScreen.value = 'manage';
+  } else {
+    mobileScreen.value = 'share';
+  }
+}
+function openMobileManage() {
+  document.getElementById(`${key.value}-email`)?.blur();
+  mobileScreen.value = 'manage';
+}
+watch(isMobile, (mobile) => {
+  if (!mobile) {
+    mobilePerson.value = null;
+  }
+});
 function focusRecipientEntry() {
   const input = document.getElementById(`${key.value}-email`);
   if (isMobile.value) {
@@ -134,7 +161,7 @@ const dirty = computed(
 );
 const discardAction = ref<(() => void) | null>(null);
 function requestClose() {
-  if (busy.value || removal.value || discardAction.value) {
+  if (busy.value || removal.value || discardAction.value || mobilePerson.value) {
     return;
   }
   if (dirty.value) {
@@ -305,6 +332,88 @@ const visibleGrants = computed<EditableGrant[]>(() =>
 const visibleInvitations = computed(() => (view.value?.invitations || []).filter(active));
 const hasLinkHistory = computed(() => links.value.some((link) => !active(link)));
 const visibleLinks = computed(() => links.value.filter((link) => history.value || active(link)));
+const activeLinks = computed(() => links.value.filter(active));
+const previewPeople = computed(() => {
+  const people = [
+    ...(view.value?.people || []).map((p) => ({ name: p.name || p.email, email: p.email })),
+    ...visibleGrants.value.map((p) => ({
+      name: p.recipient_name || p.recipient_email,
+      email: p.recipient_email,
+    })),
+    ...visibleInvitations.value.map((p) => ({ name: p.email, email: p.email })),
+  ];
+  return [...new Map(people.map((p) => [p.email.toLowerCase(), p])).values()];
+});
+const mobilePersonDetails = computed(() => {
+  const selected = mobilePerson.value;
+  if (!selected) {
+    return null;
+  }
+  if (selected.kind === 'member') {
+    return {
+      name: selected.item.name || selected.item.email,
+      email: selected.item.email,
+      role: memberEdits.value[selected.item.user_id] || selected.item.role_id,
+      roles: memberRoles(selected.item),
+    };
+  }
+  if (selected.kind === 'grant') {
+    return {
+      name: selected.item.recipient_name || selected.item.recipient_email,
+      email: selected.item.recipient_email,
+      role: grantEdit(selected.item).role,
+      roles: grantRoles(selected.item),
+    };
+  }
+  return {
+    name: selected.item.email,
+    email: selected.item.email,
+    role: selected.item.role_id,
+    roles: [],
+  };
+});
+function mobileRoleLabel(id?: string) {
+  return id === removeRole ? 'Access will be removed' : roleLabel(id);
+}
+function chooseMobileRole(role: string) {
+  const selected = mobilePerson.value;
+  if (busy.value || !selected) {
+    return;
+  }
+  if (selected.kind === 'member') {
+    setMemberRole(selected.item, role);
+  }
+  if (selected.kind === 'grant') {
+    setGrantRole(selected.item, role);
+  }
+  mobilePerson.value = null;
+}
+function removeMobilePerson() {
+  const selected = mobilePerson.value;
+  mobilePerson.value = null;
+  if (selected) {
+    confirmRemove(selected);
+  }
+}
+function setMobileExpiry(expiry: Date | null) {
+  const selected = mobilePerson.value;
+  if (selected?.kind === 'grant') {
+    grantEdits.value[selected.item.id] = { ...grantEdit(selected.item), expiry };
+  }
+}
+async function emailMobileInvitation() {
+  const selected = mobilePerson.value;
+  if (busy.value || selected?.kind !== 'invitation') {
+    return;
+  }
+  busy.value = true;
+  try {
+    await sendInvitation(selected.item);
+    mobilePerson.value = null;
+  } finally {
+    busy.value = false;
+  }
+}
 function date(value?: string) {
   if (!value) {
     return 'No expiry';
@@ -429,6 +538,8 @@ watch(
     grantEdits.value = {};
     memberRevokeLinks.value = {};
     discardAction.value = null;
+    mobileScreen.value = 'share';
+    mobilePerson.value = null;
     result.value = null;
     recipient.value = '';
     status.value = '';
@@ -776,7 +887,26 @@ async function remove() {
 
 <template>
   <div class="sharing-panel" :class="{ 'is-composing': composing }">
-    <p v-if="scope.kind === 'client'" class="scope-label muted">
+    <header v-if="isMobile" class="mobile-sharing-header">
+      <Button
+        :icon="
+          activeTab === 'links' || mobileScreen === 'manage' ? 'oi oi-arrow-left' : 'oi oi-times'
+        "
+        :aria-label="
+          activeTab === 'links' || mobileScreen === 'manage' ? 'Back to share' : 'Close sharing'
+        "
+        severity="secondary"
+        variant="text"
+        autofocus
+        :disabled="busy"
+        @click="activeTab === 'links' || mobileScreen === 'manage' ? mobileBack() : requestClose()"
+      />
+      <div>
+        <h2 aria-live="polite">{{ mobileTitle }}</h2>
+        <small>{{ scope.name }}</small>
+      </div>
+    </header>
+    <p v-if="scope.kind === 'client' && !isMobile" class="scope-label muted">
       {{ scope.kind === 'client' ? 'Entire client workspace · all files and folders' : '' }}
     </p>
     <p v-if="loading" role="status">Loading access…</p>
@@ -786,11 +916,43 @@ async function remove() {
     </div>
     <p v-if="status" role="status" class="delivery-status">{{ status }}</p>
     <template v-if="view && !loading">
-      <p v-if="view.inherits_folder_access" class="inheritance-note">
+      <p
+        v-if="view.inherits_folder_access && (!isMobile || mobileScreen === 'manage')"
+        class="inheritance-note"
+      >
         Access also comes from a containing folder. Change the assignment at that folder to remove
         its inherited access.
       </p>
-      <div v-if="activeTab === 'people'">
+      <section
+        v-if="isMobile && activeTab === 'people' && mobileScreen === 'manage'"
+        class="mobile-general-section"
+        aria-label="General access"
+      >
+        <h3>General access</h3>
+        <button
+          type="button"
+          class="mobile-general-access"
+          :disabled="busy || !canCreateLinks"
+          @click="activeTab = 'links'"
+        >
+          <span class="person-avatar" aria-hidden="true"
+            ><i :class="activeLinks.length ? 'oi oi-link' : 'oi oi-lock'"
+          /></span>
+          <span
+            ><strong>{{ activeLinks.length ? 'Sharing links enabled' : 'Restricted' }}</strong
+            ><small>{{
+              activeLinks.length
+                ? 'Anyone with an active link can use its permissions.'
+                : 'Only people with access can open this item.'
+            }}</small></span
+          >
+          <i v-if="canCreateLinks" class="oi oi-chevron-right" aria-hidden="true" />
+        </button>
+      </section>
+      <div
+        v-if="activeTab === 'people'"
+        :class="{ 'mobile-share-content': isMobile && mobileScreen === 'share' }"
+      >
         <div v-if="drafts.length" class="draft-people" aria-label="People to invite">
           <div v-for="person in drafts" :key="person.id" class="draft-person">
             <div class="recipient-settings">
@@ -832,7 +994,11 @@ async function remove() {
             </div>
           </div>
         </div>
-        <form v-if="canInvite" class="add-person" @submit.prevent="addPerson">
+        <form
+          v-if="canInvite && (!isMobile || mobileScreen === 'share')"
+          class="add-person"
+          @submit.prevent="addPerson"
+        >
           <label
             v-if="
               !drafts.length &&
@@ -887,7 +1053,11 @@ async function remove() {
             @click="sendPeople"
           />
         </div>
-        <section v-if="!composing" aria-label="People with access" class="people-section">
+        <section
+          v-if="!composing && (!isMobile || mobileScreen === 'manage')"
+          aria-label="People with access"
+          class="people-section"
+        >
           <ScopedGroupAccess
             v-if="GROUPS_UI_ENABLED"
             :key="key"
@@ -909,11 +1079,23 @@ async function remove() {
           <p v-if="view.people && !view.can_manage" class="muted">
             You can remove people you invited. Other people’s access is managed by the portal team.
           </p>
-          <div
+          <component
+            :is="isMobile && person.can_remove ? 'button' : 'div'"
             v-for="person in view.people"
             :key="person.user_id"
             class="access-row person-row"
-            :class="{ 'pending-removal': memberEdits[person.user_id] === removeRole }"
+            :class="{
+              'mobile-person-row': isMobile,
+              'pending-removal': memberEdits[person.user_id] === removeRole,
+            }"
+            :type="isMobile && person.can_remove ? 'button' : undefined"
+            :disabled="isMobile && person.can_remove ? busy : undefined"
+            :aria-label="
+              isMobile && person.can_remove ? `Change access for ${person.email}` : undefined
+            "
+            @click="
+              isMobile && person.can_remove && (mobilePerson = { kind: 'member', item: person })
+            "
           >
             <div class="person-identity">
               <span class="person-avatar" aria-hidden="true">{{
@@ -924,9 +1106,15 @@ async function remove() {
                   >{{ person.name || person.email
                   }}{{ person.user_id === auth.user?.id ? ' (you)' : '' }}</strong
                 ><small>{{ person.email }}</small>
+                <small v-if="isMobile" class="mobile-person-role">{{
+                  person.role === 'admin'
+                    ? 'Administrator'
+                    : mobileRoleLabel(memberEdits[person.user_id] || person.role_id)
+                }}</small>
               </div>
             </div>
-            <div class="recipient-controls">
+            <i v-if="isMobile && person.can_remove" class="oi oi-chevron-down" aria-hidden="true" />
+            <div v-if="!isMobile" class="recipient-controls">
               <AccessSelect
                 v-if="person.can_remove"
                 :modelValue="memberEdits[person.user_id] || person.role_id"
@@ -943,12 +1131,22 @@ async function remove() {
                 person.role === 'admin' ? 'Administrator' : roleLabel(person.role_id)
               }}</span>
             </div>
-          </div>
-          <div
+          </component>
+          <component
+            :is="isMobile && canEdit(grant) ? 'button' : 'div'"
             v-for="grant in visibleGrants"
             :key="grant.id"
             class="access-row person-row"
-            :class="{ 'pending-removal': grantEdit(grant).role === removeRole }"
+            :class="{
+              'mobile-person-row': isMobile,
+              'pending-removal': grantEdit(grant).role === removeRole,
+            }"
+            :type="isMobile && canEdit(grant) ? 'button' : undefined"
+            :disabled="isMobile && canEdit(grant) ? busy : undefined"
+            :aria-label="
+              isMobile && canEdit(grant) ? `Change access for ${grant.recipient_email}` : undefined
+            "
+            @click="isMobile && canEdit(grant) && (mobilePerson = { kind: 'grant', item: grant })"
           >
             <div class="person-identity">
               <span class="person-avatar" aria-hidden="true">{{
@@ -963,9 +1161,13 @@ async function remove() {
                     · Expires {{ date(grantEdit(grant).expiry!.toISOString()) }}</template
                   ></small
                 >
+                <small v-if="isMobile" class="mobile-person-role">{{
+                  mobileRoleLabel(grantEdit(grant).role)
+                }}</small>
               </div>
             </div>
-            <div class="recipient-controls">
+            <i v-if="isMobile && canEdit(grant)" class="oi oi-chevron-down" aria-hidden="true" />
+            <div v-if="!isMobile" class="recipient-controls">
               <AccessSelect
                 v-if="canEdit(grant)"
                 :id="`${key}-grant-${grant.id}`"
@@ -990,9 +1192,26 @@ async function remove() {
                 @update:modelValue="grantEdits[grant.id] = { ...grantEdit(grant), expiry: $event }"
               />
             </div>
-          </div>
-          <div v-for="invitation in visibleInvitations" :key="invitation.id" class="access-row">
-            <div>
+          </component>
+          <component
+            :is="isMobile && active(invitation) ? 'button' : 'div'"
+            v-for="invitation in visibleInvitations"
+            :key="invitation.id"
+            class="access-row"
+            :class="{ 'mobile-person-row': isMobile }"
+            :type="isMobile ? 'button' : undefined"
+            :disabled="isMobile ? busy : undefined"
+            :aria-label="isMobile ? `Invitation options for ${invitation.email}` : undefined"
+            @click="
+              isMobile &&
+              active(invitation) &&
+              (mobilePerson = { kind: 'invitation', item: invitation })
+            "
+          >
+            <span v-if="isMobile" class="person-avatar" aria-hidden="true">{{
+              invitation.email[0]?.toUpperCase()
+            }}</span>
+            <div class="mobile-invitation-identity">
               <strong>{{ invitation.email }}</strong
               ><small
                 >{{
@@ -1010,7 +1229,12 @@ async function remove() {
                 ></small
               >
             </div>
-            <details v-if="active(invitation)" class="invitation-actions">
+            <i
+              v-if="isMobile && active(invitation)"
+              class="oi oi-chevron-down"
+              aria-hidden="true"
+            />
+            <details v-if="!isMobile && active(invitation)" class="invitation-actions">
               <summary :aria-label="`Invitation options for ${invitation.email}`">Pending</summary>
               <div class="row-buttons">
                 <Button
@@ -1028,7 +1252,7 @@ async function remove() {
                 />
               </div>
             </details>
-          </div>
+          </component>
           <details v-if="pastPeople.length" class="past-access">
             <summary>Past invitations & access ({{ pastPeople.length }})</summary>
             <div v-for="person in pastPeople" :key="person.id" class="access-row">
@@ -1042,6 +1266,7 @@ async function remove() {
       </div>
       <div v-else>
         <Button
+          v-if="!isMobile"
           label="Back to sharing"
           icon="oi oi-arrow-left"
           severity="secondary"
@@ -1184,9 +1409,33 @@ async function remove() {
           >
         </section>
       </div>
+      <section
+        v-if="isMobile && activeTab === 'people' && mobileScreen === 'share' && !composing"
+        class="mobile-access-preview"
+      >
+        <button
+          type="button"
+          class="mobile-manage-access"
+          :disabled="busy"
+          @click="openMobileManage"
+        >
+          <span
+            ><strong>People with access</strong
+            ><span class="mobile-avatar-stack" aria-hidden="true"
+              ><span
+                v-for="person in previewPeople.slice(0, 5)"
+                :key="person.email"
+                class="person-avatar"
+                >{{ person.name[0]?.toUpperCase() }}</span
+              ><small v-if="!previewPeople.length">No people added yet</small></span
+            ></span
+          >
+          <span>Manage access <i class="oi oi-chevron-right" aria-hidden="true" /></span>
+        </button>
+      </section>
       <div v-if="!composing" class="sharing-footer">
         <Button
-          v-if="activeTab === 'people' && canCreateLinks"
+          v-if="activeTab === 'people' && canCreateLinks && !isMobile"
           label="Sharing links"
           icon="oi oi-link"
           severity="secondary"
@@ -1207,6 +1456,64 @@ async function remove() {
         </div>
       </div>
     </template>
+    <Dialog
+      :visible="isMobile && !!mobilePerson"
+      class="sharing-person-sheet"
+      position="bottom"
+      modal
+      dismissableMask
+      :draggable="false"
+      :header="mobilePersonDetails?.name || 'Person access'"
+      :style="{ width: '100vw', maxWidth: '100vw' }"
+      @update:visible="(value) => !value && (mobilePerson = null)"
+    >
+      <template v-if="mobilePersonDetails">
+        <p class="muted sheet-email">{{ mobilePersonDetails.email }}</p>
+        <div class="mobile-role-options" aria-label="Access role">
+          <button
+            v-for="role in mobilePersonDetails.roles"
+            :key="role.id"
+            type="button"
+            :disabled="busy"
+            :aria-pressed="mobilePersonDetails.role === role.id"
+            @click="chooseMobileRole(role.id)"
+          >
+            <span
+              ><strong>{{ role.name }}</strong
+              ><small>{{ role.description }}</small></span
+            ><i
+              v-if="mobilePersonDetails.role === role.id"
+              class="oi oi-check"
+              aria-hidden="true"
+            />
+          </button>
+        </div>
+        <SharingExpiry
+          v-if="mobilePerson?.kind === 'grant' && scope.kind === 'item'"
+          :modelValue="grantEdit(mobilePerson.item).expiry"
+          :disabled="busy || grantEdit(mobilePerson.item).role === removeRole"
+          label="Access expiry"
+          @update:modelValue="setMobileExpiry"
+        />
+        <Button
+          v-if="mobilePerson?.kind === 'invitation'"
+          label="Email invitation"
+          severity="secondary"
+          variant="text"
+          :disabled="busy"
+          @click="emailMobileInvitation"
+        />
+        <div class="sheet-remove">
+          <Button
+            label="Remove access"
+            severity="danger"
+            variant="text"
+            :disabled="busy"
+            @click="removeMobilePerson"
+          />
+        </div>
+      </template>
+    </Dialog>
     <Dialog
       :visible="!!removal"
       header="Remove access?"
@@ -1276,6 +1583,144 @@ async function remove() {
 </template>
 
 <style scoped>
+.mobile-sharing-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.mobile-sharing-header h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+}
+.mobile-sharing-header small {
+  display: block;
+  color: var(--p-text-muted-color);
+  overflow-wrap: anywhere;
+}
+.mobile-sharing-header > div {
+  min-width: 0;
+}
+.mobile-general-section h3 {
+  font-size: 15px;
+  margin: 0 0 12px;
+}
+.mobile-general-section {
+  margin-bottom: 24px;
+}
+.mobile-general-access,
+.mobile-manage-access,
+.mobile-role-options button {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  padding: 12px 0;
+}
+.mobile-general-access > span:nth-child(2),
+.mobile-role-options button > span {
+  flex: 1;
+}
+.mobile-general-access strong,
+.mobile-general-access small,
+.mobile-role-options strong,
+.mobile-role-options small {
+  display: block;
+}
+.mobile-general-access small,
+.mobile-role-options small {
+  color: var(--p-text-muted-color);
+  margin-top: 4px;
+  font-size: 13px;
+}
+.mobile-general-access:disabled {
+  opacity: 1;
+  cursor: default;
+}
+.mobile-manage-access {
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.mobile-manage-access > span:last-child {
+  color: var(--p-primary-color);
+  font-size: 14px;
+}
+.mobile-avatar-stack {
+  display: flex;
+  margin-top: 16px;
+  gap: 4px;
+}
+.mobile-access-preview {
+  border-top: 1px solid var(--p-content-border-color);
+  margin-top: 24px;
+  padding-top: 12px;
+}
+.mobile-role-options {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+.mobile-role-options button {
+  min-height: 56px;
+  border-radius: 8px;
+  padding: 12px;
+}
+.mobile-role-options button:hover {
+  background: var(--p-content-hover-background);
+}
+.sheet-email {
+  overflow-wrap: anywhere;
+  margin: 0 0 16px;
+}
+.sheet-remove {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--p-content-border-color);
+}
+.mobile-invitation-identity {
+  flex: 1;
+  min-width: 0;
+}
+.mobile-person-role {
+  margin-top: 4px;
+}
+@media (max-width: 639px) {
+  .access-row.mobile-person-row {
+    width: 100%;
+    border: 0;
+    border-bottom: 1px solid var(--p-content-border-color);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    padding: 16px 0;
+    flex-wrap: nowrap;
+    gap: 12px;
+    min-height: 72px;
+    margin-inline: 0;
+  }
+  button.mobile-person-row {
+    cursor: pointer;
+  }
+  .mobile-person-row .person-identity {
+    flex: 1;
+    min-width: 0;
+  }
+  .mobile-person-row:disabled {
+    opacity: 0.6;
+  }
+  .mobile-share-content {
+    margin-bottom: 8px;
+  }
+}
 .sharing-panel {
   display: grid;
   gap: 8px;

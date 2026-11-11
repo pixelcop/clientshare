@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useMediaQuery } from '@vueuse/core';
 import { Dialog } from 'openvue';
 
 import SharingPanel from './SharingPanel.vue';
@@ -6,6 +7,7 @@ import SharingPanel from './SharingPanel.vue';
 defineProps<{ visible: boolean; clientId: string; clientName: string }>();
 const emit = defineEmits<{ close: [] }>();
 const panel = ref<InstanceType<typeof SharingPanel> | null>(null);
+const isMobile = useMediaQuery('(max-width: 639px)');
 function requestClose() {
   if (panel.value) {
     panel.value.requestClose();
@@ -18,6 +20,7 @@ function requestClose() {
 <template>
   <Dialog
     class="sharing-dialog"
+    :showHeader="!isMobile"
     :visible="visible"
     :header="`Share workspace: ${clientName}`"
     :aria-label="`Share workspace: ${clientName}`"

@@ -362,6 +362,71 @@ describe('exact-scope sharing panel', () => {
     wrapper.unmount();
   });
 
+  it('uses mobile manage access and a person sheet while keeping role edits staged', async () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn((query: string) => ({
+        matches: query === '(max-width: 639px)',
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      })),
+    );
+    const grant = {
+      id: 'mobile-grant',
+      version: 4,
+      role_id: 'viewer',
+      recipient_name: 'Amber',
+      recipient_email: 'amber@example.test',
+      recipient_user_type: 'external',
+      can_manage: true,
+      can_read: true,
+      can_upload: false,
+      can_delete: false,
+      can_share: false,
+    };
+    const roles = [role('viewer', 'Viewer'), role('reader', 'Reader')];
+    vi.mocked(axios.get).mockImplementation(async (url) => {
+      if (url === '/api/access-roles') {
+        return { data: roles };
+      }
+      return { data: String(url).endsWith('/access') ? { ...access, grants: [grant] } : [] };
+    });
+    const patch = vi.spyOn(axios, 'patch').mockResolvedValue({ data: {} });
+    const wrapper = mount(SharingPanel, {
+      attachTo: document.body,
+      props: { scope },
+      global: { plugins: [OpenVue] },
+    });
+    await flushPromises();
+    expect(wrapper.get('.mobile-sharing-header h2').text()).toBe('Share');
+    expect(wrapper.find('[aria-label="People with access"]').exists()).toBe(false);
+    await wrapper.get('.mobile-manage-access').trigger('click');
+    expect(wrapper.get('.mobile-sharing-header h2').text()).toBe('Manage access');
+    expect(wrapper.find('.add-person').exists()).toBe(false);
+    await wrapper.get('[aria-label="Change access for amber@example.test"]').trigger('click');
+    await flushPromises();
+    const sheet = document.querySelector('.sharing-person-sheet')!;
+    expect(sheet.textContent).toContain('amber@example.test');
+    const reader = [...sheet.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes('Reader'),
+    )!;
+    reader.click();
+    await flushPromises();
+    expect(wrapper.get('.mobile-person-role').text()).toBe('Reader');
+    expect(patch).not.toHaveBeenCalled();
+    await wrapper.get('[aria-label="Back to share"]').trigger('click');
+    expect(wrapper.get('.mobile-sharing-header h2').text()).toBe('Share');
+    await wrapper.get('.mobile-manage-access').trigger('click');
+    expect(wrapper.get('.mobile-person-role').text()).toBe('Reader');
+    await wrapper.get('[aria-label="Save"]').trigger('click');
+    await flushPromises();
+    expect(patch).toHaveBeenCalledWith(
+      '/api/files/file/grants/mobile-grant',
+      expect.objectContaining({ role_id: 'reader', version: 4 }),
+    );
+    wrapper.unmount();
+  });
+
   it('preserves unusual existing permissions and expiry until a role is explicitly chosen', async () => {
     const grant = {
       id: 'custom',

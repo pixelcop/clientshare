@@ -15,6 +15,7 @@
   }
 
   .sharing-dialog .p-dialog-content {
+    padding-top: calc(1rem + env(safe-area-inset-top));
     flex: 1;
     min-height: 0;
     overflow-y: auto;
@@ -30,5 +31,20 @@
 
   .sharing-dialog .sharing-panel .sharing-footer {
     margin-top: auto;
+  }
+
+  .p-dialog.sharing-person-sheet {
+    margin: 0 !important;
+    border-radius: 20px 20px 0 0;
+    max-height: 85dvh;
+  }
+
+  .sharing-person-sheet .p-dialog-content {
+    padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));
+  }
+
+  .sharing-person-sheet .p-dialog-title {
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
 }
