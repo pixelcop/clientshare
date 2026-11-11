@@ -9,7 +9,8 @@ You can use a secure link without creating an account. The sender chooses the cl
 1. Follow the complete link provided by the sender.
 2. Check the file, folder or client name. A folder link opens only that folder and what is inside it.
 3. Read the access label and expiry.
-4. Use the file list or upload area to complete the exchange.
+4. Use the file list or **Upload** button to complete the exchange. You can also
+   drag files onto the file area when uploads are allowed.
 
 | Label | What you can do |
 | --- | --- |
@@ -22,8 +23,6 @@ The portal may offer account creation for continued access. That offer is separa
 **Upload-only** links hide existing files and folders. File links do not allow
 uploads. If you need an account to return to shared files later, ask the sender
 for an email invitation.
-
-![Recipient workspace showing the client name, Read & upload permission, expiry, upload area, and available folders.](/screenshots/recipient-workspace.png)
 
 ## Use the correct access session
 

@@ -7,7 +7,7 @@ Use deletion to remove documents that should no longer be stored in the client's
 ## Delete an item
 
 1. Open the correct client workspace and folder.
-2. Open the action dropdown for the file or folder.
+2. Open **More** (three dots) on the file or folder's row.
 3. Select **Delete**.
 4. Check the name in the confirmation and confirm only when it is the intended item.
 5. Confirm that it no longer appears in the file list.

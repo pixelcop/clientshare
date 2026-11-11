@@ -7,20 +7,29 @@ Anyone with the link can use it, so check what it includes before sending.
 
 ## Create the link
 
-1. Open **Share → Links** at the client workspace root for the whole client, or a file or
-   folder's **Share → Links** section for just that content.
-2. Choose **View & download**, **Upload only**, or **View, download & upload**.
+1. Select **Share workspace** at the client workspace root for the whole client,
+   **Share folder** inside a folder, or **Share** in a file or folder's row actions.
+   On mobile, workspace and folder sharing are in the **Upload** menu when uploads are available.
+2. Select **Sharing links** at the bottom of the dialog.
+3. Under **Anyone with this link can**, choose **View & download**, **Upload only**, or **View, download & upload**.
    File links allow viewing and downloading only.
-3. Choose when the link expires. Check the date, time and timezone.
-4. Review the name and what is included, then select **Create link**.
+4. Under **Link expiry**, choose **Expires in 7 days**, **Expires in 30 days**, or
+   **Custom date…**. For a custom date, select the day and **Set expiry**; access
+   ends at the end of that day in your local timezone. Hover over the expiry or
+   open its menu to check the exact date and time. Links must have an expiry.
+5. Review the name and what is included, then select **Create link**.
 
-Staff can also use **Clients → Links → New link**. There, **Send documents** and
-**Collect uploads** select a starting set of permissions. Always check them before creating the link.
+Staff can also use a client's **Links → New link** action in **Clients**, or
+**Manage links** from workspace sharing. This opens **Client-wide links**, not a
+list of individual file or folder links. There, **Send documents** and
+**Collect uploads** select a starting set of permissions, and **Expires in (days)**
+accepts a whole number from 1 to 120. Always check the access summary before creating the link.
 
 ::: important Review the entire workspace
-At the client workspace root, **Share** includes the entire client. Inside a
-folder, **Share** includes only that folder and everything inside it. Use
-**Share client** there if you want to share the whole workspace instead.
+**Share workspace** includes the entire client. **Share folder** includes only
+that folder and everything inside it. To share the whole workspace from inside
+a folder, return to the workspace root using the breadcrumb, or use the client's
+**Share** action in **Clients**.
 :::
 
 ## Copy and share

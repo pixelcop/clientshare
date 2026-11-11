@@ -15,8 +15,8 @@ A client is a document workspace. A user is a person who signs in. One client ca
 ## Can I share only one folder with a secure link?
 
 Yes. Select the folder's **Share** action and create a link there. It includes
-that folder and everything inside it. To share the entire client, use **Share**
-at the client workspace root, or **Share client** while inside a folder.
+that folder and everything inside it. To share the entire client, use **Share workspace**
+at the client workspace root, or the client's **Share** action in **Clients**.
 
 ## Can upload-only recipients download or delete files?
 
@@ -43,7 +43,7 @@ The app has no user-facing restore workflow. Ask the portal operator about their
 
 Settings requires an administrator account. Public base URL and runtime log level are single-tenant controls and are not shown for hosted workspaces. The current UI also does not expose a primary-color editor.
 
-## Does Last Accessed mean the document was approved?
+## Does a link's last-used time mean the document was approved?
 
 No. It records link access where available, not document approval or proof that every file was read. Confirm approvals through your team's normal process.
 

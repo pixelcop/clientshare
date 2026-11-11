@@ -23,7 +23,10 @@ Keep the portal address so you can return later. You do not need to reuse the in
 
 ## Find your documents
 
-Open **My Files** and the client workspace or folder you need. Your account can be assigned to more than one client. Follow [Send and receive documents](./send-and-receive-documents.md) for uploads and downloads.
+For whole-workspace access, open **My Files**. Use **Client workspace** above the
+file list to choose between assigned clients. If you were invited only to a file
+or folder, start in **Shared with me** instead. Follow
+[Send and receive documents](./send-and-receive-documents.md) for uploads and downloads.
 
 Files and folders shared with your account appear in **Shared with me**. You can
 open what was shared, but not other private folders. Shares disappear when they

@@ -4,15 +4,19 @@
 
 ## Find a client's links
 
-Open **Share → Links** at the client workspace root for the whole client, or a file or folder's
-**Share → Links** section. Staff can also open **Links** from the client directory.
+Open **Share workspace** at the client workspace root, **Share folder** inside a
+folder, or an item's **Share** row action. Select **Sharing links** at the bottom
+of the dialog. On mobile, workspace and folder sharing are in the **Upload** menu
+when uploads are available. Staff can also open **Links** from the client directory
+for the separate **Client-wide links** list; that list does not include item-only links.
 
 Choose **Use link** or **Details & email** to copy or email an existing link.
 Check its permissions and expiry before sending it.
 
-In the sharing dialog's **Links** tab, select **Include expired and revoked links**
-to see past links. Past invitations and removed access are in a collapsed section
-in **People**.
+Under **Existing links**, select **Show inactive links** to include expired and
+revoked links. This option appears only when there are inactive links.
+Use **Back to sharing** to return to people; **Past invitations & access** appears
+there only when there are past entries.
 In the client's link list, use **Expired & revoked history** to see links that no longer work.
 
 **Details & email → Link history** shows when a link was created and last used,

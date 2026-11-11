@@ -1,6 +1,7 @@
 # Organize client folders
 
-**Who:** Staff organizing a client's documents. Recipients can navigate within the access they have been given.
+**Who:** People with upload permission can create folders. People with view
+permission can browse only the content shared with them.
 
 Folders keep a client's uploads and deliverables easy to find. For example:
 
@@ -12,28 +13,36 @@ Willow Creek Holdings
 └── Completed Work
 ```
 
-Folder names help people navigate; they do not create separate access permissions within a client's workspace.
-
-![Willow Creek Holdings workspace with an upload area, New Folder action, and four folders for organizing the exchange.](/screenshots/client-workspace.png)
+Folder names help people navigate; naming a folder does not restrict access.
+You can [share a folder](../sharing/share-items.md) without sharing the whole
+client, but people with existing workspace access can still open it.
 
 ## Create and open a folder
 
 1. Open **Clients**, then the client's **View Files** action.
 2. Navigate to the folder that should contain the new folder.
-3. Select **New Folder**, enter the folder name, and create it.
+3. Select **New folder**, enter the folder name, and create it. On mobile, open
+   the menu beside **Upload** and select **New folder**.
 4. Select the new folder's name to open it.
 
-Use the breadcrumb above the file list to move back through parent folders. Check the current folder before uploading so documents arrive in the intended location.
+Use the breadcrumb above the file list to move back through parent folders.
+If the path is shortened, select **…** (**Show parent folders**) to find hidden
+parents. A shared-folder view does not let you navigate outside your access.
+Check the current folder before uploading so documents arrive in the intended location.
 
 ## Upload an existing folder
 
-Select **Choose Folder** in the upload area to pick a folder from your computer, or drag a folder into the area in browsers that support it. Its structure is recreated under the current destination. Wait for all uploads to finish before navigating away.
+Open the menu beside **Upload** and select **Upload folder** to pick a folder
+from your computer, or drag a folder onto the file area in browsers that support it.
+Its structure is recreated under the current destination. Wait for all uploads to finish before navigating away.
 
 If folder drag-and-drop is not supported by your browser, create the destination folders and upload the files separately. See [Upload files](./upload.md) for duplicate-name prompts and errors.
 
 ## Download a folder
 
-Open the folder's action dropdown and choose **Download Zip**. Recipients with read access have a download icon beside the folder. Upload-only recipients cannot download its contents.
+Open the folder's **More** (three dots) menu and choose **Download ZIP**. People
+with view permission can also use the row's download icon where shown.
+Upload-only recipients cannot download its contents.
 
 ## Change the organization
 

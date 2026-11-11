@@ -1,6 +1,7 @@
 # Preview and download files
 
-**Who:** Staff, assigned client users, and recipients with Read or Read & Write access.
+**Who:** People with view permission for the file or folder, including recipients
+of **View & download** or **View, download & upload** links.
 
 ## Preview a document
 
@@ -15,13 +16,16 @@ Preview behavior depends on the file type and browser. The app has viewers for P
 
 ## Download a file
 
-Select the download action on the file's row. Staff see a main download button with an action dropdown; client recipients see a download icon alongside **Preview**.
+Use the row's download icon, or open **More** (three dots) and select **Download**.
+Row icons appear when you hover or focus a row, and on touch devices. On narrow
+screens, use **More** for actions that are not shown alongside the filename.
 
 Your browser saves the file according to its download settings. Check its downloads list if you do not see the file immediately.
 
 ## Download a folder as ZIP
 
-Use **Download Zip** from the folder actions, or the folder's download icon where shown. Open the downloaded ZIP on your device to access its contents. Large folders may take longer to prepare.
+Use **Download ZIP** from the folder's **More** menu, or its download icon where
+shown. Open the downloaded ZIP on your device to access its contents. Large folders may take longer to prepare.
 
 ## When a preview or download is unavailable
 

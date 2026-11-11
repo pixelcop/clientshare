@@ -37,4 +37,8 @@ An empty queue means no messages are waiting there; it does not prove that an ea
 - For reset emails, request a new reset from the sign-in page.
 - If delivery keeps failing, ask the portal operator to check email configuration and delivery logs.
 
-Avoid sending repeated invitations before confirming the address. A copied invite or secure link can be delivered directly to the intended recipient when appropriate.
+Avoid sending repeated invitations before confirming the address. For file or
+folder invitations, expand **Pending** in the sharing dialog and use **Email invitation**.
+Those invitations are delivered only to the invited email address. Administrators
+can copy account invitation links from **Users**; sharing links can also be copied,
+but anyone who obtains a working sharing link can use it.

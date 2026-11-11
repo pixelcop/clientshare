@@ -11,23 +11,22 @@ appear in **Shared with me**. They do not give you access to the whole client wo
 ## Send documents
 
 1. Open the destination folder the sender asked you to use.
-2. Drag files into the upload area, or select files with the picker.
+2. Select **Upload**, or drag files onto the file area. For a folder, open the menu
+   beside **Upload** and select **Upload folder**.
 3. If asked to rename duplicate files, give each one a distinct name and continue.
 4. Wait until the upload finishes.
 5. If you can browse the folder, check that your uploaded files appear in the list.
 
 You can select multiple files. For a large batch, keep the page open until every transfer has finished. If an error appears, check which files arrived before trying again.
 
-![Client Uploads folder after a recipient uploaded Client response - demo.txt; the new document appears alongside the existing fictional project brief.](/screenshots/recipient-upload.png)
-
-No upload area? You may have a **Read-only** link. Ask the sender for upload access.
+No **Upload** button? You may have a **Read-only** link. Ask the sender for upload access.
 
 ## Receive documents
 
 1. Open the relevant folder.
 2. Select a filename or **Preview** to view it.
-3. Select the download icon to save a copy to your device.
-4. Use a folder's download icon to download its contents as a ZIP when available.
+3. Select the download icon, or **More** (three dots) → **Download**, to save a copy.
+4. Use a folder's download icon or **More → Download ZIP** to download its contents when available.
 
 If a file cannot be previewed, download it and open it in the appropriate application. With **Upload-only** access, downloading is intentionally unavailable.
 

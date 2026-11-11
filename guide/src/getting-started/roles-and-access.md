@@ -35,10 +35,12 @@ does not hide it from people who already have access to the client or folder.
 
 ## Account or link?
 
-Use **Invite by email** in a file or folder's **Share** dialog when someone should
+Enter an email address in a file or folder's **Share** dialog when someone should
 sign in to open it. After accepting, they can find it in **Shared with me**.
-Use **Share → People** at the client workspace root to invite someone to the
-entire workspace. Inside a folder, use **Share client** for whole-workspace access.
+Use **Share workspace** at the client workspace root to invite someone to the
+entire workspace. Inside a folder, return to the workspace root or use the
+client's **Share** action in **Clients** for whole-workspace access. On mobile,
+workspace and folder sharing are in the **Upload** menu when uploads are available.
 
 A secure link works for anyone who has it. Choose the client, folder or file
 carefully before sharing. File links allow viewing and downloading. Folder and

@@ -1,22 +1,23 @@
 # Upload files
 
-**Who:** Administrators, managers, assigned client users, and recipients of Write or Read & Write links.
+**Who:** People with upload permission for the destination workspace or folder,
+including recipients of **Upload only** or **View, download & upload** links.
 
 ## Upload to the right place
 
 1. Open the client workspace and the destination folder.
-2. Drag files into the upload area, or click it to choose files from your device.
-3. If offered, choose whether to **Notify client by email after upload**.
+2. Select **Upload** to choose files from your device, or drag files onto the file area.
+3. If offered, open the mail button and set **Email notifications** before uploading.
 4. Wait for the upload progress to complete.
 5. Check the file list for the uploaded filenames. With read access, open a preview or download to confirm the expected document.
 
 Keep the page open until the transfer finishes. Selecting files alone does not mean they have reached the portal.
 
-![Documents to Review folder showing the upload area, client email notification option, and uploaded PDF and CSV sample files.](/screenshots/upload-and-files.png)
-
 ## Upload folders
 
-Use **Choose Folder**, or drag a folder into the upload area, to preserve its structure when your browser supports folder uploads. The app processes folders and their files; operating-system metadata files such as `.DS_Store` are skipped.
+Open the menu beside **Upload** and select **Upload folder**, or drag a folder
+onto the file area, to preserve its structure when your browser supports folder uploads.
+The app processes folders and their files; operating-system metadata files such as `.DS_Store` are skipped.
 
 If your browser cannot read a dropped folder, [create folders](./organize-folders.md) in the portal and upload their files separately.
 
@@ -25,6 +26,12 @@ If your browser cannot read a dropped folder, [create folders](./organize-folder
 When selected files conflict with existing names or with one another, the upload flow can ask you to rename them. Enter distinct names and continue. Use meaningful names such as `Project brief - revised.pdf` so both people can recognize the version.
 
 Do not assume uploading another file with the same name silently replaces the old document.
+
+## Stop an upload
+
+Select **Stop upload** while a transfer is running. Files that already reached
+the portal remain there; stopping does not undo them. Check the file list before
+retrying and upload only what is missing.
 
 ## Email notifications
 

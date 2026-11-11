@@ -14,7 +14,9 @@ Ask portal staff to verify your account if the problem persists. Do not create a
 
 ## My secure link no longer works
 
-Open the complete original link. If it has expired or been revoked, ask the sender for a replacement. Only the sender's administrator can provide new permissions or a later expiry.
+Open the complete original link. If it has expired or been revoked, ask the sender
+for a replacement. Someone with permission to share that content must create a
+new link for different permissions or a later expiry.
 
 If you opened a secure link while using a staff account, sign in again to return to the account's normal navigation.
 
@@ -26,7 +28,10 @@ If you opened a secure link while using a staff account, sign in again to return
 - Check the link's access label: Read-only cannot upload, and Upload-only cannot download.
 - Ask whether the item has been deleted.
 
-Settings and secure-link management are administrator features. Client users do not have staff deletion controls.
+Settings requires an administrator. File actions depend on the permissions for
+that item: upload permission alone does not allow deletion or sharing. Secure
+links never allow deletion. Individual shares may appear only in **Shared with me**,
+not in the **Client workspace** selector.
 
 ## My upload failed
 

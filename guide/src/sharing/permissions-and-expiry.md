@@ -29,9 +29,14 @@ change their account permissions.
 
 ## Set an expiry
 
-Choose an expiry date and time. In **New link**, you can choose a suggested number
-of days or enter a value from **1 to 120**. Check the date, time and timezone before
-sharing. The link stops working after expiry, even if someone already has it open.
+In **Sharing links**, open **Link expiry** and choose **Expires in 7 days**,
+**Expires in 30 days**, or **Custom date…**. A custom date ends at the end of the
+selected day in your local timezone; select **Set expiry** to confirm. Hover over
+the control or open its menu for the exact date and time. Links cannot use **No expiry**.
+
+In the separate **Client-wide links → New link** form, **Expires in (days)** accepts
+a suggested number of days or a whole number from **1 to 120**. Check the displayed
+expiry before sharing. The link stops working after expiry, even if someone already has it open.
 
 **Send documents** and **Collect uploads** select a starting set of permissions.
 Check the permissions and expiry for each new recipient.

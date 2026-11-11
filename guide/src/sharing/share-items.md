@@ -7,13 +7,13 @@
 1. Find the file or folder and select **Share** on its row or in **More**. On a
    narrow screen, use **More → Share**. File detail pages also have **Share**.
 2. Check the name. Sharing a folder includes everything inside it.
-3. Under **Add people**, enter an email address and press **Enter** or select **Add**.
+3. In **Enter an email address**, enter an address and press **Enter** or select **Add**.
    Add more addresses in the input below the recipients.
 4. Choose a role for each person. Use the clock beside their role to choose an
    expiry: 7 days, 30 days, or **Custom date…**. Custom access ends at the end of
-    the selected day in your local timezone. The default is no expiry. A highlighted
-    clock means an expiry is set. Hover for the exact date and time, or tap the
-    clock to see it at the top of the expiry menu.
+   the selected day in your local timezone; confirm with **Set expiry**. The default
+   is **No expiry**. A highlighted clock means an expiry is set. Hover for the
+   exact date and time, or open the clock menu to see it at the top.
 5. Select **Send invitation** and check the email status. If sending fails, expand
    **Pending** beside the invitation and use **Email invitation** to try again.
 
@@ -66,9 +66,12 @@ Use **Copy link** to paste it into your own message, or enter an address under
 from your signed-in account.
 
 Reopen a link with **Use link**, or choose **Revoke** to stop it working, even if
-someone already has it open. Select **Include expired and revoked links** to see past links.
+someone already has it open. Under **Existing links**, **Show inactive links**
+appears when there are expired or revoked links to include.
 
-Inside a folder, the top **Share** button shares that folder. To invite someone
-to the whole client, use **Share client**, or return to the client workspace root
-and select **Share**. Check the dialog title and each recipient's summary
-to confirm what is included.
+Inside a folder, **Share folder** shares that folder. To invite someone to the
+whole client, return to the client workspace root and select **Share workspace**,
+or use the client's **Share** action in **Clients**. On mobile, workspace and
+folder sharing are in the **Upload** menu when uploads are available. Check the
+dialog title to confirm what is included. Whole-workspace invitations do not
+offer the per-person expiry clock used for file and folder invitations.

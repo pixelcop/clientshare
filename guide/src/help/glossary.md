@@ -15,12 +15,12 @@
 | **Direct share** | A file or folder shared with a person's account, without sharing the whole client. |
 | **Inherited access** | Access to a file because its client or a containing folder was shared with you. |
 | **Shared with me** | The page where you find files and folders shared with your account. |
-| **Read** | Link permission to view and download documents. |
-| **Write** | Link permission to upload documents; downloads are disabled. |
-| **Read & Write** | Link permission to view, download, and upload documents. |
+| **View & download / Read-only** | Link permission to view and download documents. |
+| **Upload only / Upload-only** | Link permission to upload documents without seeing existing files or folders. |
+| **View, download & upload / Read & upload** | Link permission to view, download, and upload documents. |
 | **Expiry** | The time after which a secure link is no longer usable. |
 | **Revoke** | End a link's access before or regardless of its scheduled expiry. |
-| **Invitation** | An email/link that lets a new user set up account access. |
+| **Invitation** | An email/link that lets someone accept shared access, setting up an account if needed. |
 | **Passkey** | A sign-in credential used through a device lock, biometric verification, or security key. |
 | **Activity** | The account's unread/read event notifications. |
 | **Pending email** | A queued notification waiting to be sent. |

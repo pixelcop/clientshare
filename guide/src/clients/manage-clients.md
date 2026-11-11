@@ -10,7 +10,8 @@ A client is the workspace that holds an organization's or person's documents. Cr
 
 1. Open **Clients** → **New Client**.
 2. Enter a recognizable name, such as `Willow Creek Holdings`.
-3. If you want to share immediately and you are an administrator, enable secure-link generation and select its access, expiry, and email options.
+3. If you want a link immediately, enable **Generate secure link** and select its
+   permissions and expiry. Creating the link does not email it.
 4. Submit the form.
 
 The client appears in **Client Directory** with its own root folder. If link creation fails after the client is created, use that existing client's **Links** action to try again; do not create a duplicate client.
@@ -19,7 +20,10 @@ The client appears in **Client Directory** with its own root folder. If link cre
 
 Use **Search clients...** to narrow the directory. Use the page controls when the list spans multiple pages. Select the client name or **View Files** to open its files.
 
-The dropdown beside **View Files** contains actions such as **View Users**, **Add User**, and, for administrators, **Links**, **Edit**, and **Delete**.
+The dropdown beside **View Files** contains **Share**, **View Users**, **Add User**,
+and, for administrators, **Links**, **Edit**, and **Delete**. **Share** opens access
+to the entire workspace. Select **Sharing links** there to create a link, or add
+email addresses to invite named accounts.
 
 ## Edit a client
 

@@ -6,9 +6,13 @@ Open **Settings**, make the intended changes, review the preview, and select **S
 
 ## Default secure-link expiry
 
-Set **Default secure-link expiry** to a number of days from **1 to 120**. This supplies the starting value for link creation; the administrator creating a link can choose another value.
+Set **Default secure-link expiry** to a number of days from **1 to 120**. This
+supplies the starting value in the **Client-wide links → New link** form and
+when generating a link while creating a client. The person creating the link
+can choose another value. The **Sharing links** dialog uses its own expiry picker;
+always check it separately.
 
-The link form can remember recent choices in that browser. Always check the expiry on the individual link. Changing the default does not extend or shorten links already created.
+Changing the default does not extend or shorten links already created.
 
 ## Public base URL
 

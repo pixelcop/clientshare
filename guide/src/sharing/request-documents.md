@@ -14,7 +14,9 @@ For example, ask for a project brief, an asset inventory, and supporting images.
 
 ## Send an upload link
 
-1. Open **Share → Links** at the client workspace root for the entire client, or a folder's **Share → Links** for just that folder.
+1. Open **Share workspace** at the client workspace root for the entire client,
+   or **Share folder** in the destination folder. Select **Sharing links**.
+   On mobile, use the **Upload** menu to find the sharing action.
 2. Select **Upload only**.
 3. Set the expiry to cover the requested submission period.
 4. Create the link, then use **Copy link** or **Email link** to send it. Check the email status if sending from the portal.

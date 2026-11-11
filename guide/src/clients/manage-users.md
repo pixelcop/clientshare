@@ -21,7 +21,7 @@ if they need help.
 ::: tip Choose the role before saving
 Use Customer for people who need access to selected client workspaces. To share
 just one file or folder, use its [Share](../sharing/share-items.md) action. To
-invite someone to a whole workspace, open **Share → People** at the client workspace root.
+invite someone to a whole workspace, open **Share workspace** at the client workspace root.
 :::
 
 ## Find users and check invitations
@@ -29,7 +29,7 @@ invite someone to a whole workspace, open **Share → People** at the client wor
 Search or filter the **Users** directory. Opening **View Users** from a client filters the directory to that client. The status badge distinguishes **Invite pending** from **Accepted**.
 
 For a pending invitation in the user directory, choose **Resend Invite**. For an
-invitation made through **Share**, use **Email invitation** in its **People** tab.
+invitation made through sharing, expand **Pending** beside the person and use **Email invitation**.
 
 Administrators can also copy account invitation or password-reset links from the
 user directory. File and folder invitations are sent only to the recipient's email address.
@@ -44,12 +44,15 @@ Invitation and reset links provide account access. Send them directly to the per
 
 Creating a Customer in the user directory requires at least one assigned client.
 People invited to a file or folder can have an account without a whole client workspace.
-Managers change client access through **Share → People** at the client workspace root.
+Managers remove client access through **Share workspace** at the client workspace root.
 
 ## Remove a user
 
 Administrators can select **Delete** from the user's action dropdown to remove
-their account. To remove access to just one client, open **Share → People** at the client workspace root and choose **Remove**.
+their account. To remove access to just one client, open **Share workspace** at the
+client workspace root and choose **Remove** beside the person. On mobile, find
+**Share workspace** in the **Upload** menu when uploads are available, or use the
+client's **Share** action in **Clients**.
 This also removes their file and folder shares in that client and cancels their pending invitations.
 
 Shares they created for other people keep working. If they have a sharing link,
