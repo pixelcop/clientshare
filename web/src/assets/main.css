@@ -2,3 +2,8 @@ html {
   font-size: 14px;
   line-height: 1;
 }
+
+/* Keep padded labels and arrows centered when a Select has a taller hit area. */
+.p-select {
+  align-items: center;
+}

@@ -39,7 +39,12 @@ function description(option: Record<string, unknown>) {
 .access-select-overlay .p-select-option {
   min-height: 44px;
   align-items: center;
+  padding: 12px 16px;
+  gap: 12px;
   white-space: normal;
+}
+.access-select-overlay .p-select-option-check-icon {
+  margin-inline: 0;
 }
 .access-select-option {
   min-width: 0;
