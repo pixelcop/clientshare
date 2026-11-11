@@ -1,13 +1,26 @@
 <script setup lang="ts">
 import axios from 'axios';
-import { Button, FileUpload, type FileUploadSelectEvent, Select, useToast } from 'openvue';
+import {
+  Button,
+  FileUpload,
+  type FileUploadSelectEvent,
+  Select,
+  Tab,
+  TabList,
+  TabPanel,
+  TabPanels,
+  Tabs,
+  useToast,
+} from 'openvue';
 import { storeToRefs } from 'pinia';
+import { useRoute, useRouter } from 'vue-router';
 
 import Logo from '@/components/Logo.vue';
 import TenantUsage from '@/components/TenantUsage.vue';
 import { defaultBrandingTitle, useBrandingStore } from '@/stores/branding';
 import { useTenantSettingsStore } from '@/stores/tenantSettings';
 import type { QueuedEmail } from '@/types/models';
+import AccessSettings from '@/views/AccessSettings.vue';
 
 import inviteWelcomeText from '../../../shared/invite-welcome.txt?raw';
 import { formatDate } from '../types/util';
@@ -17,6 +30,23 @@ const tenantSettingsStore = useTenantSettingsStore();
 const { branding } = storeToRefs(brandingStore);
 const { settings: tenantSettings } = storeToRefs(tenantSettingsStore);
 const toast = useToast();
+const route = useRoute();
+const router = useRouter();
+const settingsTabs = [
+  { value: 'branding', label: 'Branding' },
+  { value: 'email', label: 'Email notifications' },
+  { value: 'access', label: 'Access roles' },
+  { value: 'usage', label: 'Usage' },
+];
+const activeTab = computed({
+  get: () =>
+    settingsTabs.some((tab) => tab.value === route.query.tab)
+      ? String(route.query.tab)
+      : 'branding',
+  set: (value: string | number) => {
+    void router.replace({ query: { ...route.query, tab: String(value) } });
+  },
+});
 
 type LogLevelOption = {
   label: string;
@@ -275,271 +305,298 @@ onMounted(() => {
 
 <template>
   <div class="space-y-6">
-    <div class="flex items-center justify-between">
+    <div class="flex flex-wrap items-start justify-between gap-4">
       <div>
         <h1 class="text-2xl font-bold">Settings</h1>
         <p class="text-sm text-muted-color">
-          Manage tenant branding, invites, links, and appearance.
+          Manage branding, email notifications, access roles, and workspace usage.
         </p>
       </div>
-      <Button :disabled="saving || loading" @click="saveSettings" severity="primary">
+      <Button
+        v-if="activeTab === 'branding'"
+        :disabled="saving || loading"
+        @click="saveSettings"
+        severity="primary"
+      >
         {{ saving ? 'Saving...' : 'Save Changes' }}
       </Button>
     </div>
 
-    <TenantUsage />
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <Card class="lg:col-span-2 rounded shadow">
-        <template #title>
-          <h2 class="text-lg font-semibold">Branding</h2>
-        </template>
-
-        <template #content>
-          <div class="flex flex-col space-y-4">
-            <div class="flex flex-col gap-2">
-              <label class="text-sm font-medium">Site title</label>
-              <InputText
-                v-model="form.siteTitle"
-                type="text"
-                class="w-full border rounded px-3 py-2"
-                placeholder="ClientShare Portal"
-              />
-            </div>
-
-            <div class="flex flex-col gap-2">
-              <label class="text-md font-bold">Logo upload</label>
-              <div class="flex flex-row gap-4">
-                <div v-if="logoPreview || removeLogo" class="flex flex-col items-center">
-                  <h6>Current Logo</h6>
-                  <img
-                    v-if="logoPreview"
-                    :src="logoPreview"
-                    alt="Logo preview"
-                    class="h-10 w-10 object-contain rounded mb-4"
+    <Tabs v-model:value="activeTab" scrollable class="settings-tabs shadow">
+      <TabList :pt="{ tabList: { 'aria-label': 'Settings sections' } }">
+        <Tab v-for="tab in settingsTabs" :key="tab.value" :value="tab.value">{{ tab.label }}</Tab>
+      </TabList>
+      <TabPanels>
+        <TabPanel value="branding">
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <section class="lg:col-span-2 grid content-start gap-4" aria-label="Branding">
+              <h2 class="text-lg font-semibold">Branding</h2>
+              <div class="flex flex-col space-y-4">
+                <div class="flex flex-col gap-2">
+                  <label class="text-sm font-medium">Site title</label>
+                  <InputText
+                    v-model="form.siteTitle"
+                    type="text"
+                    class="w-full border rounded px-3 py-2"
+                    placeholder="ClientShare Portal"
                   />
-                  <i v-else class="oi oi-minus h-10 w-10 mb-4 text-center pt-4"></i>
-
-                  <label class="inline-flex items-center gap-2 text-sm">
-                    <input v-model="removeLogo" type="checkbox" @change="onRemoveLogoChange" />
-                    Remove current logo
-                  </label>
                 </div>
-                <FileUpload
-                  class="p-button-outlined"
-                  ref="fileupload"
-                  mode="advanced"
-                  name="logo[]"
-                  :multiple="false"
-                  :show-upload-button="false"
-                  :show-cancel-button="false"
-                  custom-upload
-                  severity="info"
-                  accept="image/*"
-                  :maxFileSize="1000000"
-                  @select="onLogoChange"
+
+                <div class="flex flex-col gap-2">
+                  <label class="text-md font-bold">Logo upload</label>
+                  <div class="flex flex-wrap gap-4">
+                    <div v-if="logoPreview || removeLogo" class="flex flex-col items-center">
+                      <h6>Current Logo</h6>
+                      <img
+                        v-if="logoPreview"
+                        :src="logoPreview"
+                        alt="Logo preview"
+                        class="h-10 w-10 object-contain rounded mb-4"
+                      />
+                      <i v-else class="oi oi-minus h-10 w-10 mb-4 text-center pt-4"></i>
+
+                      <label class="inline-flex items-center gap-2 text-sm">
+                        <input v-model="removeLogo" type="checkbox" @change="onRemoveLogoChange" />
+                        Remove current logo
+                      </label>
+                    </div>
+                    <FileUpload
+                      class="p-button-outlined"
+                      ref="fileupload"
+                      mode="advanced"
+                      name="logo[]"
+                      :multiple="false"
+                      :show-upload-button="false"
+                      :show-cancel-button="false"
+                      custom-upload
+                      severity="info"
+                      accept="image/*"
+                      :maxFileSize="1000000"
+                      @select="onLogoChange"
+                    >
+                      <template #content>
+                        <span>Drag and drop image here to upload.</span>
+                      </template>
+                    </FileUpload>
+                  </div>
+                </div>
+
+                <!-- FIXME: when we properly set colors -->
+                <div v-if="false" class="flex flex-col gap-2">
+                  <label class="text-sm font-medium">Primary color</label>
+                  <div class="flex items-center gap-3">
+                    <ColorPicker
+                      v-model="form.primaryColor"
+                      type="color"
+                      class="picker h-10 w-16 rounded border"
+                    />
+                    <InputText
+                      v-model="form.primaryColor"
+                      type="text"
+                      class="flex-1 border rounded px-3 py-2"
+                      placeholder="#3B82F6"
+                    />
+                  </div>
+                </div>
+
+                <div v-if="isSingleTenant" class="flex flex-col gap-2">
+                  <label class="text-sm font-medium">Public base URL</label>
+                  <InputText
+                    v-model="form.publicBaseURL"
+                    type="url"
+                    class="w-full border rounded px-3 py-2"
+                    placeholder="https://portal.example.com"
+                  />
+                  <p class="text-xs text-muted-color">
+                    Used for invite, reset-password, and secure-link URLs for this tenant.
+                  </p>
+                  <p v-if="effectivePublicBaseURL" class="text-xs text-muted-color">
+                    Current effective URL: {{ effectivePublicBaseURL }}
+                  </p>
+                </div>
+
+                <div class="flex flex-col gap-2">
+                  <label class="text-sm font-medium">Invite welcome text</label>
+                  <textarea
+                    v-model="form.inviteWelcomeText"
+                    rows="4"
+                    class="w-full rounded border px-3 py-2"
+                    :placeholder="defaultInviteWelcomeText"
+                  />
+                  <p class="text-xs text-muted-color">
+                    Leave blank to use the default message shown in the preview.
+                  </p>
+                </div>
+
+                <div class="flex flex-col gap-2">
+                  <label class="text-sm font-medium">Default secure-link expiry</label>
+                  <input
+                    v-model.number="form.secureLinkDefaultExpiryDays"
+                    type="number"
+                    min="1"
+                    max="120"
+                    class="w-full rounded border px-3 py-2"
+                  />
+                  <p class="text-xs text-muted-color">
+                    Applied when creating secure links unless the user overrides it.
+                  </p>
+                </div>
+
+                <div v-if="isSingleTenant" class="flex flex-col gap-2">
+                  <label class="text-sm font-medium">Runtime log level</label>
+                  <Select
+                    v-model="form.logLevel"
+                    :options="logLevelOptions"
+                    optionLabel="label"
+                    optionValue="value"
+                    class="w-full"
+                    placeholder="Select a log level"
+                  />
+                  <p class="text-xs text-muted-color">
+                    Applies immediately and resets when the server restarts.
+                  </p>
+                </div>
+              </div>
+            </section>
+
+            <aside class="space-y-4" aria-label="Branding preview">
+              <h2 class="text-lg font-semibold">Preview</h2>
+              <div class="rounded border p-4 space-y-3">
+                <div class="gap-3">
+                  <p class="text-sm mb-2">Header</p>
+                  <div class="flex layout-topbar-logo-container">
+                    <div class="layout-topbar-logo">
+                      <img
+                        v-if="logoPreview"
+                        :src="logoPreview"
+                        alt="Logo preview"
+                        class="h-10 w-10 object-contain rounded"
+                      />
+                      <span v-if="form.siteTitle && form.siteTitle !== defaultBrandingTitle">{{
+                        form.siteTitle
+                      }}</span>
+                      <Logo v-else />
+                    </div>
+                  </div>
+                </div>
+                <div class="rounded border p-3 space-y-1 text-sm text-slate-600">
+                  <p>
+                    <span class="font-medium text-slate-900">Invite copy:</span>
+                    {{ form.inviteWelcomeText.trim() || defaultInviteWelcomeText }}
+                  </p>
+                  <p>
+                    <span class="font-medium text-slate-900">Default link expiry:</span>
+                    {{ normalizeSecureLinkExpiryDays() }} days
+                  </p>
+                </div>
+                <!-- FIXME: when we properly set colors -->
+                <div v-if="false" class="rounded border p-3 space-y-2">
+                  <p class="text-sm">Buttons</p>
+                  <Button :style="{ backgroundColor: form.primaryColor || defaultPrimaryColor }">
+                    Primary action
+                  </Button>
+                </div>
+              </div>
+            </aside>
+          </div>
+        </TabPanel>
+
+        <TabPanel value="email">
+          <section class="grid gap-4" aria-label="Email notifications">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 class="text-lg font-semibold mb-0!">Email notifications</h2>
+                <p class="text-sm text-muted-color">Pending queued emails waiting to be sent.</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <Button
+                  :disabled="emailQueueLoading || emailQueueProcessing"
+                  @click="fetchPendingEmails"
+                  severity="secondary"
                 >
-                  <template #content>
-                    <span>Drag and drop image here to upload.</span>
-                  </template>
-                </FileUpload>
+                  Refresh
+                </Button>
+                <Button
+                  :disabled="emailQueueLoading || emailQueueProcessing"
+                  @click="processEmailQueue"
+                  severity="info"
+                >
+                  {{ emailQueueProcessing ? 'Sending...' : 'Send now' }}
+                </Button>
               </div>
             </div>
-
-            <!-- FIXME: when we properly set colors -->
-            <div v-if="false" class="flex flex-col gap-2">
-              <label class="text-sm font-medium">Primary color</label>
-              <div class="flex items-center gap-3">
-                <ColorPicker
-                  v-model="form.primaryColor"
-                  type="color"
-                  class="picker h-10 w-16 rounded border"
-                />
-                <InputText
-                  v-model="form.primaryColor"
-                  type="text"
-                  class="flex-1 border rounded px-3 py-2"
-                  placeholder="#3B82F6"
-                />
-              </div>
-            </div>
-
-            <div v-if="isSingleTenant" class="flex flex-col gap-2">
-              <label class="text-sm font-medium">Public base URL</label>
-              <InputText
-                v-model="form.publicBaseURL"
-                type="url"
-                class="w-full border rounded px-3 py-2"
-                placeholder="https://portal.example.com"
-              />
-              <p class="text-xs text-muted-color">
-                Used for invite, reset-password, and secure-link URLs for this tenant.
-              </p>
-              <p v-if="effectivePublicBaseURL" class="text-xs text-muted-color">
-                Current effective URL: {{ effectivePublicBaseURL }}
-              </p>
-            </div>
-
-            <div class="flex flex-col gap-2">
-              <label class="text-sm font-medium">Invite welcome text</label>
-              <textarea
-                v-model="form.inviteWelcomeText"
-                rows="4"
-                class="w-full rounded border px-3 py-2"
-                :placeholder="defaultInviteWelcomeText"
-              />
-              <p class="text-xs text-muted-color">
-                Leave blank to use the default message shown in the preview.
-              </p>
-            </div>
-
-            <div class="flex flex-col gap-2">
-              <label class="text-sm font-medium">Default secure-link expiry</label>
-              <input
-                v-model.number="form.secureLinkDefaultExpiryDays"
-                type="number"
-                min="1"
-                max="120"
-                class="w-full rounded border px-3 py-2"
-              />
-              <p class="text-xs text-muted-color">
-                Applied when creating secure links unless the user overrides it.
-              </p>
-            </div>
-
-            <div v-if="isSingleTenant" class="flex flex-col gap-2">
-              <label class="text-sm font-medium">Runtime log level</label>
-              <Select
-                v-model="form.logLevel"
-                :options="logLevelOptions"
-                optionLabel="label"
-                optionValue="value"
-                class="w-full"
-                placeholder="Select a log level"
-              />
-              <p class="text-xs text-muted-color">
-                Applies immediately and resets when the server restarts.
-              </p>
-            </div>
-          </div>
-        </template>
-      </Card>
-
-      <Card class="rounded shadow p-6 space-y-4">
-        <template #title>
-          <h2 class="text-lg font-semibold">Preview</h2>
-        </template>
-
-        <template #content>
-          <div class="rounded border p-4 space-y-3">
-            <div class="gap-3">
-              <p class="text-sm mb-2">Header</p>
-              <div class="flex layout-topbar-logo-container">
-                <div class="layout-topbar-logo">
-                  <img
-                    v-if="logoPreview"
-                    :src="logoPreview"
-                    alt="Logo preview"
-                    class="h-10 w-10 object-contain rounded"
-                  />
-                  <span v-if="form.siteTitle && form.siteTitle !== defaultBrandingTitle">{{
-                    form.siteTitle
-                  }}</span>
-                  <Logo v-else />
-                </div>
-              </div>
-            </div>
-            <div class="rounded border p-3 space-y-1 text-sm text-slate-600">
-              <p>
-                <span class="font-medium text-slate-900">Invite copy:</span>
-                {{ form.inviteWelcomeText.trim() || defaultInviteWelcomeText }}
-              </p>
-              <p>
-                <span class="font-medium text-slate-900">Default link expiry:</span>
-                {{ normalizeSecureLinkExpiryDays() }} days
-              </p>
-            </div>
-            <!-- FIXME: when we properly set colors -->
-            <div v-if="false" class="rounded border p-3 space-y-2">
-              <p class="text-sm">Buttons</p>
-              <Button :style="{ backgroundColor: form.primaryColor || defaultPrimaryColor }">
-                Primary action
-              </Button>
-            </div>
-          </div>
-        </template>
-      </Card>
-    </div>
-
-    <Card class="rounded shadow space-y-4">
-      <template #title>
-        <div class="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 class="text-lg font-semibold mb-0!">Email notifications</h2>
-            <p class="text-sm text-muted-color">Pending queued emails waiting to be sent.</p>
-          </div>
-          <div class="flex items-center gap-2">
-            <Button
-              :disabled="emailQueueLoading || emailQueueProcessing"
-              @click="fetchPendingEmails"
-              severity="secondary"
+            <div
+              v-if="emailQueueError"
+              class="rounded border border-red-200 bg-red-50 text-red-700 px-4 py-2"
             >
-              Refresh
-            </Button>
-            <Button
-              :disabled="emailQueueLoading || emailQueueProcessing"
-              @click="processEmailQueue"
-              severity="info"
+              {{ emailQueueError }}
+            </div>
+            <div
+              v-if="emailQueueSuccess"
+              class="rounded border border-green-200 bg-green-50 text-green-700 px-4 py-2"
             >
-              {{ emailQueueProcessing ? 'Sending...' : 'Send now' }}
-            </Button>
-          </div>
-        </div>
-      </template>
+              {{ emailQueueSuccess }}
+            </div>
 
-      <template #content>
-        <div
-          v-if="emailQueueError"
-          class="rounded border border-red-200 bg-red-50 text-red-700 px-4 py-2"
-        >
-          {{ emailQueueError }}
-        </div>
-        <div
-          v-if="emailQueueSuccess"
-          class="rounded border border-green-200 bg-green-50 text-green-700 px-4 py-2"
-        >
-          {{ emailQueueSuccess }}
-        </div>
-
-        <div v-if="emailQueueLoading" class="text-sm">Loading queued emails...</div>
-        <div v-else>
-          <div v-if="pendingEmails.length === 0" class="text-sm mt-4">
-            No pending email notifications.
-          </div>
-          <table v-else class="min-w-full border rounded overflow-hidden">
-            <thead class="text-left text-sm">
-              <tr>
-                <th class="px-4 py-2">Recipient</th>
-                <th class="px-4 py-2">Subject</th>
-                <th class="px-4 py-2">Scheduled</th>
-                <th class="px-4 py-2">Queued</th>
-              </tr>
-            </thead>
-            <tbody class="text-sm">
-              <tr v-for="email in pendingEmails" :key="email.id" class="border-t">
-                <td class="px-4 py-2">{{ email.recipient }}</td>
-                <td class="px-4 py-2">{{ email.subject }}</td>
-                <td class="px-4 py-2">{{ formatDate(email.scheduled_for) }}</td>
-                <td class="px-4 py-2">{{ formatDate(email.created_at) }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </template>
-    </Card>
+            <div v-if="emailQueueLoading" class="text-sm">Loading queued emails...</div>
+            <div v-else>
+              <div v-if="pendingEmails.length === 0" class="text-sm mt-4">
+                No pending email notifications.
+              </div>
+              <div v-else class="overflow-x-auto">
+                <table class="min-w-full border rounded overflow-hidden">
+                  <thead class="text-left text-sm">
+                    <tr>
+                      <th class="px-4 py-2">Recipient</th>
+                      <th class="px-4 py-2">Subject</th>
+                      <th class="px-4 py-2">Scheduled</th>
+                      <th class="px-4 py-2">Queued</th>
+                    </tr>
+                  </thead>
+                  <tbody class="text-sm">
+                    <tr v-for="email in pendingEmails" :key="email.id" class="border-t">
+                      <td class="px-4 py-2">{{ email.recipient }}</td>
+                      <td class="px-4 py-2">{{ email.subject }}</td>
+                      <td class="px-4 py-2">{{ formatDate(email.scheduled_for) }}</td>
+                      <td class="px-4 py-2">{{ formatDate(email.created_at) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+        </TabPanel>
+        <TabPanel value="access">
+          <AccessSettings />
+        </TabPanel>
+        <TabPanel value="usage">
+          <TenantUsage />
+        </TabPanel>
+      </TabPanels>
+    </Tabs>
   </div>
 </template>
 
 <style scoped>
+.settings-tabs {
+  min-width: 0;
+  background: var(--p-content-background);
+  border-radius: var(--p-border-radius-md);
+  overflow: hidden;
+}
+.settings-tabs :deep(.p-tabpanels) {
+  padding: 24px;
+  background: var(--p-content-background);
+}
+.settings-tabs :deep(.p-tab) {
+  min-height: 44px;
+  white-space: nowrap;
+}
+@media (max-width: 640px) {
+  .settings-tabs :deep(.p-tabpanels) {
+    padding: 16px;
+  }
+}
 .picker {
   --p-colorpicker-preview-height: 100%;
   --p-colorpicker-preview-width: 100%;

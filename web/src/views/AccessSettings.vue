@@ -289,13 +289,16 @@ async function confirm() {
 </script>
 
 <template>
-  <main class="max-w-5xl mx-auto grid gap-6">
-    <header>
-      <h1 class="text-2xl font-bold">Access roles</h1>
-      <p class="mt-2 text-muted-color max-w-2xl">
-        Define document permissions once, then assign them to people in a client workspace, folder,
-        or file. Organization administration stays separate.
-      </p>
+  <section class="grid gap-6" aria-label="Access roles">
+    <header class="flex flex-wrap justify-between items-start gap-4">
+      <div>
+        <h2 class="text-lg font-semibold">Document access roles</h2>
+        <p class="mt-2 text-muted-color max-w-2xl">
+          Define document permissions once, then assign them to people in a client workspace,
+          folder, or file. Organization administration stays separate.
+        </p>
+      </div>
+      <Button v-if="tab === 'roles'" label="Create access role" @click="editRole()" />
     </header>
     <p v-if="error" role="alert" class="text-red-600">
       {{ error }} <Button label="Refresh" severity="secondary" @click="load" />
@@ -314,10 +317,6 @@ async function confirm() {
       />
     </nav>
     <section v-if="tab === 'roles'" class="grid gap-4">
-      <div class="flex justify-between items-center gap-4">
-        <h2 class="text-lg font-semibold">Document access roles</h2>
-        <Button label="Create access role" @click="editRole()" />
-      </div>
       <p class="text-sm text-muted-color">
         Names are editable. Renaming a role never changes its permissions. Editing permissions
         updates all existing assignments.
@@ -648,5 +647,5 @@ async function confirm() {
         </div>
       </div>
     </Dialog>
-  </main>
+  </section>
 </template>

@@ -273,7 +273,7 @@ function clearClientScope() {
           v-if="isAdmin"
           label="Access roles"
           severity="secondary"
-          @click="router.push('/settings/access')"
+          @click="router.push({ name: 'Settings', query: { tab: 'access' } })"
         />
         <Button
           v-if="!scopedClientId"

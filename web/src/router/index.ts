@@ -144,7 +144,7 @@ const router = createRouter({
     {
       path: '/settings/access',
       name: 'AccessSettings',
-      component: () => import('../views/AccessSettings.vue'),
+      redirect: (to) => ({ name: 'Settings', query: { ...to.query, tab: 'access' } }),
       meta: { public: false, roles: ['admin'] },
     },
     {
@@ -179,7 +179,9 @@ router.beforeEach(async (to, _from) => {
   }
   // If user is logged in, allow
   if (auth.user) {
-    if (to.name === 'Users' && !auth.canManageUsers) return { name: 'Clients' };
+    if (to.name === 'Users' && !auth.canManageUsers) {
+      return { name: 'Clients' };
+    }
     const allowedRoles = to.meta.roles as string[] | undefined;
     if (allowedRoles && !allowedRoles.includes(auth.user.role)) {
       return ['client', 'customer', 'link'].includes(auth.user.role)

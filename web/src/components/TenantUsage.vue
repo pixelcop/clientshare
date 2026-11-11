@@ -21,7 +21,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <section class="rounded-lg border border-surface-200 p-4 mb-6" aria-label="Workspace usage">
+  <section class="grid gap-4" aria-label="Workspace usage">
     <h2 class="text-lg font-semibold">Workspace usage</h2>
     <p v-if="error" role="status">{{ error }}</p>
     <template v-else-if="usage">

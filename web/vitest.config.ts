@@ -15,6 +15,15 @@ export default defineConfig((env) =>
       }),
     ],
 
+    server: {
+      fs: {
+        allow: [
+          fileURLToPath(new URL('./', import.meta.url)),
+          fileURLToPath(new URL('../shared/', import.meta.url)),
+        ],
+      },
+    },
+
     test: {
       environment: 'jsdom',
       exclude: [...configDefaults.exclude, 'e2e/**'],

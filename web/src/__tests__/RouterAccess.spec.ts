@@ -93,4 +93,17 @@ describe('folder navigation', () => {
     await router.push('/settings');
     expect(router.currentRoute.value.name).toBe(role === 'manager' ? 'Clients' : 'FolderRootView');
   });
+
+  it('redirects the old role-management URL into the Settings access tab', async () => {
+    auth.user = { role: 'admin' };
+    await router.push('/settings/access');
+    expect(router.currentRoute.value.name).toBe('Settings');
+    expect(router.currentRoute.value.query.tab).toBe('access');
+  });
+
+  it.each(['manager', 'client', 'link'])('keeps the access tab restricted for %s', async (role) => {
+    auth.user = { role };
+    await router.push('/settings/access');
+    expect(router.currentRoute.value.name).toBe(role === 'manager' ? 'Clients' : 'FolderRootView');
+  });
 });

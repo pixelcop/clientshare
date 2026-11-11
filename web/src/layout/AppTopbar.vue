@@ -39,20 +39,15 @@ const menuItems = computed<MenuItem[]>(() => {
       to: '/activity',
       props: { active: route.path.startsWith('/activity') },
     });
-    if (auth.canManageUsers)
+    if (auth.canManageUsers) {
       items.push({
         type: 'custom',
         label: 'Users',
         to: '/users',
         props: { active: route.path.startsWith('/users') },
       });
+    }
     if (role === 'admin') {
-      items.push({
-        type: 'custom',
-        label: 'Access roles',
-        to: '/settings/access',
-        props: { active: route.path === '/settings/access' },
-      });
       items.push({
         type: 'custom',
         label: 'Settings',
