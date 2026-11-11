@@ -856,6 +856,7 @@ async function remove() {
                   optionValue="value"
                   :disabled="busy"
                   fluid
+                  class="link-role-select"
                 />
               </div>
               <div class="link-setting">
@@ -1114,6 +1115,12 @@ small {
 .link-setting :deep(.p-select) {
   min-width: 0;
   min-height: 44px;
+}
+.link-setting :deep(.link-role-select .p-select-label) {
+  display: flex;
+  align-items: center;
+  min-height: 42px;
+  padding-block: 0;
 }
 .link-composer > .muted,
 .link-history-note {
