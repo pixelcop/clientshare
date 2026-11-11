@@ -271,7 +271,7 @@ function clearClientScope() {
       <div class="flex items-center gap-2">
         <Button
           v-if="isAdmin"
-          label="Roles and groups"
+          label="Access roles"
           severity="secondary"
           @click="router.push('/settings/access')"
         />

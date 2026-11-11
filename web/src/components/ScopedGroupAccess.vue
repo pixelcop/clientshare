@@ -2,6 +2,7 @@
 import axios from 'axios';
 
 import AccessSelect from '@/components/AccessSelect.vue';
+import { GROUPS_UI_ENABLED } from '@/features';
 import { useAuthStore } from '@/stores/auth';
 import type { GroupDetails, TenantAccessRole } from '@/types/accessRoles';
 import { applicableRole, roleSummary, tenantRoleLabel } from '@/types/accessRoles';
@@ -73,7 +74,7 @@ watch(availableRoles, (roles) => {
   }
 });
 onMounted(async () => {
-  if (auth.user?.role === 'admin') {
+  if (GROUPS_UI_ENABLED && auth.user?.role === 'admin') {
     try {
       const [groupList, people] = await Promise.all([
         axios.get<GroupDetails[]>('/api/access-groups'),
@@ -185,17 +186,23 @@ async function confirm() {
 </script>
 <template>
   <section
-    v-if="assignments.length || auth.user?.role === 'admin'"
+    v-if="
+      assignments.some((a) => GROUPS_UI_ENABLED || !a.group_id) ||
+      (GROUPS_UI_ENABLED && auth.user?.role === 'admin')
+    "
     class="grid gap-3 mt-5"
-    aria-label="Group and additive access"
+    aria-label="Additional access"
   >
-    <h3 class="font-semibold">Group and additional access</h3>
+    <h3 class="font-semibold">Additional access</h3>
     <p class="text-sm text-muted-color">
       Each assignment is independent. Removing one leaves other access sources unchanged.
     </p>
     <article
       v-for="a in assignments.filter(
-        (a) => !a.revoked_at && (!a.expires_at || Date.parse(a.expires_at) > Date.now()),
+        (a) =>
+          (GROUPS_UI_ENABLED || !a.group_id) &&
+          !a.revoked_at &&
+          (!a.expires_at || Date.parse(a.expires_at) > Date.now()),
       )"
       :key="a.id"
       class="grid gap-2 border-b border-surface pb-3"
@@ -239,7 +246,11 @@ async function confirm() {
         @click="stageGroup(a.id)"
       />
     </article>
-    <form v-if="auth.user?.role === 'admin'" class="grid gap-3" @submit.prevent="stageGroup()">
+    <form
+      v-if="GROUPS_UI_ENABLED && auth.user?.role === 'admin'"
+      class="grid gap-3"
+      @submit.prevent="stageGroup()"
+    >
       <label class="grid gap-2"
         >Group<Select
           ariaLabel="Group"

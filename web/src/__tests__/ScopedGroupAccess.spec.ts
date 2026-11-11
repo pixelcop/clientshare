@@ -8,8 +8,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ScopedGroupAccess from '@/components/ScopedGroupAccess.vue';
 import type { GroupDetails, TenantAccessRole } from '@/types/accessRoles';
 import type { User } from '@/types/models';
+import type { AdditionalAccess } from '@/types/sharing';
 
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ user: { role: 'admin' } }) }));
+const features = vi.hoisted(() => ({ groups: true }));
+vi.mock('@/features', () => ({
+  get GROUPS_UI_ENABLED() {
+    return features.groups;
+  },
+}));
 
 const people = [
   { id: 'internal', role: 'manager', access_profile: { user_type: 'internal' } },
@@ -74,6 +81,7 @@ function options(wrapper: Wrapper) {
 
 describe('scoped group role eligibility', () => {
   beforeEach(() => {
+    features.groups = true;
     vi.stubGlobal(
       'matchMedia',
       vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() })),
@@ -85,6 +93,28 @@ describe('scoped group role eligibility', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+  });
+
+  it('hides group controls and assignments without hiding additional person access', async () => {
+    features.groups = false;
+    const wrapper = await open();
+    expect(wrapper.find('form').exists()).toBe(false);
+    expect(axios.get).not.toHaveBeenCalled();
+    await wrapper.setProps({
+      assignments: [
+        { id: 'group', group_id: 'team', group_name: 'Hidden team', role_id: 'shared-role' },
+        {
+          id: 'person',
+          user_id: 'external',
+          recipient_name: 'Visible person',
+          role_id: 'shared-role',
+        },
+      ] as AdditionalAccess[],
+    });
+    expect(wrapper.text()).not.toContain('Hidden team');
+    expect(wrapper.text()).toContain('Visible person');
+    expect(wrapper.find('button[aria-label="Remove group from this scope"]').exists()).toBe(false);
+    wrapper.unmount();
   });
 
   it.each([

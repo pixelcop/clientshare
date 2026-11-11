@@ -8,6 +8,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GroupDetails, TenantAccessRole } from '@/types/accessRoles';
 import AccessSettings from '@/views/AccessSettings.vue';
 
+// Keep deferred group behavior covered while the production UI is hidden.
+const features = vi.hoisted(() => ({ groups: true }));
+vi.mock('@/features', () => ({
+  get GROUPS_UI_ENABLED() {
+    return features.groups;
+  },
+}));
+
 const roles = [
   { id: 'file-role', name: 'File reviewer', allow_file: true, allow_folder: false },
   { id: 'folder-role', name: 'Folder reviewer', allow_file: false, allow_folder: true },
@@ -51,6 +59,7 @@ async function open(scopeType?: string, roleId = 'both-role') {
     },
   });
   await flushPromises();
+  if (!features.groups) return wrapper;
   await wrapper.get('button[aria-label="Groups"]').trigger('click');
   await wrapper.get('button[aria-label="Edit group"]').trigger('click');
   await flushPromises();
@@ -65,6 +74,7 @@ function roleSelect(wrapper: Wrapper) {
 
 describe('group editor exact scope roles', () => {
   beforeEach(() => {
+    features.groups = true;
     vi.stubGlobal(
       'matchMedia',
       vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() })),
@@ -73,6 +83,17 @@ describe('group editor exact scope roles', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+  });
+
+  it('hides group management while keeping role management available for this release', async () => {
+    features.groups = false;
+    const wrapper = await open();
+    expect(wrapper.text()).toContain('Document access roles');
+    expect(wrapper.find('button[aria-label="Create access role"]').exists()).toBe(true);
+    expect(wrapper.find('button[aria-label="Groups"]').exists()).toBe(false);
+    expect(wrapper.find('button[aria-label="Create group"]').exists()).toBe(false);
+    expect(wrapper.find('button[aria-label="Edit group"]').exists()).toBe(false);
+    wrapper.unmount();
   });
 
   it.each([

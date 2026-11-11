@@ -2,6 +2,7 @@
 import axios from 'axios';
 
 import AccessSelect from '@/components/AccessSelect.vue';
+import { GROUPS_UI_ENABLED } from '@/features';
 import type { GroupDetails, TenantAccessRole } from '@/types/accessRoles';
 import { roleSummary, tenantRoleLabel } from '@/types/accessRoles';
 import type { Client, RolePermissions, User } from '@/types/models';
@@ -290,10 +291,10 @@ async function confirm() {
 <template>
   <main class="max-w-5xl mx-auto grid gap-6">
     <header>
-      <h1 class="text-2xl font-bold">Roles and groups</h1>
+      <h1 class="text-2xl font-bold">Access roles</h1>
       <p class="mt-2 text-muted-color max-w-2xl">
-        Define document permissions once, then assign them to people or groups in a client
-        workspace, folder, or file. Organization administration stays separate.
+        Define document permissions once, then assign them to people in a client workspace, folder,
+        or file. Organization administration stays separate.
       </p>
     </header>
     <p v-if="error" role="alert" class="text-red-600">
@@ -301,7 +302,7 @@ async function confirm() {
     </p>
     <p v-if="status" role="status">{{ status }}</p>
     <p v-if="loading" role="status">Loading access settings…</p>
-    <nav aria-label="Access settings" class="flex gap-2">
+    <nav v-if="GROUPS_UI_ENABLED" aria-label="Access settings" class="flex gap-2">
       <Button
         label="Access roles"
         :severity="tab === 'roles' ? 'primary' : 'secondary'"
@@ -370,7 +371,7 @@ async function confirm() {
         </div>
       </article>
     </section>
-    <section v-else class="grid gap-4">
+    <section v-else-if="GROUPS_UI_ENABLED" class="grid gap-4">
       <div class="flex justify-between items-center">
         <h2 class="text-lg font-semibold">Groups</h2>
         <Button label="Create group" @click="editGroup()" />
@@ -483,6 +484,7 @@ async function confirm() {
       </form>
     </Dialog>
     <Dialog
+      v-if="GROUPS_UI_ENABLED"
       :visible="!!groupEditor"
       modal
       blockScroll

@@ -145,7 +145,6 @@ describe('staff invitation quota', () => {
         organization_role: 'none',
         all_workspaces: false,
         workspace_access: [],
-        group_ids: [],
       },
     ]);
     wrapper.unmount();
@@ -160,6 +159,8 @@ describe('staff invitation quota', () => {
     expect(staff.get('button[type="submit"]').attributes('disabled')).toBeUndefined();
     await staff.get('form').trigger('submit');
     expect(staff.emitted('submit')).toHaveLength(1);
+    expect(staff.find('label[for$="-groups"]').exists()).toBe(false);
+    expect(staff.emitted('submit')?.[0]?.[0]).not.toHaveProperty('group_ids');
     expect(staff.emitted('submit')?.[0]).toEqual([
       expect.objectContaining({
         user_type: 'internal',

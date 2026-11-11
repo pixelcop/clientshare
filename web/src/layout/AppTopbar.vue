@@ -49,7 +49,7 @@ const menuItems = computed<MenuItem[]>(() => {
     if (role === 'admin') {
       items.push({
         type: 'custom',
-        label: 'Roles and groups',
+        label: 'Access roles',
         to: '/settings/access',
         props: { active: route.path === '/settings/access' },
       });

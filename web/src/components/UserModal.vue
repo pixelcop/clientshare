@@ -2,6 +2,7 @@
 import axios from 'axios';
 
 import AccessSelect from '@/components/AccessSelect.vue';
+import { GROUPS_UI_ENABLED } from '@/features';
 import StaffSeatUsage from '@/components/StaffSeatUsage.vue';
 import { useAuthStore } from '@/stores/auth';
 import { useStaffQuotaStore } from '@/stores/staffQuota';
@@ -134,7 +135,7 @@ async function prepare() {
   try {
     const [catalog, groupList, settings] = await Promise.all([
       axios.get<TenantAccessRole[]>('/api/access-roles', { params: { archived: isAdmin.value } }),
-      isAdmin.value
+      isAdmin.value && GROUPS_UI_ENABLED
         ? axios.get<GroupDetails[]>('/api/access-groups')
         : Promise.resolve({ data: [] as GroupDetails[] }),
       isEdit.value && props.user
@@ -236,7 +237,7 @@ function onSubmit() {
       client_id: id,
       role_id: workspaceRoles.value[id]!,
     })),
-    ...(isAdmin.value ? { group_ids: groupIds.value } : {}),
+    ...(isAdmin.value && GROUPS_UI_ENABLED ? { group_ids: groupIds.value } : {}),
     ...(isAdmin.value && isEdit.value && hadLegacyUserManagement.value
       ? { can_manage_users: userType.value === 'internal' && legacyUserManagement.value }
       : {}),
@@ -346,7 +347,7 @@ function onSubmit() {
                 label: 'Administrator',
                 value: 'administrator',
                 description:
-                  'Manage settings, people, roles and groups, with access to all client workspaces.',
+                  'Manage settings, people and roles, with access to all client workspaces.',
               },
             ]"
             optionLabel="label"
@@ -360,8 +361,8 @@ function onSubmit() {
         v-if="userType === 'internal' && organizationRole === 'administrator'"
         class="text-muted-color"
       >
-        Administrators manage organization settings, people, roles and groups, and retain access to
-        all client workspaces.
+        Administrators manage organization settings, people and roles, and retain access to all
+        client workspaces.
       </p>
       <label v-else-if="userType === 'internal' && isAdmin" class="flex gap-3 items-center min-h-11"
         ><Checkbox v-model="allWorkspaces" binary :disabled="disabled" />Full access to all current
@@ -449,7 +450,7 @@ function onSubmit() {
           all-workspace authority.
         </p>
       </fieldset>
-      <div v-if="isAdmin" class="grid gap-2">
+      <div v-if="isAdmin && GROUPS_UI_ENABLED" class="grid gap-2">
         <label :for="`${fieldPrefix}-groups`">Groups</label>
         <MultiSelect
           :inputId="`${fieldPrefix}-groups`"
