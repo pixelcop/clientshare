@@ -76,11 +76,9 @@ describe('exact-scope sharing panel', () => {
   });
 
   it('shares by email without a recipient-type selector or an identity-change hint', async () => {
-    const post = vi
-      .spyOn(axios, 'post')
-      .mockResolvedValue({
-        data: { id: 'invite', email: 'teammate@example.test', status: 'queued' },
-      });
+    const post = vi.spyOn(axios, 'post').mockResolvedValue({
+      data: { id: 'invite', email: 'teammate@example.test', status: 'queued' },
+    });
     const wrapper = mount(SharingPanel, { props: { scope }, global: { plugins: [OpenVue] } });
     await flushPromises();
     expect(wrapper.text()).not.toContain('Recipient type');
@@ -333,6 +331,33 @@ describe('exact-scope sharing panel', () => {
       .trigger('click');
     expect(wrapper.get('#item-file-email').element).toBe(document.activeElement);
     expect((wrapper.get('#item-file-email').element as HTMLInputElement).value).toBe('');
+    wrapper.unmount();
+  });
+
+  it('moves focus to the sharing page after adding a recipient on mobile', async () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn((query: string) => ({
+        matches: query === '(max-width: 639px)',
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      })),
+    );
+    const wrapper = mount(SharingPanel, {
+      attachTo: document.body,
+      props: { scope },
+      global: { plugins: [OpenVue] },
+    });
+    await flushPromises();
+    const input = wrapper.get<HTMLInputElement>('#item-file-email');
+    expect(input.attributes('autofocus')).toBeUndefined();
+    input.element.focus();
+    await input.setValue('mobile@example.test');
+    await wrapper.get('.add-person').trigger('submit');
+    await flushPromises();
+    expect(document.activeElement).toBe(wrapper.get('.sharing-panel').element);
+    expect(wrapper.get('.draft-people').text()).toContain('mobile@example.test');
+    expect(input.element.value).toBe('');
     wrapper.unmount();
   });
 

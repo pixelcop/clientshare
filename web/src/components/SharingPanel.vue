@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import '@/assets/sharing.css';
+
+import { useMediaQuery } from '@vueuse/core';
 import axios from 'axios';
 import { Button, Checkbox, Dialog, InputText } from 'openvue';
 
@@ -66,8 +69,14 @@ const scopeSummary = computed(() =>
       : 'This file only',
 );
 const composing = ref(false);
-function focusEmail() {
-  document.getElementById(`${key.value}-email`)?.focus();
+const panelElement = ref<HTMLElement | null>(null);
+const isMobile = useMediaQuery('(max-width: 639px)');
+function focusRecipientEntry() {
+  if (isMobile.value) {
+    panelElement.value?.focus({ preventScroll: true });
+  } else {
+    document.getElementById(`${key.value}-email`)?.focus();
+  }
 }
 const deliveryKeys = new Map<string, string>();
 const linkMode = ref('read');
@@ -344,12 +353,12 @@ async function addPerson() {
   status.value = '';
   composing.value = true;
   await nextTick();
-  focusEmail();
+  focusRecipientEntry();
 }
 function removeDraft(id: string) {
   drafts.value = drafts.value.filter((person) => person.id !== id);
   composing.value = drafts.value.length > 0;
-  void nextTick(focusEmail);
+  void nextTick(focusRecipientEntry);
 }
 function updateDraft(person: DraftPerson) {
   person.requestKey = crypto.randomUUID();
@@ -357,7 +366,7 @@ function updateDraft(person: DraftPerson) {
 async function backToPeople() {
   resetForm();
   await nextTick();
-  focusEmail();
+  focusRecipientEntry();
 }
 async function load() {
   const current = ++version;
@@ -523,7 +532,7 @@ async function sendPeople() {
       status.value = messages.join(' ');
       busy.value = false;
       await nextTick();
-      focusEmail();
+      focusRecipientEntry();
     }
   }
 }
@@ -766,7 +775,14 @@ async function remove() {
 </script>
 
 <template>
-  <div class="sharing-panel" :class="{ 'is-composing': composing }">
+  <div
+    ref="panelElement"
+    class="sharing-panel"
+    :class="{ 'is-composing': composing }"
+    tabindex="-1"
+    role="region"
+    :aria-label="`Sharing settings for ${scope.name}`"
+  >
     <p v-if="scope.kind === 'client'" class="scope-label muted">
       {{ scope.kind === 'client' ? 'Entire client workspace · all files and folders' : '' }}
     </p>
@@ -851,7 +867,7 @@ async function remove() {
               type="email"
               autocomplete="email"
               :placeholder="drafts.length ? 'Add another email address' : 'Enter an email address'"
-              autofocus
+              :autofocus="!isMobile"
               required
               :disabled="busy || !roleOptions.length"
               fluid

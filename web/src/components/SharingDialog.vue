@@ -8,12 +8,16 @@ const { visible, scope } = defineProps<{ visible: boolean; scope: SharingScope }
 const emit = defineEmits<{ close: [] }>();
 const panel = ref<InstanceType<typeof SharingPanel> | null>(null);
 function requestClose() {
-  if (panel.value) {panel.value.requestClose();}
-  else {emit('close');}
+  if (panel.value) {
+    panel.value.requestClose();
+  } else {
+    emit('close');
+  }
 }
 </script>
 <template>
   <Dialog
+    class="sharing-dialog"
     :id="`sharing-${scope.kind}-${scope.id}`"
     :visible="visible"
     :header="`Share${scope.kind === 'item' && scope.itemType === 'folder' ? ' folder' : ''}: ${scope.name}`"

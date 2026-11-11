@@ -7,13 +7,17 @@ defineProps<{ visible: boolean; clientId: string; clientName: string }>();
 const emit = defineEmits<{ close: [] }>();
 const panel = ref<InstanceType<typeof SharingPanel> | null>(null);
 function requestClose() {
-  if (panel.value) {panel.value.requestClose();}
-  else {emit('close');}
+  if (panel.value) {
+    panel.value.requestClose();
+  } else {
+    emit('close');
+  }
 }
 </script>
 
 <template>
   <Dialog
+    class="sharing-dialog"
     :visible="visible"
     :header="`Share workspace: ${clientName}`"
     :aria-label="`Share workspace: ${clientName}`"
