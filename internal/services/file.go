@@ -171,7 +171,7 @@ func (s *FileService) GetFileByID(ctx context.Context, tenantID, id string) (*mo
 	return &file, nil
 }
 
-func (s *FileService) ListExistingNamesInFolder(ctx context.Context, tenantID string, clientID string, folderID string, names []string) ([]string, error) {
+func (s *FileService) ListExistingNamesInFolder(ctx context.Context, tenantID string, clientID string, folderID string, names []string, ownerIDs ...string) ([]string, error) {
 	tenantID, err := requireTenantID(tenantID)
 	if err != nil {
 		return nil, err
@@ -180,8 +180,12 @@ func (s *FileService) ListExistingNamesInFolder(ctx context.Context, tenantID st
 		return []string{}, nil
 	}
 	var existing []string
-	err = s.DB.WithContext(ctx).Model(&models.File{}).
-		Where("tenant_id = ? AND client_id = ? AND folder_id = ? AND deleted_at IS NULL AND filename IN ?", tenantID, clientID, folderID, names).
+	q := s.DB.WithContext(ctx).Model(&models.File{}).
+		Where("tenant_id = ? AND client_id = ? AND folder_id = ? AND deleted_at IS NULL AND filename IN ?", tenantID, clientID, folderID, names)
+	if len(ownerIDs) > 0 {
+		q = q.Where("user_id = ?", ownerIDs[0])
+	}
+	err = q.
 		Distinct("filename").
 		Pluck("filename", &existing).Error
 	if err != nil {
@@ -190,12 +194,17 @@ func (s *FileService) ListExistingNamesInFolder(ctx context.Context, tenantID st
 	return existing, nil
 }
 
-func (s *FileService) ListFilesInFolder(ctx context.Context, tenantID string, clientID string, folderID string, fileType string, page, pageSize int, sortBy string, sortDirection string) (*models.PaginationResponse, []models.File, error) {
+func (s *FileService) ListFilesInFolder(ctx context.Context, tenantID string, clientID string, folderID string, fileType string, page, pageSize int, sortBy string, sortDirection string, ownerIDs ...string) (*models.PaginationResponse, []models.File, error) {
 	tenantID, err := requireTenantID(tenantID)
 	if err != nil {
 		return nil, nil, err
 	}
 	q := s.DB.WithContext(ctx).Model(&models.File{}).Where("tenant_id = ? AND client_id = ? AND folder_id = ? AND deleted_at IS NULL AND disk_deleted_at IS NULL", tenantID, clientID, folderID)
+	// Apply ownership before counting/pagination; hidden siblings must not
+	// affect totals, pages or sort positions.
+	if len(ownerIDs) > 0 {
+		q = q.Where("user_id = ?", ownerIDs[0])
+	}
 	if fileType == "all" {
 		q = q.Where("type IN ?", []string{"file", "folder"})
 	} else {

@@ -69,6 +69,7 @@ type AccessDecision struct {
 	CanManageClient bool                      `json:"can_manage_client,omitempty"`
 	CanManageQueue  bool                      `json:"can_manage_queue,omitempty"`
 	Sources         []AccessSource            `json:"-"`
+	ReadOwnOnly     bool                      `json:"-"` // read authority comes only from creating this item
 }
 
 // AccessService is deliberately uncached: revocation, expiry, role changes and
@@ -161,6 +162,14 @@ func (s *AccessService) ResolveItems(ctx context.Context, req AccessRequest, fil
 				}
 			}
 		}
+		// Creation is not a grant to the entire subtree. Only a signed-in
+		// uploader with current upload authority may read their exact items.
+		// Bearer collection links retain their private, upload-only behavior.
+		file := nodes[id]
+		readOwnOnly := !caps.CanRead && caps.CanUpload && base.link == nil && base.user != nil && file.UserID != nil && *file.UserID == base.user.ID
+		if readOwnOnly {
+			caps.CanRead = true
+		}
 		if nodes[id].Type != "folder" {
 			caps.CanUpload = false
 		}
@@ -182,7 +191,9 @@ func (s *AccessService) ResolveItems(ctx context.Context, req AccessRequest, fil
 				continue
 			}
 		}
-		decisions[id] = accessDecision(caps, sources, req.Operation, nodes[id].Type, base.staff)
+		d := accessDecision(caps, sources, req.Operation, nodes[id].Type, base.staff)
+		d.ReadOwnOnly = readOwnOnly
+		decisions[id] = d
 	}
 	return decisions, nil
 }

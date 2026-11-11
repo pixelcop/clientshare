@@ -101,7 +101,7 @@ function handleDownload() {
 }
 
 function openItem(item: FileItem) {
-  if (!fileManager.canRead) {
+  if (!item.capabilities?.can_read) {
     return;
   }
   if (item.type === 'folder') {
@@ -134,10 +134,7 @@ watch(() => fileManager.currentFolder, closePreview);
       <p>{{ fileManager.error }}</p>
       <Button label="Try again" severity="secondary" @click="fileManager.fetchFiles()" />
     </div>
-    <div
-      v-else-if="isEmpty || (presentation.loaded && !canRead && canWrite)"
-      class="workspace-empty"
-    >
+    <div v-else-if="isEmpty" class="workspace-empty">
       <i class="oi oi-folder" aria-hidden="true" />
       <h3>{{ emptyHeading }}</h3>
       <p v-if="canWrite">Use Upload or drag files here to get started.</p>

@@ -170,12 +170,16 @@ func (h *FileHandler) CheckFileExists(c fiber.Ctx) error {
 		utils.Logger(c).Debug("invalid names payload", zap.Error(err))
 		return c.Status(400).JSON(fiber.Map{"error": "invalid names payload"})
 	}
-	if !decision.Capabilities.CanRead {
+	var ownerIDs []string
+	if (!decision.Capabilities.CanRead || decision.ReadOwnOnly) && fiber.Locals[string](c, "link_id") == "" && fiber.Locals[string](c, "user_id") != "" {
+		ownerIDs = []string{fiber.Locals[string](c, "user_id")}
+	}
+	if !decision.Capabilities.CanRead && len(ownerIDs) == 0 {
 		// Private collection reveals neither collisions nor existing names.
 		return c.JSON(fiber.Map{"existing": []string{}})
 	}
 
-	existing, err := h.fileService.ListExistingNamesInFolder(c.Context(), tenantID, folder.ClientID, folder.ID, body.Names)
+	existing, err := h.fileService.ListExistingNamesInFolder(c.Context(), tenantID, folder.ClientID, folder.ID, body.Names, ownerIDs...)
 	if err != nil {
 		utils.Logger(c).Error("error checking existing files", zap.Error(err))
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
@@ -383,13 +387,17 @@ func (h *FileHandler) ListFolderFiles(c fiber.Ctx) error {
 		}
 		context["client_name"] = client.Name
 	}
-	if !decision.Capabilities.CanRead {
+	var ownerIDs []string
+	if (!decision.Capabilities.CanRead || decision.ReadOwnOnly) && req.Actor.LinkID == "" && req.Actor.UserID != "" {
+		ownerIDs = []string{req.Actor.UserID}
+	}
+	if !decision.Capabilities.CanRead && len(ownerIDs) == 0 {
 		return c.JSON(fiber.Map{"context": context, "pagination": models.PaginationResponse{Page: 1, PageSize: 20}, "items": []models.File{}})
 	}
 	page, pageSize := getPageParams(c)
 	sortBy := getSortBy(c)
 	sortDirection := getSortDirection(c)
-	pagination, dbFiles, err := h.fileService.ListFilesInFolder(c.Context(), tenantID, folder.ClientID, folder.ID, fileType, page, pageSize, sortBy, sortDirection)
+	pagination, dbFiles, err := h.fileService.ListFilesInFolder(c.Context(), tenantID, folder.ClientID, folder.ID, fileType, page, pageSize, sortBy, sortDirection, ownerIDs...)
 	if err != nil {
 		utils.Logger(c).Error("db error counting files", zap.Error(err))
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
@@ -413,6 +421,11 @@ func (h *FileHandler) ListFolderFiles(c fiber.Ctx) error {
 		dbFiles[i].Capabilities = &d.Capabilities
 		dbFiles[i].NavigationRootID = description.NavigationRootID
 		dbFiles[i].Path = filepath.Join(description.Path, dbFiles[i].Filename)
+		if !decision.Capabilities.CanRead {
+			// Do not serialize the private upload destination as a readable parent.
+			dbFiles[i].FolderID = nil
+			dbFiles[i].NavigationRootID = dbFiles[i].ID
+		}
 		dbFiles[i].UserID = nil
 	}
 

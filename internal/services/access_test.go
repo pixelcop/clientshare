@@ -115,6 +115,39 @@ func TestAccessRoleMembershipAndOperationMatrix(t *testing.T) {
 	f.check(t, r, false)
 }
 
+func TestUploaderReadsOnlyExactOwnedItemsWithCurrentAuthority(t *testing.T) {
+	for _, scope := range []string{"membership", "grant"} {
+		t.Run(scope, func(t *testing.T) {
+			f := newAccessFixture(t)
+			if scope == "membership" {
+				require.NoError(t, f.db.Model(&models.UserClient{}).Where("user_id = ?", "member").Updates(map[string]any{"capabilities_set": true, "can_read": false, "can_upload": true, "can_share": false}).Error)
+			} else {
+				require.NoError(t, f.db.Where("user_id = ?", "member").Delete(&models.UserClient{}).Error)
+				f.grant(t, "folder", "member", models.AccessCapabilities{CanUpload: true})
+			}
+			require.NoError(t, f.db.Model(&models.File{}).Where("id IN ?", []string{"folder", "file"}).Update("user_id", "member").Error)
+			for _, id := range []string{"folder", "file"} {
+				for _, op := range []AccessOperation{AccessContext, AccessRead, AccessDownload} {
+					d := f.check(t, f.req("member", id, op), true)
+					require.True(t, d.ReadOwnOnly)
+				}
+				f.check(t, f.req("member", id, AccessDelete), false)
+				f.check(t, f.req("member", id, AccessShare), false)
+			}
+			f.check(t, f.req("member", "folder", AccessUpload), true)
+			f.check(t, f.req("member", "nested", AccessRead), false) // ownership never inherits
+			f.check(t, f.req("member", "sibling", AccessRead), false)
+			f.check(t, f.req("recipient", "file", AccessRead), false)
+			if scope == "membership" {
+				require.NoError(t, f.db.Model(&models.UserClient{}).Where("user_id = ?", "member").Update("can_upload", false).Error)
+			} else {
+				require.NoError(t, f.db.Model(&models.ItemGrant{}).Where("user_id = ?", "member").Update("revoked_at", accessTestNow).Error)
+			}
+			f.check(t, f.req("member", "file", AccessRead), false)
+		})
+	}
+}
+
 func TestAccessExplicitMembershipAndAdditiveItemGrants(t *testing.T) {
 	f := newAccessFixture(t)
 	require.NoError(t, f.db.Model(&models.UserClient{}).Where("user_id = ?", "member").Updates(map[string]any{"capabilities_set": true, "can_read": true}).Error)

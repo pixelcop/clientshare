@@ -27,7 +27,7 @@ export function sharingRoles(isFile: boolean): SharingRole[] {
           {
             value: 'uploader',
             label: 'Uploader',
-            description: 'Upload only; existing files stay private',
+            description: 'Upload and view your own files and folders',
             capabilities: capabilities(false, true),
           },
           {

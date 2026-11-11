@@ -129,6 +129,75 @@ func TestPrivateCollectionCannotProbeOrReuseExistingFolders(t *testing.T) {
 	require.Empty(t, result.Existing)
 }
 
+func TestUploaderListsOwnItemsWithoutExposingOtherCreators(t *testing.T) {
+	for _, scope := range []string{"membership", "grant"} {
+		t.Run(scope, func(t *testing.T) {
+			env := setupFileTestEnv(t)
+			owner := env.otherClientUser.ID
+			if scope == "membership" {
+				require.NoError(t, env.db.Create(&models.UserClient{TenantID: env.client.TenantID, ClientID: env.client.ID, UserID: owner, CapabilitiesSet: true, AccessCapabilities: models.AccessCapabilities{CanUpload: true}}).Error)
+			} else {
+				require.NoError(t, env.db.Create(&models.ItemGrant{TenantID: env.client.TenantID, ClientID: env.client.ID, FileID: env.rootFolder.ID, UserID: owner, CreatedBy: env.adminUser.ID, AccessCapabilities: models.AccessCapabilities{CanUpload: true}}).Error)
+			}
+			private := createFileRecord(t, env, env.rootFolder, "private.txt", "private")
+			own := createFileRecord(t, env, env.rootFolder, "own.txt", "own content")
+			own.UserID = &owner
+			require.NoError(t, env.db.Model(own).Update("user_id", owner).Error)
+			get := func(path string, status int) []byte {
+				t.Helper()
+				resp, err := env.app.Test(jsonAuthRequest(http.MethodGet, path, env.otherToken, nil))
+				require.NoError(t, err)
+				defer resp.Body.Close()
+				require.Equal(t, status, resp.StatusCode, path)
+				body, err := io.ReadAll(resp.Body)
+				require.NoError(t, err)
+				return body
+			}
+			checkListing := func(folderID, expectedID string) {
+				t.Helper()
+				body := get("/api/folders/"+folderID+"?type=all&page_size=1", 200)
+				var result struct {
+					Items      []models.File             `json:"items"`
+					Pagination models.PaginationResponse `json:"pagination"`
+				}
+				require.NoError(t, json.Unmarshal(body, &result))
+				require.EqualValues(t, 1, result.Pagination.TotalItems)
+				require.Len(t, result.Items, 1)
+				require.Equal(t, expectedID, result.Items[0].ID)
+				require.True(t, result.Items[0].Capabilities.CanRead)
+				require.NotContains(t, string(body), private.Filename)
+			}
+			checkListing(env.rootFolder.ID, own.ID)
+			get("/api/files/"+own.ID, 200)
+			require.Equal(t, "own content", string(get("/api/files/"+own.ID+"/download", 200)))
+			get("/api/files/"+private.ID, 404)
+			resp, err := env.app.Test(jsonAuthRequest(http.MethodPost, "/api/folders/"+env.rootFolder.ID, env.otherToken, map[string]any{"name": "My folder"}))
+			require.NoError(t, err)
+			require.Equal(t, 200, resp.StatusCode)
+			var folder models.File
+			require.NoError(t, json.NewDecoder(resp.Body).Decode(&folder))
+			resp.Body.Close()
+			require.True(t, folder.Capabilities.CanRead)
+			get("/api/folders/"+folder.ID+"/breadcrumbs", 200)
+			nested := createFileRecord(t, env, &folder, "mine.txt", "mine")
+			nested.UserID = &owner
+			require.NoError(t, env.db.Model(nested).Update("user_id", owner).Error)
+			private = createFileRecord(t, env, &folder, "someone-else.txt", "hidden")
+			checkListing(folder.ID, nested.ID)
+			get("/api/files/"+private.ID, 404)
+			resp, err = env.app.Test(jsonAuthRequest(http.MethodPost, "/api/folders/"+folder.ID+"/exists", env.otherToken, map[string]any{"names": []string{nested.Filename, private.Filename}}))
+			require.NoError(t, err)
+			require.Equal(t, 200, resp.StatusCode)
+			var collisions struct {
+				Existing []string `json:"existing"`
+			}
+			require.NoError(t, json.NewDecoder(resp.Body).Decode(&collisions))
+			resp.Body.Close()
+			require.Equal(t, []string{nested.Filename}, collisions.Existing)
+		})
+	}
+}
+
 func TestScopedBearerSessionsCannotEscapeItemOrAcquireSharingAuthority(t *testing.T) {
 	for _, mode := range []string{"read", "view", "write", "readwrite"} {
 		t.Run(mode, func(t *testing.T) {
