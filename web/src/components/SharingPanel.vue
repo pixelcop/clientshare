@@ -786,10 +786,6 @@ async function remove() {
     </div>
     <p v-if="status" role="status" class="delivery-status">{{ status }}</p>
     <template v-if="view && !loading">
-      <p v-if="view.inherits_client_access" class="inheritance-note">
-        Access also comes from the client workspace, including any workspace group assignments.
-        Removing access added here does not remove that inherited access.
-      </p>
       <p v-if="view.inherits_folder_access" class="inheritance-note">
         Access also comes from a containing folder. Change the assignment at that folder to remove
         its inherited access.
