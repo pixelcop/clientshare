@@ -32,18 +32,21 @@ const summary = computed(() => {
   }
   return `Expires ${value.value.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`;
 });
-const expiryDetail = computed(() =>
-  value.value
-    ? `Access expires on ${value.value.toLocaleString(undefined, {
-        month: 'long',
-        day: 'numeric',
-        year: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-        timeZoneName: 'short',
-      })}.`
-    : 'No expiry is set.',
-);
+const expiryDetail = computed(() => {
+  if (!value.value) {
+    return 'No expiry is set.';
+  }
+  const days = Math.ceil((value.value.getTime() - Date.now()) / 86400000);
+  const relative = days > 0 ? `Expires in ${days} ${days === 1 ? 'day' : 'days'} on` : 'Expired on';
+  return `${relative} ${value.value.toLocaleString(undefined, {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZoneName: 'short',
+  })}.`;
+});
 const zone = new Intl.DateTimeFormat(undefined, { timeZoneName: 'short' })
   .formatToParts(new Date())
   .find((part) => part.type === 'timeZoneName')?.value;
@@ -138,11 +141,18 @@ function apply() {
   flex: 0 0 48px;
   border-color: transparent;
   background: transparent;
+  box-shadow: none;
 }
 .compact-expiry:hover,
 .compact-expiry:focus-within {
-  border-color: var(--p-form-field-border-color);
+  border-color: transparent;
+  box-shadow: none;
+  outline: none;
   background: var(--p-content-hover-background);
+}
+.compact-expiry:has(:focus-visible) {
+  outline: 2px solid var(--p-primary-color);
+  outline-offset: 2px;
 }
 .expiry-clock {
   display: inline-grid;

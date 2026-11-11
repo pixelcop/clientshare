@@ -33,7 +33,7 @@ describe('sharing expiry', () => {
     expect(wrapper.find('.expiry-clock.is-active').exists()).toBe(true);
     expect(wrapper.getComponent(Select).attributes('title')).toBeUndefined();
     expect(wrapper.getComponent(Select).props('pt').label['aria-description']).toContain(
-      'Access expires on',
+      'Expires in',
     );
     wrapper.unmount();
   });
