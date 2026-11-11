@@ -50,13 +50,11 @@ const blank = (): AccessCapabilities => ({
   can_share: false,
 });
 const email = ref('');
-const recipientType = ref<'internal' | 'external'>('external');
 type DraftPerson = {
   id: string;
   requestKey: string;
   email: string;
   role: string;
-  userType: 'internal' | 'external';
   expiry: Date | null;
 };
 const drafts = ref<DraftPerson[]>([]);
@@ -203,7 +201,7 @@ const canCreateLinks = computed(
   () => view.value?.capabilities.sharing?.create_links ?? view.value?.capabilities.can_share,
 );
 const roleOptions = computed(() => {
-  const kind = recipientType.value;
+  const kind = 'external';
   const target = isFile.value ? 'file' : scope.kind === 'client' ? 'workspace' : 'folder';
   return catalog.value
     .filter(
@@ -226,11 +224,6 @@ const selectedRole = computed({
       selectedRoleId.value = role.value;
     }
   },
-});
-watch(recipientType, () => {
-  selectedRoleId.value = defaultAccessRole(
-    catalog.value.filter((r) => roleOptions.value.some((o) => o.value === r.id)),
-  );
 });
 function active(item: { revoked_at?: string; expires_at?: string; accepted_at?: string }) {
   return (
@@ -343,7 +336,6 @@ async function addPerson() {
     id: crypto.randomUUID(),
     requestKey: crypto.randomUUID(),
     email: address,
-    userType: recipientType.value,
     role: selectedRole.value,
     expiry: null,
   });
@@ -491,7 +483,7 @@ async function sendPeople() {
           r.id === person.role &&
           applicableRole(
             r,
-            person.userType,
+            'external',
             isFile.value ? 'file' : scope.kind === 'client' ? 'workspace' : 'folder',
           ),
       );
@@ -503,7 +495,6 @@ async function sendPeople() {
         `${endpoint}/invitations`,
         {
           email: person.email,
-          user_type: person.userType,
           role_id: person.role,
           capabilities: role.capabilities,
           expires_at: person.expiry?.toISOString() || null,
@@ -853,37 +844,6 @@ async function remove() {
               placeholder="Choose the permissions to grant"
               :disabled="busy"
           /></label>
-          <div
-            v-if="
-              !drafts.length &&
-              (view.capabilities.sharing?.manage_access ?? view.capabilities.can_share)
-            "
-            class="grid gap-2 mb-3"
-          >
-            <label :id="`${key}-recipient-type-label`">Recipient type</label>
-            <AccessSelect
-              v-model="recipientType"
-              :ariaLabelledby="`${key}-recipient-type-label`"
-              :options="[
-                {
-                  label: 'External contact',
-                  value: 'external',
-                  description: 'Invite a client or adviser with the selected document role.',
-                },
-                {
-                  label: 'Existing internal team member',
-                  value: 'internal',
-                  description: 'Assign access to someone already on your team.',
-                },
-              ]"
-              optionLabel="label"
-              optionValue="value"
-              :disabled="busy"
-            />
-            <p v-if="recipientType === 'internal'" class="muted">
-              Use an existing team member’s email. Create new internal accounts from Users first.
-            </p>
-          </div>
           <div class="recipient-entry">
             <InputText
               :id="`${key}-email`"

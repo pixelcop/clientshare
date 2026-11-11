@@ -75,6 +75,29 @@ describe('exact-scope sharing panel', () => {
     });
   });
 
+  it('shares by email without a recipient-type selector or an identity-change hint', async () => {
+    const post = vi
+      .spyOn(axios, 'post')
+      .mockResolvedValue({
+        data: { id: 'invite', email: 'teammate@example.test', status: 'queued' },
+      });
+    const wrapper = mount(SharingPanel, { props: { scope }, global: { plugins: [OpenVue] } });
+    await flushPromises();
+    expect(wrapper.text()).not.toContain('Recipient type');
+    expect(wrapper.findAllComponents(Select)).toHaveLength(0);
+    await wrapper.get('#item-file-email').setValue('teammate@example.test');
+    await wrapper.get('.add-person').trigger('submit');
+    await wrapper.get('[aria-label="Send invitation"]').trigger('click');
+    await flushPromises();
+    expect(post.mock.calls[0][0]).toBe('/api/files/file/invitations');
+    expect(post.mock.calls[0][1]).toMatchObject({
+      email: 'teammate@example.test',
+      role_id: 'viewer',
+    });
+    expect(post.mock.calls[0][1]).not.toHaveProperty('user_type');
+    wrapper.unmount();
+  });
+
   it('opens links separately without losing typed email, and resets for a new target', async () => {
     const wrapper = mount(SharingPanel, { props: { scope }, global: { plugins: [OpenVue] } });
     await flushPromises();
