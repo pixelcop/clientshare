@@ -15,6 +15,48 @@ export interface AccessCapabilities {
 }
 
 //////////
+// source: access_group.go
+
+/**
+ * AccessGroup contains people, never nested groups or implicit capabilities.
+ */
+export interface AccessGroup {
+  id: string;
+  tenant_id: string;
+  name: string;
+  description: string;
+  version: number /* uint64 */;
+  created_at: string;
+  updated_at: string;
+}
+export interface AccessGroupMember {
+  tenant_id: string;
+  group_id: string;
+  user_id: string;
+  created_at: string;
+}
+/**
+ * RoleAssignment references exactly one tenant-local person/group and one scope.
+ * Source fields identify migrated rows without replacing their original records.
+ */
+export interface RoleAssignment {
+  id: string;
+  tenant_id: string;
+  role_id: string;
+  user_id?: string;
+  group_id?: string;
+  client_id: string;
+  file_id?: string;
+  source_kind: string;
+  source_id?: string;
+  version: number /* uint64 */;
+  expires_at?: string;
+  revoked_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+//////////
 // source: access_invitation.go
 
 /**
@@ -35,6 +77,60 @@ export interface AccessInvitation {
   revoked_at?: string;
   accepted_at?: string;
   accepted_by?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+//////////
+// source: access_profile.go
+
+/**
+ * AccessProfile separates organizational identity from scoped document access.
+ * The legacy role remains authoritative until the permission resolver cutover.
+ * CanManageUsers preserves existing managers' administrative powers explicitly;
+ * new Members do not receive it by default.
+ */
+export interface AccessProfile {
+  tenant_id: string;
+  user_id: string;
+  user_type: string;
+  organization_role: string;
+  can_manage_users: boolean;
+  all_workspaces: boolean;
+}
+
+//////////
+// source: access_role.go
+
+/**
+ * RolePermissions intentionally does not embed AccessCapabilities. Legacy
+ * CanShare combines three different authorities and cannot represent this model.
+ */
+export interface RolePermissions {
+  can_read: boolean;
+  can_upload: boolean;
+  can_delete: boolean;
+  can_invite_external: boolean;
+  can_create_links: boolean;
+  can_manage_access: boolean;
+}
+/**
+ * AccessRole is tenant-owned, including seeded roles. TemplateKey is provenance,
+ * never an authorization shortcut. Archived roles retain existing assignments.
+ */
+export interface AccessRole {
+  id: string;
+  tenant_id: string;
+  name: string;
+  description: string;
+  template_key?: string;
+  audience: string;
+  allow_workspace: boolean;
+  allow_folder: boolean;
+  allow_file: boolean;
+  RolePermissions: RolePermissions;
+  version: number /* uint64 */;
+  archived_at?: string;
   created_at: string;
   updated_at: string;
 }

@@ -30,6 +30,7 @@ func main() {
 		migration.NewGoMigration(52, upAddNotificationAccessContext, downAddNotificationAccessContext),
 		migration.NewGoMigration(53, upAddAccessInvitations, downAddAccessInvitations),
 		migration.NewGoMigration(54, upAddInvitationDeliveryContext, downAddInvitationDeliveryContext),
+		migration.NewGoMigration(55, upAddAccessRoleFoundation, downAddAccessRoleFoundation),
 	}
 
 	migration.Run(goMigrations, func(path string) (db.DatabaseConfig, error) {
