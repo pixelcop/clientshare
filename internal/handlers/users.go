@@ -452,8 +452,23 @@ func (h *UsersHandler) CreateUserHandler(c fiber.Ctx) error {
 	inviteRawToken := ""
 	createdBy := strings.TrimSpace(fiber.Locals[string](c, "user_id"))
 	if err := h.db.WithContext(c.Context()).Transaction(func(tx *gorm.DB) error {
+		if err := services.LockTenantAccess(tx, tenantID); err != nil {
+			return err
+		}
+		var actor models.User
+		if err := tx.Where("tenant_id = ? AND id = ?", tenantID, createdBy).First(&actor).Error; err != nil {
+			return err
+		}
+		if profile, err := services.AccessProfileFor(tx, actor); err != nil {
+			return err
+		} else if actor.Role != "admin" && (!profile.CanManageUsers || (resolvedRole != "client" && resolvedRole != "customer")) {
+			return services.ErrRoleForbidden
+		}
 		caps := models.AccessCapabilities{CanRead: true, CanUpload: true, CanShare: true}
 		if req.Capabilities != nil {
+			if req.UserType == "" && req.Capabilities.Sharing != nil {
+				return services.ErrRoleInput
+			}
 			caps = *req.Capabilities
 		}
 		if req.UserType == "" {
@@ -841,6 +856,9 @@ func (h *UsersHandler) UpdateUserHandler(c fiber.Ctx) error {
 	// Item-only and removed client members legitimately have zero memberships.
 	user.UpdatedAt = time.Now()
 	if err := h.db.WithContext(c.Context()).Transaction(func(tx *gorm.DB) error {
+		if err := services.RequireOrganizationAdministrator(tx, tenantID, fiber.Locals[string](c, "user_id")); err != nil {
+			return err
+		}
 		if err := services.CheckStaffQuota(tx, &user); err != nil {
 			return err
 		}
@@ -880,6 +898,9 @@ func (h *UsersHandler) UpdateUserHandler(c fiber.Ctx) error {
 		if errors.Is(err, services.ErrRoleInput) || errors.Is(err, services.ErrSharingCapabilities) {
 			return c.Status(400).JSON(fiber.Map{"error": err.Error()})
 		}
+		if errors.Is(err, services.ErrRoleForbidden) {
+			return c.Status(403).JSON(fiber.Map{"error": err.Error()})
+		}
 		if respondQuotaError(c, err) {
 			return nil
 		}
@@ -907,6 +928,9 @@ func (h *UsersHandler) DeleteUserHandler(c fiber.Ctx) error {
 	}
 	if err := h.db.WithContext(c.Context()).Transaction(func(tx *gorm.DB) error {
 		var grants []models.ItemGrant
+		if err := services.RequireOrganizationAdministrator(tx, tenantID, fiber.Locals[string](c, "user_id")); err != nil {
+			return err
+		}
 		if err := tx.Where("tenant_id = ? AND user_id = ?", tenantID, id).Find(&grants).Error; err != nil {
 			return err
 		}
@@ -976,6 +1000,9 @@ func (h *UsersHandler) AssignManagerToClientHandler(c fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "client_id is required"})
 	}
 	if err := h.db.WithContext(c.Context()).Transaction(func(tx *gorm.DB) error {
+		if err := services.RequireOrganizationAdministrator(tx, tenantID, fiber.Locals[string](c, "user_id")); err != nil {
+			return err
+		}
 		if err := h.addClientAssignment(tx, tenantID, user.ID, req.ClientID); err != nil {
 			return err
 		}

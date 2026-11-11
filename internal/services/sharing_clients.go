@@ -105,19 +105,32 @@ func (s *SharingService) ClientAccess(ctx context.Context, req AccessRequest) (*
 	return view, err
 }
 
-func (s *SharingService) ChangeMemberRole(ctx context.Context, req AccessRequest, userID, roleID string) error {
+func (s *SharingService) ChangeMemberRole(ctx context.Context, req AccessRequest, userID, roleID string, expectedRoleID ...string) error {
 	if req.FileID != "" || roleID == "" || userID == "" {
 		return ErrSharingInput
 	}
-	caps, err := sharingRoleInput(ctx, s.DB, req, roleID, userID, "")
+	req.Operation = AccessManageOwn
+	var previous models.UserClient
+	if err := s.DB.WithContext(ctx).Where("tenant_id=? AND client_id=? AND user_id=?", req.TenantID, req.ClientID, userID).First(&previous).Error; err != nil {
+		return err
+	}
+	caps, err := sharingRoleInput(ctx, s.DB, req, roleID, userID, "", previous.RoleID)
 	if err != nil {
 		return err
 	}
 	req.GrantRoleID = roleID
+	req.PreserveArchivedRole = previous.RoleID != nil && *previous.RoleID == roleID
 	return s.withAuthority(ctx, req, caps, func(tx *gorm.DB, _ *models.File) error {
 		var member models.UserClient
 		if err := tx.Where("tenant_id = ? AND client_id = ? AND user_id = ?", req.TenantID, req.ClientID, userID).First(&member).Error; err != nil {
 			return err
+		}
+		current := ""
+		if member.RoleID != nil {
+			current = *member.RoleID
+		}
+		if len(expectedRoleID) > 0 && current != expectedRoleID[0] {
+			return ErrSharingConflict
 		}
 		owned := member.AccessSource == "invitation" && member.InvitedBy != nil && *member.InvitedBy == req.Actor.UserID
 		if !owned {

@@ -41,6 +41,13 @@ func AccessProfileFor(db *gorm.DB, user models.User) (models.AccessProfile, erro
 }
 
 func (s *AccessRoleService) administrator(tx *gorm.DB, tenantID, actorID string) error {
+	return RequireOrganizationAdministrator(tx, tenantID, actorID)
+}
+
+func RequireOrganizationAdministrator(tx *gorm.DB, tenantID, actorID string) error {
+	if err := LockTenantAccess(tx, tenantID); err != nil {
+		return err
+	}
 	var actor models.User
 	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id = ? AND id = ?", tenantID, actorID).First(&actor).Error; err != nil {
 		return err

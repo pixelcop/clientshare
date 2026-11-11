@@ -203,3 +203,27 @@ func TestIndependentSharingRightsCannotLeakThroughLegacyEndpoints(t *testing.T) 
 	_, err = service.CreateInvitation(ctx, f.req("admin", "folder", AccessShare), InvitationInput{Email: "unknown@example.test", UserType: "internal", RoleID: roles["viewer"].ID}, "no-internal-identity")
 	require.ErrorIs(t, err, ErrSharingInput)
 }
+
+func TestManageAccessDoesNotRequireExternalInvitationOrLinkPermission(t *testing.T) {
+	f, _, roles := roleFixture(t)
+	ctx := context.Background()
+	role := roles["viewer"]
+	role.ID = "access-coordinator"
+	role.Name = "Access coordinator"
+	role.TemplateKey = nil
+	role.CanManageAccess = true
+	require.NoError(t, f.db.Create(&role).Error)
+	require.NoError(t, f.db.Model(&models.UserClient{}).Where("user_id='member'").Updates(map[string]any{"role_id": role.ID, "capabilities_set": true, "can_read": true, "can_share": true}).Error)
+	viewer := roles["viewer"]
+	require.NoError(t, f.db.Create(&models.UserClient{TenantID: "tenant", ClientID: "client", UserID: "recipient", RoleID: &viewer.ID, CapabilitiesSet: true, AccessCapabilities: viewer.RolePermissions.Capabilities()}).Error)
+	s := &SharingService{DB: f.db, TokenSecret: "test", LinkSigningKey: "test"}
+	req := f.req("member", "", AccessShare)
+	require.NoError(t, s.ChangeMemberRole(ctx, req, "recipient", viewer.ID, viewer.ID))
+	require.ErrorIs(t, s.ChangeMemberRole(ctx, req, "recipient", viewer.ID, "outdated-role"), ErrSharingConflict)
+	_, err := s.CreateInvitation(ctx, req, InvitationInput{Email: "new-external@example.test", RoleID: viewer.ID}, "cannot-invite")
+	require.Error(t, err)
+	_, err = s.CreateLink(ctx, req, LinkInput{AccessType: "read", ExpiryDays: 7}, "cannot-link")
+	require.Error(t, err)
+	require.NoError(t, s.RemoveMember(ctx, req, "recipient", false))
+	f.check(t, f.req("recipient", "file", AccessRead), false)
+}

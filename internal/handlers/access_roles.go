@@ -85,13 +85,14 @@ func RegisterAccessRoleRoutes(router fiber.Router, db *gorm.DB) {
 	}))
 	router.Put("/clients/:id/members/:userID/role", middleware.AuthRequired, roleResponse(func(c fiber.Ctx) error {
 		var input struct {
-			RoleID string `json:"role_id"`
+			RoleID         string `json:"role_id"`
+			ExpectedRoleID string `json:"expected_role_id"`
 		}
 		if err := c.Bind().Body(&input); err != nil {
 			return services.ErrRoleInput
 		}
 		req := middleware.AccessRequest(c, c.Params("id"), "", services.AccessShare)
-		if err := (&services.SharingService{DB: db}).ChangeMemberRole(c.Context(), req, c.Params("userID"), input.RoleID); err != nil {
+		if err := (&services.SharingService{DB: db}).ChangeMemberRole(c.Context(), req, c.Params("userID"), input.RoleID, input.ExpectedRoleID); err != nil {
 			return err
 		}
 		return c.SendStatus(204)

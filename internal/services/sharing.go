@@ -43,6 +43,9 @@ func (s *SharingService) withAuthority(ctx context.Context, req AccessRequest, c
 		return gorm.ErrRecordNotFound
 	}
 	return s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := LockTenantAccess(tx, req.TenantID); err != nil {
+			return err
+		}
 		var client models.Client
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id = ? AND id = ?", req.TenantID, req.ClientID).First(&client).Error; err != nil {
 			return err

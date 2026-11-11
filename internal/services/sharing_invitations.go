@@ -260,6 +260,9 @@ func (s *SharingService) AcceptInvitation(ctx context.Context, tenantID, userID,
 		return nil, err
 	}
 	err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := LockTenantAccess(tx, tenantID); err != nil {
+			return err
+		}
 		var user models.User
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id = ? AND id = ? AND role IN ?", tenantID, userID, []string{"admin", "manager", "client", "customer"}).First(&user).Error; err != nil {
 			return err

@@ -69,6 +69,9 @@ func UserAccessSettingsFor(ctx context.Context, db *gorm.DB, tenantID, userID st
 // ApplyUserAccess is called inside the identity-creation/edit transaction. It
 // never infers document access from Internal, Member or account creation alone.
 func ApplyUserAccess(ctx context.Context, tx *gorm.DB, tenantID, actorID string, user models.User, input UserAccessInput) error {
+	if err := LockTenantAccess(tx, tenantID); err != nil {
+		return err
+	}
 	compatibility, err := input.CompatibilityRole()
 	if err != nil {
 		return err
@@ -82,6 +85,15 @@ func ApplyUserAccess(ctx context.Context, tx *gorm.DB, tenantID, actorID string,
 	}
 	if actor.Role != "admin" && (input.UserType != "external" || input.AllWorkspaces || input.GroupIDs != nil) {
 		return ErrRoleForbidden
+	}
+	if actor.Role != "admin" {
+		p, err := AccessProfileFor(tx, actor)
+		if err != nil {
+			return err
+		}
+		if !p.CanManageUsers {
+			return ErrRoleForbidden
+		}
 	}
 	groupIDs := []string{}
 	if input.GroupIDs != nil {

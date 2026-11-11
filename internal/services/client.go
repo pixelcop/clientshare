@@ -107,6 +107,9 @@ func (s *ClientService) CreateClient(ctx context.Context, tenantID, name string)
 func (s *ClientService) CreateClientForActor(ctx context.Context, tenantID, userID, name string) (*models.Client, error) {
 	var client *models.Client
 	err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := LockTenantAccess(tx, tenantID); err != nil {
+			return err
+		}
 		var user models.User
 		if err := tx.Where("tenant_id = ? AND id = ?", tenantID, userID).First(&user).Error; err != nil {
 			return err
