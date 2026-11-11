@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import {
   Body,
   Button,
@@ -43,13 +43,13 @@ defineProps({
 <template>
   <Html lang="en">
     <Head />
-    <Preview>New secure link from ${ productName }</Preview>
+    <Preview>New secure link from {{ productName }}</Preview>
 
     <Tailwind :config="tailwindConfig">
       <Body class="m-0 bg-surface-bg px-0 py-6 font-sans text-text-primary">
         <Container class="mx-auto w-full max-w-160 px-4">
           <Text class="m-0 mb-4 text-xs font-semibold uppercase tracking-wide text-text-muted">
-            ${ productName }
+            {{ productName }}
           </Text>
 
           <Section
@@ -60,11 +60,11 @@ defineProps({
             </Heading>
 
             <Text class="m-0 mb-3 text-sm text-text-primary">
-              A secure link to <strong>${ clientName }</strong> has been generated.
+              A secure link to <strong>{{ clientName }}</strong> has been generated.
             </Text>
 
             <Text class="m-0 mb-5 text-sm text-text-primary">
-              Access level: <strong>${ accessType }</strong>
+              Access level: <strong>{{ accessType }}</strong>
             </Text>
 
             <Section class="mb-5">
@@ -76,7 +76,7 @@ defineProps({
               </Button>
             </Section>
 
-            <Text class="m-0 mb-3 text-xs text-text-muted">This link expires on ${ expiry }.</Text>
+            <Text class="m-0 mb-3 text-xs text-text-muted">This link expires on {{ expiry }}.</Text>
 
             <Hr class="my-4 border-surface-border" />
 
@@ -85,7 +85,7 @@ defineProps({
             </Text>
 
             <Link :href="linkUrl" class="m-0 break-all text-xs font-medium text-brand-dark">
-              ${ linkUrl }
+              {{ linkUrl }}
             </Link>
 
             <Text class="m-0 mt-4 text-xs text-text-muted">

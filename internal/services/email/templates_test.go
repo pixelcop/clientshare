@@ -11,9 +11,9 @@ import (
 
 func TestRenderUploadNotification_MultipleFileNames(t *testing.T) {
 	files := []models.File{
-		{Filename: "q1-report.pdf"},
-		{Filename: "invoice.csv"},
-		{Filename: "notes.txt"},
+		{ID: "report", Filename: "q1-report.pdf"},
+		{ID: "invoice", Filename: "invoice.csv"},
+		{ID: "notes", Filename: "notes.txt"},
 	}
 
 	subject, body, htmlBody := RenderUploadNotification("Acme Corp", files, "https://example.com", "ClientShare")
@@ -35,6 +35,39 @@ func TestRenderUploadNotification_MultipleFileNames(t *testing.T) {
 	for _, file := range files {
 		assert.Contains(t, body, file.Filename, "expected text body to include filename %q", file.Filename)
 		assert.Contains(t, htmlBody, file.Filename, "expected html body to include filename %q", file.Filename)
+		assert.Contains(t, htmlBody, `href="https://example.com/files/`+file.ID+`"`)
+	}
+}
+
+func TestGeneratedEmailTemplatesResolveBothVueAndGoValues(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		render func() (string, string, string)
+		want   string
+	}{
+		{"password reset", func() (string, string, string) {
+			return RenderPasswordReset("Alex", "https://example.test/reset", "Example Portal", time.Hour)
+		}, "https://example.test/reset"},
+		{"secure link", func() (string, string, string) {
+			return RenderSecureLinkEmail("Example client", "Read and upload", "https://example.test/link", "Example Portal", models.Now().Add(time.Hour))
+		}, "https://example.test/link"},
+		{"invitation", func() (string, string, string) {
+			return RenderUserInviteEmail("Alex", "https://example.test/invite", "Example Portal", "Welcome aboard", models.Now().Add(time.Hour))
+		}, "https://example.test/invite"},
+		{"upload", func() (string, string, string) {
+			return RenderUploadNotification("Example client", []models.File{{ID: "document", Filename: "document.pdf"}}, "https://example.test", "Example Portal")
+		}, "document.pdf"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, text, html := tc.render()
+			assert.Contains(t, html, "background-color: rgb(243,244,246)", "email theme utilities must still be inlined")
+			for _, body := range []string{text, html} {
+				assert.Contains(t, body, "Example Portal")
+				assert.Contains(t, body, tc.want)
+				assert.NotContains(t, body, "${")
+				assert.NotContains(t, body, "{{")
+			}
+		})
 	}
 }
 

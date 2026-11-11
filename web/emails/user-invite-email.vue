@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import {
   Body,
   Button,
@@ -44,13 +44,13 @@ defineProps({
 <template>
   <Html lang="en">
     <Head />
-    <Preview>You're invited to join ${ productName }</Preview>
+    <Preview>You're invited to join {{ productName }}</Preview>
 
     <Tailwind :config="tailwindConfig">
       <Body class="m-0 bg-surface-bg px-0 py-6 font-sans text-text-primary">
         <Container class="mx-auto w-full max-w-160 px-4">
           <Text class="m-0 mb-4 text-xs font-semibold uppercase tracking-wide text-text-muted">
-            ${ productName }
+            {{ productName }}
           </Text>
 
           <Section
@@ -60,9 +60,9 @@ defineProps({
               You're invited
             </Heading>
 
-            <Text class="m-0 mb-3 text-sm text-text-primary">Hi ${ displayName },</Text>
+            <Text class="m-0 mb-3 text-sm text-text-primary">Hi {{ displayName }},</Text>
 
-            <Text class="m-0 mb-5 text-sm text-text-primary">${ welcomeText }</Text>
+            <Text class="m-0 mb-5 text-sm text-text-primary">{{ welcomeText }}</Text>
 
             <Text class="m-0 mb-5 text-sm text-text-primary">
               Your account is ready. Use the link below to set your password and sign in.
@@ -77,7 +77,9 @@ defineProps({
               </Button>
             </Section>
 
-            <Text class="m-0 mb-3 text-xs text-text-muted">This invite expires on ${ expiry }.</Text>
+            <Text class="m-0 mb-3 text-xs text-text-muted"
+              >This invite expires on {{ expiry }}.</Text
+            >
 
             <Hr class="my-4 border-surface-border" />
 
@@ -86,7 +88,7 @@ defineProps({
             </Text>
 
             <Link :href="inviteUrl" class="m-0 break-all text-xs font-medium text-brand-dark">
-              ${ inviteUrl }
+              {{ inviteUrl }}
             </Link>
           </Section>
         </Container>

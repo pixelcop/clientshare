@@ -1,4 +1,11 @@
+import type { Tailwind } from '@vue-email/components';
+
+type EmailTailwindConfig = InstanceType<typeof Tailwind>['$props']['config'];
+
 export const tailwindConfig = {
+  separator: ':',
+  safelist: [],
+  corePlugins: {},
   theme: {
     extend: {
       colors: {
@@ -35,4 +42,4 @@ export const tailwindConfig = {
       '2xl': ['24px', { lineHeight: '32px' }],
     },
   },
-};
+} satisfies EmailTailwindConfig;

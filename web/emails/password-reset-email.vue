@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import {
   Body,
   Button,
@@ -39,13 +39,13 @@ defineProps({
 <template>
   <Html lang="en">
     <Head />
-    <Preview>Reset your ${ productName } password</Preview>
+    <Preview>Reset your {{ productName }} password</Preview>
 
     <Tailwind :config="tailwindConfig">
       <Body class="m-0 bg-surface-bg px-0 py-6 font-sans text-text-primary">
         <Container class="mx-auto w-full max-w-160 px-4">
           <Text class="m-0 mb-4 text-xs font-semibold uppercase tracking-wide text-text-muted">
-            ${ productName }
+            {{ productName }}
           </Text>
 
           <Section
@@ -55,7 +55,7 @@ defineProps({
               Reset your password
             </Heading>
 
-            <Text class="m-0 mb-3 text-sm text-text-primary">Hi ${ displayName },</Text>
+            <Text class="m-0 mb-3 text-sm text-text-primary">Hi {{ displayName }},</Text>
 
             <Text class="m-0 mb-5 text-sm text-text-primary">
               We received a request to reset your password. Use the button below to choose a new
@@ -71,7 +71,7 @@ defineProps({
               </Button>
             </Section>
 
-            <Text class="m-0 mb-3 text-xs text-text-muted">This link expires in ${ expiry }.</Text>
+            <Text class="m-0 mb-3 text-xs text-text-muted">This link expires in {{ expiry }}.</Text>
 
             <Hr class="my-4 border-surface-border" />
 
@@ -80,7 +80,7 @@ defineProps({
             </Text>
 
             <Link :href="resetLink" class="m-0 break-all text-xs font-medium text-brand-dark">
-              ${ resetLink }
+              {{ resetLink }}
             </Link>
 
             <Text class="m-0 mt-4 text-xs text-text-muted">
