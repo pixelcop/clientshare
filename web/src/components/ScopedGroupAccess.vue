@@ -4,6 +4,7 @@ import axios from 'axios';
 import { useAuthStore } from '@/stores/auth';
 import type { GroupDetails, TenantAccessRole } from '@/types/accessRoles';
 import { applicableRole, roleSummary, tenantRoleLabel } from '@/types/accessRoles';
+import type { User } from '@/types/models';
 import type { AdditionalAccess, SharingScope } from '@/types/sharing';
 const props = defineProps<{
   scope: SharingScope;
@@ -14,6 +15,7 @@ const props = defineProps<{
 const emit = defineEmits<{ changed: [] }>();
 const auth = useAuthStore();
 const groups = ref<GroupDetails[]>([]);
+const users = ref<User[]>([]);
 const groupId = ref('');
 const roleId = ref('');
 const busy = ref(false);
@@ -27,21 +29,57 @@ const kind = computed(() =>
       ? 'folder'
       : 'file',
 );
+function rolesForGroup(group?: GroupDetails) {
+  if (!group) {
+    return [];
+  }
+  const memberTypes = group.member_ids.map((id) => {
+    const user = users.value.find((person) => person.id === id);
+    if (!user) {
+      return undefined;
+    }
+    if (user.access_profile) {
+      const type = user.access_profile.user_type;
+      return type === 'internal' || type === 'external' ? type : undefined;
+    }
+    if (['admin', 'manager'].includes(user.role)) {
+      return 'internal';
+    }
+    if (['client', 'customer'].includes(user.role)) {
+      return 'external';
+    }
+    return undefined;
+  });
+  return props.roles.filter(
+    (role) =>
+      !role.archived_at &&
+      { workspace: role.allow_workspace, folder: role.allow_folder, file: role.allow_file }[
+        kind.value
+      ] &&
+      memberTypes.every((type) => !!type && applicableRole(role, type, kind.value)),
+  );
+}
 const availableRoles = computed(() =>
-  props.roles.filter(
-    (r) =>
-      !r.archived_at &&
-      (kind.value === 'workspace'
-        ? r.allow_workspace
-        : kind.value === 'folder'
-          ? r.allow_folder
-          : r.allow_file),
-  ),
+  rolesForGroup(groups.value.find((g) => g.id === groupId.value)),
 );
+watch(groupId, () => {
+  review.value = null;
+});
+watch(availableRoles, (roles) => {
+  if (!roles.some((role) => role.id === roleId.value)) {
+    roleId.value = '';
+    review.value = null;
+  }
+});
 onMounted(async () => {
   if (auth.user?.role === 'admin') {
     try {
-      groups.value = (await axios.get<GroupDetails[]>('/api/access-groups')).data;
+      const [groupList, people] = await Promise.all([
+        axios.get<GroupDetails[]>('/api/access-groups'),
+        axios.get<User[]>('/api/users'),
+      ]);
+      users.value = people.data;
+      groups.value = groupList.data;
     } catch {
       error.value = 'Groups could not be loaded.';
     }
@@ -60,11 +98,21 @@ async function stageGroup(removeId?: string) {
     if (!id) {
       return;
     }
-    const group = (await axios.get<GroupDetails[]>('/api/access-groups')).data.find(
-      (g) => g.id === id,
-    );
+    const [groupList, people] = await Promise.all([
+      axios.get<GroupDetails[]>('/api/access-groups'),
+      axios.get<User[]>('/api/users'),
+    ]);
+    users.value = people.data;
+    groups.value = groupList.data;
+    const group = groupList.data.find((g) => g.id === id);
     if (!group) {
       throw new Error();
+    }
+    if (!removeId && !rolesForGroup(group).some((role) => role.id === roleId.value)) {
+      roleId.value = '';
+      review.value = null;
+      error.value = 'Choose a role available to every member of this group.';
+      return;
     }
     const existing = group.assignments.map((a) => ({
       client_id: a.client_id,
