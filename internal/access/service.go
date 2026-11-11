@@ -20,8 +20,13 @@ const (
 	AccessUpload       AccessOperation = "upload"
 	AccessDelete       AccessOperation = "delete"
 	AccessShare        AccessOperation = "share"
+	AccessInvite       AccessOperation = "invite"
+	AccessCreateLink   AccessOperation = "create_link"
+	AccessManageAccess AccessOperation = "manage_access"
+	AccessManageOwn    AccessOperation = "manage_own_access"
 	AccessInviteClient AccessOperation = "invite_client"
 	AccessManageClient AccessOperation = "manage_client"
+	AccessDeleteClient AccessOperation = "delete_client"
 	AccessManageQueue  AccessOperation = "manage_queue"
 
 	// Limits bound both SQL parameters and adversarial/corrupt ancestry. Lists
@@ -52,7 +57,10 @@ type AccessRequest struct {
 	FileID    string // empty requests the whole client, not a shared root folder
 	Actor     AccessActor
 	Operation AccessOperation
-	Now       time.Time // zero uses the current server time
+	// Internal service input, not accepted directly from HTTP callers.
+	GrantRoleID          string
+	PreserveArchivedRole bool
+	Now                  time.Time // zero uses the current server time
 }
 
 // AccessSource is internal management evidence. Never expose it in recipient
@@ -127,7 +135,33 @@ func (s *AccessService) ResolveItems(ctx context.Context, req AccessRequest, fil
 			if err := s.DB.WithContext(ctx).Where("tenant_id = ? AND client_id = ? AND user_id = ? AND file_id IN ? AND revoked_at IS NULL", req.TenantID, req.ClientID, base.user.ID, ids[start:min(start+accessBatchSize, len(ids))]).Find(&rows).Error; err != nil {
 				return nil, err
 			}
+			roleIDs := []string{}
+			for _, row := range rows {
+				if row.RoleID != nil {
+					roleIDs = append(roleIDs, *row.RoleID)
+				}
+			}
+			roleByID := map[string]models.AccessRole{}
+			if len(roleIDs) > 0 {
+				var roles []models.AccessRole
+				if err := s.DB.WithContext(ctx).Where("tenant_id = ? AND id IN ?", req.TenantID, roleIDs).Find(&roles).Error; err != nil {
+					return nil, err
+				}
+				for _, r := range roles {
+					roleByID[r.ID] = r
+				}
+			}
 			for _, grant := range rows {
+				if grant.RoleID != nil {
+					role, ok := roleByID[*grant.RoleID]
+					if !ok {
+						return nil, gorm.ErrRecordNotFound
+					}
+					grant.AccessCapabilities = models.AccessCapabilities{}
+					if role.Supports(userTypeForRole(base.user.Role), nodes[grant.FileID].Type) {
+						grant.AccessCapabilities = projectRoleCapabilities(role, nodes[grant.FileID].Type)
+					}
+				}
 				// SQLite timestamp ordering is textual across stored offsets.
 				if grant.ExpiresAt == nil || grant.ExpiresAt.After(base.now) {
 					grants[grant.FileID] = grant
@@ -161,6 +195,12 @@ func (s *AccessService) ResolveItems(ctx context.Context, req AccessRequest, fil
 					sources = append(sources, AccessSource{Kind: "grant", ID: grant.ID, FileID: grant.FileID})
 				}
 			}
+			for _, assignment := range base.assignments {
+				if assignment.assignment.FileID != nil && chainContains(chain, *assignment.assignment.FileID) {
+					caps = unionAccess(caps, assignment.caps)
+					sources = append(sources, assignmentSource(assignment.assignment))
+				}
+			}
 		}
 		// Creation is not a grant to the entire subtree. Only a signed-in
 		// uploader with current upload authority may read their exact items.
@@ -173,7 +213,7 @@ func (s *AccessService) ResolveItems(ctx context.Context, req AccessRequest, fil
 		if nodes[id].Type != "folder" {
 			caps.CanUpload = false
 		}
-		if !caps.CanRead && caps.CanUpload && (req.Operation == AccessContext || req.Operation == AccessUpload || req.Operation == AccessShare) {
+		if !caps.CanRead && caps.CanUpload && requiresKnownUploadDestination(req.Operation) {
 			// Private collection may address its explicit destination and new
 			// directory trees from this session, never probe/reuse old folders.
 			knownDestination := base.rootFolderID == id && base.caps.CanUpload
@@ -182,6 +222,11 @@ func (s *AccessService) ResolveItems(ctx context.Context, req AccessRequest, fil
 			}
 			if grant, ok := grants[id]; ok && grant.CanUpload {
 				knownDestination = true
+			}
+			for _, a := range base.assignments {
+				if a.assignment.FileID != nil && *a.assignment.FileID == id && a.caps.CanUpload {
+					knownDestination = true
+				}
 			}
 			file := nodes[id]
 			if req.Actor.SessionID != "" && file.UploadSessionID != nil && *file.UploadSessionID == req.Actor.SessionID {
@@ -199,6 +244,7 @@ func (s *AccessService) ResolveItems(ctx context.Context, req AccessRequest, fil
 }
 
 type accessBase struct {
+	assignments  []resolvedAssignment
 	valid        bool
 	staff        bool // authority for staff-only client/queue operations
 	user         *models.User
@@ -272,12 +318,31 @@ func (s *AccessService) resolveBase(ctx context.Context, req AccessRequest) (acc
 		return base, nil
 	}
 	var membership models.UserClient
-	if err := db.Where("tenant_id = ? AND client_id = ? AND user_id = ?", req.TenantID, req.ClientID, user.ID).First(&membership).Error; err != nil {
-		return base, accessQueryError(err)
+	err := db.Where("tenant_id = ? AND client_id = ? AND user_id = ?", req.TenantID, req.ClientID, user.ID).First(&membership).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return base, err
 	}
-	base.caps = MembershipCapabilities(user.Role, membership)
+	if err == nil {
+		base.caps = MembershipCapabilities(user.Role, membership)
+		resolved, err := s.RoleCapabilities(ctx, req.TenantID, membership.RoleID, base.caps, "workspace", userTypeForRole(user.Role))
+		if err != nil {
+			return base, err
+		}
+		base.caps = resolved
+		base.sources = []AccessSource{{Kind: "membership", ID: user.ID}}
+	}
 	base.staff = user.Role == "manager"
-	base.sources = []AccessSource{{Kind: "membership", ID: user.ID}}
+	assignments, err := s.assignments(ctx, req.TenantID, user.ID, userTypeForRole(user.Role), []string{req.ClientID}, base.now)
+	if err != nil {
+		return base, err
+	}
+	base.assignments = assignments[req.ClientID]
+	for _, a := range base.assignments {
+		if a.assignment.FileID == nil {
+			base.caps = unionAccess(base.caps, a.caps)
+			base.sources = append(base.sources, assignmentSource(a.assignment))
+		}
+	}
 	return base, nil
 }
 
@@ -347,10 +412,15 @@ func chainContains(chain []models.File, id string) bool {
 }
 
 func unionAccess(a, b models.AccessCapabilities) models.AccessCapabilities {
-	return models.AccessCapabilities{
+	c := models.AccessCapabilities{
 		CanRead: a.CanRead || b.CanRead, CanUpload: a.CanUpload || b.CanUpload,
 		CanDelete: a.CanDelete || b.CanDelete, CanShare: a.CanShare || b.CanShare,
 	}
+	if a.Sharing != nil || b.Sharing != nil {
+		ap, bp := a.Permissions(), b.Permissions()
+		c.Sharing = &models.SharingPermissions{InviteExternal: ap.CanInviteExternal || bp.CanInviteExternal, CreateLinks: ap.CanCreateLinks || bp.CanCreateLinks, ManageAccess: ap.CanManageAccess || bp.CanManageAccess}
+	}
+	return c
 }
 
 // MembershipCapabilities decorates an already-authorized membership DTO. It
@@ -364,6 +434,7 @@ func MembershipCapabilities(role string, membership models.UserClient) models.Ac
 
 func accessDecision(caps models.AccessCapabilities, sources []AccessSource, op AccessOperation, targetType string, staff bool) AccessDecision {
 	var allowed bool
+	p := caps.Permissions()
 	switch op {
 	case AccessContext:
 		allowed = caps.CanRead || (caps.CanUpload && targetType != "file")
@@ -379,23 +450,71 @@ func accessDecision(caps models.AccessCapabilities, sources []AccessSource, op A
 		allowed = caps.CanDelete
 	case AccessShare:
 		allowed = caps.CanShare
+	case AccessInvite:
+		allowed = p.CanInviteExternal
+	case AccessCreateLink:
+		allowed = p.CanCreateLinks
+	case AccessManageAccess:
+		allowed = p.CanManageAccess
+	case AccessManageOwn:
+		allowed = p.CanInviteExternal || p.CanManageAccess
 	case AccessInviteClient:
-		allowed = targetType == "client" && caps.CanShare
+		allowed = targetType == "client" && p.CanInviteExternal
 	case AccessManageClient:
-		allowed = targetType == "client" && staff && caps.CanShare
+		allowed = targetType == "client" && staff && p.CanManageAccess
+	case AccessDeleteClient:
+		allowed = targetType == "client" && staff && p.CanManageAccess && caps.CanDelete
 	case AccessManageQueue:
-		allowed = targetType == "client" && staff && caps.CanShare && caps.CanRead
+		allowed = targetType == "client" && staff && p.CanManageAccess && caps.CanRead
 	}
-	return AccessDecision{Allowed: allowed, Capabilities: caps, Sources: sources, CanManageClient: targetType == "client" && staff && caps.CanShare, CanManageQueue: targetType == "client" && staff && caps.CanShare && caps.CanRead}
+	return AccessDecision{Allowed: allowed, Capabilities: caps, Sources: sources, CanManageClient: targetType == "client" && staff && p.CanManageAccess, CanManageQueue: targetType == "client" && staff && p.CanManageAccess && caps.CanRead}
+}
+
+func requiresKnownUploadDestination(op AccessOperation) bool {
+	switch op {
+	case AccessContext, AccessUpload, AccessShare, AccessInvite, AccessInviteClient, AccessCreateLink, AccessManageAccess, AccessManageOwn:
+		return true
+	}
+	return false
 }
 
 // CanGrant applies a ceiling to a previously resolved exact-scope decision.
 // Membership invitation additionally requires AccessInviteClient, not an item
 // decision. Role assignment and invitee ownership remain separate checks.
 func (d AccessDecision) CanGrant(requested models.AccessCapabilities) bool {
-	return d.Allowed && d.Capabilities.CanShare &&
-		(!requested.CanRead || d.Capabilities.CanRead) &&
-		(!requested.CanUpload || d.Capabilities.CanUpload) &&
-		(!requested.CanDelete || d.Capabilities.CanDelete) &&
-		(!requested.CanShare || d.Capabilities.CanShare)
+	return d.Allowed && d.Capabilities.CanShare && requested.Permissions().Within(d.Capabilities.Permissions())
+}
+
+func (s *AccessService) RoleCapabilities(ctx context.Context, tenantID string, roleID *string, fallback models.AccessCapabilities, scope string, userType ...string) (models.AccessCapabilities, error) {
+	if roleID == nil {
+		return fallback, nil
+	}
+	var role models.AccessRole
+	if err := s.DB.WithContext(ctx).Where("tenant_id = ? AND id = ?", tenantID, *roleID).First(&role).Error; err != nil {
+		return models.AccessCapabilities{}, err
+	}
+	if len(userType) > 0 && !role.Supports(userType[0], scope) {
+		return models.AccessCapabilities{}, nil
+	}
+	return projectRoleCapabilities(role, scope), nil
+}
+
+func userTypeForRole(role string) string {
+	if role == "admin" || role == "manager" {
+		return "internal"
+	}
+	return "external"
+}
+
+func projectRoleCapabilities(role models.AccessRole, scope string) models.AccessCapabilities {
+	p, valid := role.PermissionsAt(scope)
+	if !valid {
+		return models.AccessCapabilities{}
+	}
+	// Archival blocks new assignments, not the access of existing recipients.
+	c := p.Capabilities()
+	if role.LegacySharing {
+		c.Sharing = nil
+	}
+	return c
 }

@@ -7,6 +7,12 @@ import (
 	"gorm.io/gorm"
 )
 
+// AccessRoleCatalog records one-time seeding so deleting a default role never
+// recreates it on the next visit to the sharing dropdown.
+type AccessRoleCatalog struct {
+	TenantID string `gorm:"primaryKey" json:"tenant_id"`
+}
+
 // RolePermissions intentionally does not embed AccessCapabilities. Legacy
 // CanShare combines three different authorities and cannot represent this model.
 type RolePermissions struct {
@@ -32,6 +38,7 @@ type AccessRole struct {
 	Name            string  `gorm:"not null;uniqueIndex:idx_access_role_name,priority:2" json:"name"`
 	Description     string  `gorm:"not null;default:''" json:"description"`
 	TemplateKey     *string `gorm:"uniqueIndex:idx_access_role_template,priority:2" json:"template_key,omitempty"`
+	LegacySharing   bool    `gorm:"->;not null;default:false" json:"legacy_sharing"`
 	Audience        string  `gorm:"not null" json:"audience"`
 	AllowWorkspace  bool    `gorm:"not null;default:false" json:"allow_workspace"`
 	AllowFolder     bool    `gorm:"not null;default:false" json:"allow_folder"`
@@ -52,7 +59,13 @@ func (r *AccessRole) BeforeCreate(_ *gorm.DB) error {
 }
 
 func (r AccessRole) AppliesTo(userType, scope string) bool {
-	if r.ArchivedAt != nil || (userType != "internal" && userType != "external") ||
+	return r.ArchivedAt == nil && r.Supports(userType, scope)
+}
+
+// Supports describes existing assignments; archival only changes eligibility
+// for new assignments, not the scope/audience of current access.
+func (r AccessRole) Supports(userType, scope string) bool {
+	if (userType != "internal" && userType != "external") ||
 		(r.Audience != "both" && r.Audience != userType) {
 		return false
 	}

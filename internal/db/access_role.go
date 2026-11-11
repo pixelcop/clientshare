@@ -6,6 +6,12 @@ import (
 	"gorm.io/cli/gorm/field"
 )
 
+var AccessRoleCatalog = struct {
+	TenantID field.String
+}{
+	TenantID: field.String{}.WithColumn("tenant_id"),
+}
+
 var RolePermissions = struct {
 	CanRead           field.Bool
 	CanUpload         field.Bool
@@ -28,6 +34,7 @@ var AccessRole = struct {
 	Name              field.String
 	Description       field.String
 	TemplateKey       field.String
+	LegacySharing     field.Bool
 	Audience          field.String
 	AllowWorkspace    field.Bool
 	AllowFolder       field.Bool
@@ -48,6 +55,7 @@ var AccessRole = struct {
 	Name:              field.String{}.WithColumn("name"),
 	Description:       field.String{}.WithColumn("description"),
 	TemplateKey:       field.String{}.WithColumn("template_key"),
+	LegacySharing:     field.Bool{}.WithColumn("legacy_sharing"),
 	Audience:          field.String{}.WithColumn("audience"),
 	AllowWorkspace:    field.Bool{}.WithColumn("allow_workspace"),
 	AllowFolder:       field.Bool{}.WithColumn("allow_folder"),

@@ -26,6 +26,7 @@ type SharingService struct {
 
 type GrantInput struct {
 	UserID       string                    `json:"user_id"`
+	RoleID       string                    `json:"role_id"`
 	Capabilities models.AccessCapabilities `json:"capabilities"`
 	ExpiresAt    *time.Time                `json:"expires_at"`
 }
@@ -46,9 +47,13 @@ func (s *SharingService) withAuthority(ctx context.Context, req AccessRequest, c
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id = ? AND id = ?", req.TenantID, req.ClientID).First(&client).Error; err != nil {
 			return err
 		}
+		operation := req.Operation
 		req.Operation, req.Now = AccessShare, s.now()
 		if req.FileID == "" {
 			req.Operation = AccessInviteClient
+		}
+		if operation == AccessShare || operation == AccessInvite || operation == AccessCreateLink || operation == AccessManageAccess || operation == AccessManageOwn {
+			req.Operation = operation
 		}
 		resolver := &AccessService{DB: tx}
 		d, err := resolver.Resolve(ctx, req)
@@ -60,6 +65,31 @@ func (s *SharingService) withAuthority(ctx context.Context, req AccessRequest, c
 		}
 		if !d.CanGrant(caps) {
 			return ErrSharingCapabilities
+		}
+		if req.GrantRoleID != "" {
+			var role models.AccessRole
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id = ? AND id = ?", req.TenantID, req.GrantRoleID).First(&role).Error; err != nil {
+				return err
+			}
+			if role.ArchivedAt != nil && !req.PreserveArchivedRole {
+				return ErrSharingInput
+			}
+			scope := "workspace"
+			if req.FileID != "" {
+				var target models.File
+				if err := tx.Where("tenant_id = ? AND id = ?", req.TenantID, req.FileID).First(&target).Error; err != nil {
+					return err
+				}
+				scope = target.Type
+			}
+			p, valid := role.PermissionsAt(scope)
+			current := p.Capabilities()
+			if role.LegacySharing {
+				current.Sharing = nil
+			}
+			if !valid || !models.SameAccessCapabilities(current, caps) {
+				return ErrSharingConflict
+			}
 		}
 		var file *models.File
 		if req.FileID != "" {
@@ -100,6 +130,18 @@ func sameGrantExpiry(a, b *time.Time) bool {
 }
 
 func (s *SharingService) CreateGrant(ctx context.Context, req AccessRequest, input GrantInput) (*models.ItemGrant, error) {
+	if input.RoleID == "" && input.Capabilities.Sharing != nil {
+		return nil, ErrSharingInput
+	}
+	req.Operation = AccessShare
+	if input.RoleID != "" {
+		var err error
+		input.Capabilities, err = sharingRoleInput(ctx, s.DB, req, input.RoleID, input.UserID, "")
+		if err != nil {
+			return nil, err
+		}
+		req.GrantRoleID = input.RoleID
+	}
 	if req.FileID == "" || input.UserID == "" || !validGrantInput(input, s.now()) {
 		return nil, ErrSharingInput
 	}
@@ -109,9 +151,12 @@ func (s *SharingService) CreateGrant(ctx context.Context, req AccessRequest, inp
 		if err := tx.Where("tenant_id = ? AND id = ? AND role IN ?", req.TenantID, input.UserID, []string{"admin", "manager", "client", "customer"}).First(&recipient).Error; err != nil {
 			return err
 		}
+		if err := requireInvitationRecipient(ctx, tx, req, recipient); err != nil {
+			return err
+		}
 		err := tx.Where("tenant_id = ? AND client_id = ? AND file_id = ? AND user_id = ?", req.TenantID, req.ClientID, req.FileID, input.UserID).First(&grant).Error
 		if err == nil {
-			if grant.RevokedAt == nil && (grant.ExpiresAt == nil || grant.ExpiresAt.After(s.now())) && grant.AccessCapabilities == input.Capabilities && sameGrantExpiry(grant.ExpiresAt, input.ExpiresAt) {
+			if grant.RevokedAt == nil && (grant.ExpiresAt == nil || grant.ExpiresAt.After(s.now())) && models.SameAccessCapabilities(grant.AccessCapabilities, input.Capabilities) && sameGrantExpiry(grant.ExpiresAt, input.ExpiresAt) {
 				return nil
 			}
 			return ErrSharingConflict // creation never silently updates/reactivates
@@ -119,7 +164,7 @@ func (s *SharingService) CreateGrant(ctx context.Context, req AccessRequest, inp
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
 		}
-		grant = models.ItemGrant{TenantID: req.TenantID, ClientID: req.ClientID, FileID: req.FileID, UserID: input.UserID, CreatedBy: req.Actor.UserID, AccessCapabilities: input.Capabilities, ExpiresAt: input.ExpiresAt, Version: 1, CreatedAt: s.now(), UpdatedAt: s.now()}
+		grant = models.ItemGrant{TenantID: req.TenantID, RoleID: roleIDPointer(input.RoleID), ClientID: req.ClientID, FileID: req.FileID, UserID: input.UserID, CreatedBy: req.Actor.UserID, AccessCapabilities: input.Capabilities, ExpiresAt: input.ExpiresAt, Version: 1, CreatedAt: s.now(), UpdatedAt: s.now()}
 		result := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "tenant_id"}, {Name: "user_id"}, {Name: "file_id"}}, DoNothing: true}).Create(&grant)
 		if result.Error != nil {
 			return result.Error
@@ -133,6 +178,27 @@ func (s *SharingService) CreateGrant(ctx context.Context, req AccessRequest, inp
 }
 
 func (s *SharingService) UpdateGrant(ctx context.Context, req AccessRequest, grantID string, version uint64, input GrantInput, revoke bool) (*models.ItemGrant, error) {
+	if !revoke && input.RoleID == "" && input.Capabilities.Sharing != nil {
+		return nil, ErrSharingInput
+	}
+	req.Operation = AccessManageAccess
+	var owned models.ItemGrant
+	if err := s.DB.WithContext(ctx).Where("tenant_id = ? AND id = ? AND client_id = ? AND file_id = ? AND created_by = ?", req.TenantID, grantID, req.ClientID, req.FileID, req.Actor.UserID).First(&owned).Error; err == nil {
+		req.Operation = AccessManageOwn
+	}
+	if input.RoleID != "" && !revoke {
+		var existing models.ItemGrant
+		if err := s.DB.WithContext(ctx).Where("tenant_id = ? AND id = ? AND client_id = ? AND file_id = ?", req.TenantID, grantID, req.ClientID, req.FileID).First(&existing).Error; err != nil {
+			return nil, err
+		}
+		var err error
+		input.Capabilities, err = sharingRoleInput(ctx, s.DB, req, input.RoleID, existing.UserID, "", existing.RoleID)
+		if err != nil {
+			return nil, err
+		}
+		req.GrantRoleID = input.RoleID
+		req.PreserveArchivedRole = existing.RoleID != nil && *existing.RoleID == input.RoleID
+	}
 	if req.FileID == "" || grantID == "" || version == 0 || (!revoke && !validGrantInput(input, s.now())) {
 		return nil, ErrSharingInput
 	}
@@ -161,6 +227,7 @@ func (s *SharingService) UpdateGrant(ctx context.Context, req AccessRequest, gra
 				return err
 			}
 		} else {
+			updates["role_id"] = roleIDPointer(input.RoleID)
 			updates["can_read"], updates["can_upload"], updates["can_delete"], updates["can_share"] = caps.CanRead, caps.CanUpload, caps.CanDelete, caps.CanShare
 			updates["expires_at"], updates["revoked_at"] = input.ExpiresAt, nil
 		}

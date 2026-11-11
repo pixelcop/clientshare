@@ -24,7 +24,7 @@ func notificationTestDB(t *testing.T) *gorm.DB {
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, sqlDB.Close()) })
-	require.NoError(t, db.AutoMigrate(&models.Client{}, &models.File{}, &models.User{}, &models.UserClient{}, &models.ItemGrant{}, &models.SecureLink{}, &models.QueuedEmail{}))
+	require.NoError(t, db.AutoMigrate(&models.Client{}, &models.File{}, &models.User{}, &models.UserClient{}, &models.ItemGrant{}, &models.SecureLink{}, &models.QueuedEmail{}, &models.AccessRole{}, &models.RoleAssignment{}, &models.AccessGroupMember{}))
 	for _, row := range []any{
 		&models.Client{ID: "client", TenantID: "tenant", Name: "Private Client Name", FolderPath: "private-client", RootFolderID: notificationPtr("root")},
 		&models.File{ID: "root", TenantID: "tenant", ClientID: "client", Type: "folder", Filename: "private-root", Path: "private-root"},

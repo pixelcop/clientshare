@@ -3,6 +3,7 @@
 package db
 
 import (
+	"github.com/pixelcop/clientshare/internal/models"
 	"gorm.io/cli/gorm/field"
 )
 
@@ -11,9 +12,21 @@ var AccessCapabilities = struct {
 	CanUpload field.Bool
 	CanDelete field.Bool
 	CanShare  field.Bool
+	Sharing   field.Struct[models.SharingPermissions]
 }{
 	CanRead:   field.Bool{}.WithColumn("can_read"),
 	CanUpload: field.Bool{}.WithColumn("can_upload"),
 	CanDelete: field.Bool{}.WithColumn("can_delete"),
 	CanShare:  field.Bool{}.WithColumn("can_share"),
+	Sharing:   field.Struct[models.SharingPermissions]{}.WithName("Sharing"),
+}
+
+var SharingPermissions = struct {
+	InviteExternal field.Bool
+	CreateLinks    field.Bool
+	ManageAccess   field.Bool
+}{
+	InviteExternal: field.Bool{}.WithColumn("invite_external"),
+	CreateLinks:    field.Bool{}.WithColumn("create_links"),
+	ManageAccess:   field.Bool{}.WithColumn("manage_access"),
 }

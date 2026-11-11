@@ -541,6 +541,10 @@ func (h *AuthHandler) MeHandler(c fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to load client assignments"})
 	}
 	isInitialAdmin := false
+	profile, err := services.AccessProfileFor(h.db.WithContext(c.Context()), user)
+	if err != nil {
+		return c.Status(503).JSON(fiber.Map{"error": "Access settings are temporarily unavailable"})
+	}
 	if user.Role == "admin" {
 		var initialAdmin models.User
 		if err := h.db.WithContext(c.Context()).Select("id").Where("tenant_id = ? AND role = ?", tenantID, "admin").Order("created_at ASC, id ASC").First(&initialAdmin).Error; err != nil {
@@ -557,6 +561,7 @@ func (h *AuthHandler) MeHandler(c fiber.Ctx) error {
 		"client_ids":          clientIDs,
 		"is_initial_admin":    isInitialAdmin,
 		"manager_full_access": user.ManagerFullAccess,
+		"access_profile":      profile,
 	})
 }
 

@@ -22,6 +22,7 @@ type LinkInput struct {
 // CreateLink is the authorized creation path for both client and item targets.
 // Item route registration remains separately gated until enforcement is ready.
 func (s *SharingService) CreateLink(ctx context.Context, req AccessRequest, input LinkInput, requestKey string) (*models.SecureLink, error) {
+	req.Operation = AccessCreateLink
 	caps, valid := linkCapabilities(input.AccessType)
 	if !valid || s.LinkSigningKey == "" || len(requestKey) > 128 {
 		return nil, ErrSharingInput
@@ -82,6 +83,7 @@ func (s *SharingService) CreateLink(ctx context.Context, req AccessRequest, inpu
 }
 
 func (s *SharingService) LinkForDelivery(ctx context.Context, req AccessRequest, linkID string) (*models.SecureLink, error) {
+	req.Operation = AccessCreateLink
 	var link models.SecureLink
 	if err := s.DB.WithContext(ctx).Where("tenant_id = ? AND id = ?", req.TenantID, linkID).First(&link).Error; err != nil {
 		return nil, err
@@ -107,6 +109,7 @@ func (s *SharingService) LinkForDelivery(ctx context.Context, req AccessRequest,
 }
 
 func (s *SharingService) RevokeLink(ctx context.Context, req AccessRequest, linkID string) error {
+	req.Operation = AccessCreateLink
 	var link models.SecureLink
 	if err := s.DB.WithContext(ctx).Where("tenant_id = ? AND id = ?", req.TenantID, linkID).First(&link).Error; err != nil {
 		return err
@@ -136,6 +139,7 @@ func (s *SharingService) RevokeLink(ctx context.Context, req AccessRequest, link
 }
 
 func (s *SharingService) LinksAtScope(ctx context.Context, req AccessRequest) ([]models.SecureLink, error) {
+	req.Operation = AccessCreateLink
 	result := []models.SecureLink{}
 	err := s.withAuthority(ctx, req, models.AccessCapabilities{}, func(tx *gorm.DB, _ *models.File) error {
 		req.Operation, req.Now = AccessShare, s.now()

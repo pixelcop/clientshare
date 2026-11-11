@@ -10,6 +10,7 @@ var UserClient = struct {
 	TenantID        field.String
 	UserID          field.String
 	ClientID        field.String
+	RoleID          field.String
 	CapabilitiesSet field.Bool
 	AccessSource    field.String
 	InvitedBy       field.String
@@ -18,6 +19,7 @@ var UserClient = struct {
 	TenantID:        field.String{}.WithColumn("tenant_id"),
 	UserID:          field.String{}.WithColumn("user_id"),
 	ClientID:        field.String{}.WithColumn("client_id"),
+	RoleID:          field.String{}.WithColumn("role_id"),
 	CapabilitiesSet: field.Bool{}.WithColumn("capabilities_set"),
 	AccessSource:    field.String{}.WithColumn("access_source"),
 	InvitedBy:       field.String{}.WithColumn("invited_by"),

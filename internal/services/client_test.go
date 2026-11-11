@@ -39,7 +39,7 @@ func setupTestDB(t *testing.T) (*gorm.DB, func()) {
 	if err != nil {
 		t.Fatalf("failed to open test db: %v", err)
 	}
-	if err := db.AutoMigrate(&models.ReadableView{}, &models.Client{}, &models.File{}, &models.FileActivity{}, &models.User{}, &models.UserClient{}); err != nil {
+	if err := db.AutoMigrate(&models.ReadableView{}, &models.Client{}, &models.File{}, &models.FileActivity{}, &models.User{}, &models.UserClient{}, &models.AccessRole{}, &models.RoleAssignment{}, &models.AccessGroupMember{}, &models.AccessProfile{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Create(&models.User{ID: "test-admin", TenantID: tenantctx.DefaultTenantID, Email: "test-admin@example.test", Role: "admin"}).Error; err != nil {

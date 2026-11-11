@@ -17,6 +17,7 @@ var ErrScopedSharingUnavailable = errors.New("item sharing is not available unti
 // PersistClientLinkForActor preserves legacy request keys/fingerprints while
 // applying the same transactional permission ceiling as scoped creation.
 func (s *SharingService) PersistClientLinkForActor(ctx context.Context, req AccessRequest, link *models.SecureLink) error {
+	req.Operation = AccessCreateLink
 	if req.FileID != "" || link.FileID != nil {
 		return ErrScopedSharingUnavailable
 	}

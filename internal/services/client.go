@@ -114,7 +114,13 @@ func (s *ClientService) CreateClientForActor(ctx context.Context, tenantID, user
 		if user.Role != "admin" && user.Role != "manager" {
 			return gorm.ErrRecordNotFound
 		}
-		var err error
+		profile, err := AccessProfileFor(tx, user)
+		if err != nil {
+			return err
+		}
+		if user.Role != "admin" && !profile.CanManageUsers {
+			return gorm.ErrRecordNotFound
+		}
 		client, err = (&ClientService{DB: tx, Storage: s.Storage}).CreateClient(ctx, tenantID, name)
 		if err != nil {
 			return err

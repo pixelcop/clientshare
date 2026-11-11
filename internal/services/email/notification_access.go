@@ -24,20 +24,26 @@ type NotificationRecipient struct {
 func UploadNotificationRecipients(ctx context.Context, db *gorm.DB, tenantID, clientID, actorRole string, now time.Time) ([]NotificationRecipient, error) {
 	var users []models.User
 	var links []models.SecureLink
+	var candidateRoles []string
 	switch actorRole {
 	case "admin", "manager":
-		if err := db.WithContext(ctx).Model(&models.User{}).Joins("JOIN user_clients uc ON uc.tenant_id = users.tenant_id AND uc.user_id = users.id").Where("users.tenant_id = ? AND uc.client_id = ? AND users.role IN ? AND (NOT uc.capabilities_set OR uc.can_read)", tenantID, clientID, []string{"client", "customer"}).Distinct().Find(&users).Error; err != nil {
-			return nil, err
-		}
+		candidateRoles = []string{"client", "customer"}
 		if err := db.WithContext(ctx).Where("tenant_id = ? AND client_id = ? AND email <> '' AND revoked_at IS NULL AND access_type IN ?", tenantID, clientID, []string{"read", "view", "readwrite"}).Find(&links).Error; err != nil {
 			return nil, err
 		}
 	case "client", "customer", "link":
-		if err := db.WithContext(ctx).Where(`users.tenant_id = ? AND (users.role = 'admin' OR (users.role = 'manager' AND (users.manager_full_access OR EXISTS (SELECT 1 FROM user_clients uc WHERE uc.tenant_id = users.tenant_id AND uc.user_id = users.id AND uc.client_id = ? AND (NOT uc.capabilities_set OR uc.can_read)))))`, tenantID, clientID).Find(&users).Error; err != nil {
-			return nil, err
-		}
+		candidateRoles = []string{"admin", "manager"}
 	default:
 		return nil, nil
+	}
+	ids, err := (&access.AccessService{DB: db}).WorkspaceReaderIDs(ctx, tenantID, clientID, candidateRoles)
+	if err != nil {
+		return nil, err
+	}
+	if len(ids) > 0 {
+		if err := db.WithContext(ctx).Where("tenant_id = ? AND id IN ?", tenantID, ids).Find(&users).Error; err != nil {
+			return nil, err
+		}
 	}
 	result := []NotificationRecipient{}
 	for _, user := range users {

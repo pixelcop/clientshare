@@ -40,7 +40,7 @@ func testSensitiveResponseCacheHeaders(t *testing.T, mode string) {
 	cfg.InternalAPI.Enabled = true
 	cfg.InternalAPI.Secret = "12345678901234567890123456789012"
 	db := newTestDB(t)
-	if err := db.AutoMigrate(&models.User{}, &models.UserClient{}, &models.SecureLink{}); err != nil {
+	if err := db.AutoMigrate(&models.User{}, &models.UserClient{}, &models.SecureLink{}, &models.AccessProfile{}); err != nil {
 		t.Fatal(err)
 	}
 	user := models.User{TenantID: tenantctx.DefaultTenantID, Email: "cache-test@example.com", Role: "admin"}

@@ -46,6 +46,7 @@ func revokeClientLinks(tx *gorm.DB, req AccessRequest, now time.Time) (int, erro
 }
 
 func (s *SharingService) RevokeClientLinks(ctx context.Context, req AccessRequest) (int, error) {
+	req.Operation = AccessCreateLink
 	if req.FileID != "" {
 		return 0, ErrSharingInput
 	}
@@ -61,10 +62,22 @@ func (s *SharingService) RevokeClientLinks(ctx context.Context, req AccessReques
 // RemoveMember removes recipient access, never shares authored by that person.
 // Bearer links survive unless the caller explicitly chooses client-wide revoke.
 func (s *SharingService) RemoveMember(ctx context.Context, req AccessRequest, userID string, revokeLinks bool) error {
+	req.Operation = AccessManageOwn
 	if req.FileID != "" || userID == "" {
 		return ErrSharingInput
 	}
 	return s.withAuthority(ctx, req, models.AccessCapabilities{}, func(tx *gorm.DB, _ *models.File) error {
+		if revokeLinks {
+			linkReq := req
+			linkReq.Operation = AccessCreateLink
+			d, err := (&AccessService{DB: tx}).Resolve(ctx, linkReq)
+			if err != nil {
+				return err
+			}
+			if !d.Allowed {
+				return ErrSharingCapabilities
+			}
+		}
 		var member models.UserClient
 		if err := tx.Where("tenant_id = ? AND client_id = ? AND user_id = ?", req.TenantID, req.ClientID, userID).First(&member).Error; err != nil {
 			return err
@@ -76,16 +89,17 @@ func (s *SharingService) RemoveMember(ctx context.Context, req AccessRequest, us
 		if err := tx.Where("tenant_id = ? AND id = ?", req.TenantID, req.Actor.UserID).First(&actor).Error; err != nil {
 			return err
 		}
-		if recipient.Role != "client" && recipient.Role != "customer" && actor.Role != "admin" {
-			return gorm.ErrRecordNotFound
-		}
 		staffReq := req
 		staffReq.Operation = AccessManageClient
 		staff, err := (&AccessService{DB: tx}).Resolve(ctx, staffReq)
 		if err != nil {
 			return err
 		}
-		if !staff.Allowed && (member.AccessSource != "invitation" || member.InvitedBy == nil || *member.InvitedBy != req.Actor.UserID) {
+		if recipient.Role != "client" && recipient.Role != "customer" && actor.Role != "admin" && !staff.Allowed && !(staff.Capabilities.Sharing != nil && staff.Capabilities.Permissions().CanManageAccess) {
+			return gorm.ErrRecordNotFound
+		}
+		canManageAccess := staff.Allowed || (staff.Capabilities.Sharing != nil && staff.Capabilities.Permissions().CanManageAccess)
+		if !canManageAccess && (member.AccessSource != "invitation" || member.InvitedBy == nil || *member.InvitedBy != req.Actor.UserID) {
 			return gorm.ErrRecordNotFound
 		}
 		var grants []models.ItemGrant
@@ -108,6 +122,9 @@ func (s *SharingService) RemoveMember(ctx context.Context, req AccessRequest, us
 			}
 		}
 		if err := RevokePendingRecipientInvitations(tx, req, userID, recipient.Email, s.now()); err != nil {
+			return err
+		}
+		if err := tx.Model(&models.RoleAssignment{}).Where("tenant_id = ? AND client_id = ? AND user_id = ? AND revoked_at IS NULL", req.TenantID, req.ClientID, userID).Updates(map[string]any{"revoked_at": s.now(), "version": gorm.Expr("version + 1")}).Error; err != nil {
 			return err
 		}
 		if err := tx.Where("tenant_id = ? AND client_id = ? AND user_id = ?", req.TenantID, req.ClientID, userID).Delete(&models.UserClient{}).Error; err != nil {

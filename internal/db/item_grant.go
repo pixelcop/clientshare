@@ -8,6 +8,7 @@ import (
 
 var ItemGrant = struct {
 	ID        field.String
+	RoleID    field.String
 	TenantID  field.String
 	ClientID  field.String
 	UserID    field.String
@@ -20,6 +21,7 @@ var ItemGrant = struct {
 	RevokedAt field.Time
 }{
 	ID:        field.String{}.WithColumn("id"),
+	RoleID:    field.String{}.WithColumn("role_id"),
 	TenantID:  field.String{}.WithColumn("tenant_id"),
 	ClientID:  field.String{}.WithColumn("client_id"),
 	UserID:    field.String{}.WithColumn("user_id"),

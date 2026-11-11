@@ -8,6 +8,7 @@ import (
 
 var AccessInvitation = struct {
 	ID              field.String
+	RoleID          field.String
 	TenantID        field.String
 	ClientID        field.String
 	FileID          field.String
@@ -26,6 +27,7 @@ var AccessInvitation = struct {
 	UpdatedAt       field.Time
 }{
 	ID:              field.String{}.WithColumn("id"),
+	RoleID:          field.String{}.WithColumn("role_id"),
 	TenantID:        field.String{}.WithColumn("tenant_id"),
 	ClientID:        field.String{}.WithColumn("client_id"),
 	FileID:          field.String{}.WithColumn("file_id"),

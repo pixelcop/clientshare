@@ -20,8 +20,13 @@ const (
 	AccessUpload       = access.AccessUpload
 	AccessDelete       = access.AccessDelete
 	AccessShare        = access.AccessShare
+	AccessInvite       = access.AccessInvite
+	AccessCreateLink   = access.AccessCreateLink
+	AccessManageAccess = access.AccessManageAccess
+	AccessManageOwn    = access.AccessManageOwn
 	AccessInviteClient = access.AccessInviteClient
 	AccessManageClient = access.AccessManageClient
+	AccessDeleteClient = access.AccessDeleteClient
 	AccessManageQueue  = access.AccessManageQueue
 	maxAccessItems     = access.MaxItems
 	maxAccessDepth     = access.MaxDepth

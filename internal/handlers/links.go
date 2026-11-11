@@ -436,7 +436,7 @@ func (h *LinkHandler) DeleteSecureLink(c fiber.Ctx) error {
 }
 
 func (h *LinkHandler) requireClientSharing(c fiber.Ctx, clientID string, read bool) (services.AccessDecision, error) {
-	d, err := (&services.AccessService{DB: h.db}).Resolve(c.Context(), middleware.AccessRequest(c, clientID, "", services.AccessShare))
+	d, err := (&services.AccessService{DB: h.db}).Resolve(c.Context(), middleware.AccessRequest(c, clientID, "", services.AccessCreateLink))
 	if err != nil {
 		return d, sharingError(err)
 	}

@@ -8,9 +8,10 @@ import (
 
 // UserClient maps users to the clients they are allowed to access.
 type UserClient struct {
-	TenantID string `gorm:"not null;index" json:"tenant_id"`
-	UserID   string `gorm:"primaryKey;size:26" json:"user_id"`
-	ClientID string `gorm:"primaryKey;size:26" json:"client_id"`
+	TenantID string  `gorm:"not null;index" json:"tenant_id"`
+	UserID   string  `gorm:"primaryKey;size:26" json:"user_id"`
+	ClientID string  `gorm:"primaryKey;size:26" json:"client_id"`
+	RoleID   *string `gorm:"index" json:"role_id,omitempty"`
 	// Unset capabilities preserve legacy role-specific membership behavior.
 	// An explicit all-false membership grants nothing, rather than legacy rights.
 	CapabilitiesSet    bool `gorm:"not null;default:false" json:"capabilities_set"`

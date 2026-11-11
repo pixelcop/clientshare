@@ -11,6 +11,7 @@ import (
 // Acceptance binds a verified tenant-local identity without changing its role.
 type AccessInvitation struct {
 	ID                 string  `gorm:"primaryKey;size:26" json:"id"`
+	RoleID             *string `gorm:"index" json:"role_id,omitempty"`
 	TenantID           string  `gorm:"not null;index" json:"tenant_id"`
 	ClientID           string  `gorm:"not null;index" json:"client_id"`
 	FileID             *string `gorm:"index" json:"file_id,omitempty"`

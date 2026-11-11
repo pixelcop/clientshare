@@ -153,7 +153,11 @@ func (h *ClientHandler) DeleteClient(c fiber.Ctx) error {
 }
 
 func (h *ClientHandler) requireClientManagement(c fiber.Ctx) error {
-	d, err := (&services.AccessService{DB: h.service.DB}).Resolve(c.Context(), middleware.AccessRequest(c, c.Params("id"), "", services.AccessManageClient))
+	op := services.AccessManageClient
+	if c.Method() == "DELETE" {
+		op = services.AccessDeleteClient
+	}
+	d, err := (&services.AccessService{DB: h.service.DB}).Resolve(c.Context(), middleware.AccessRequest(c, c.Params("id"), "", op))
 	if err != nil {
 		return fiber.NewError(503, "Access validation is temporarily unavailable")
 	}

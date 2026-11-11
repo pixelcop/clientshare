@@ -37,6 +37,7 @@ var AccessGroupMember = struct {
 }
 
 var RoleAssignment = struct {
+	ScopeName  field.String
 	ID         field.String
 	TenantID   field.String
 	RoleID     field.String
@@ -52,6 +53,7 @@ var RoleAssignment = struct {
 	CreatedAt  field.Time
 	UpdatedAt  field.Time
 }{
+	ScopeName:  field.String{}.WithColumn("scope_name"),
 	ID:         field.String{}.WithColumn("id"),
 	TenantID:   field.String{}.WithColumn("tenant_id"),
 	RoleID:     field.String{}.WithColumn("role_id"),

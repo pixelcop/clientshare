@@ -30,7 +30,7 @@ func newAccessFixture(t *testing.T) accessFixture {
 	require.NoError(t, err)
 	sqlDB.SetMaxOpenConns(1)
 	t.Cleanup(func() { require.NoError(t, sqlDB.Close()) })
-	require.NoError(t, db.AutoMigrate(&models.User{}, &models.Client{}, &models.File{}, &models.UserClient{}, &models.SecureLink{}, &models.ItemGrant{}))
+	require.NoError(t, db.AutoMigrate(&models.User{}, &models.Client{}, &models.File{}, &models.UserClient{}, &models.SecureLink{}, &models.ItemGrant{}, &models.AccessRole{}, &models.RoleAssignment{}, &models.AccessGroupMember{}, &models.AccessProfile{}))
 	for _, row := range []any{
 		&models.Client{ID: "client", TenantID: "tenant", Name: "Client", FolderPath: "client", RootFolderID: accessPtr("root")},
 		&models.Client{ID: "other-client", TenantID: "tenant", Name: "Other", FolderPath: "other"},
@@ -373,8 +373,9 @@ func TestAccessReparentingAndBatchQueries(t *testing.T) {
 	for _, id := range ids {
 		require.True(t, results[id].Allowed)
 	}
-	// client/user/membership + 3 ancestry levels + one grant batch, not N+1.
-	require.LessOrEqual(t, queries, 7)
+	// client/user/membership + one assignment batch + 3 ancestry levels + one
+	// grant batch, not a query per item.
+	require.LessOrEqual(t, queries, 8)
 	_, err = f.s.ResolveItems(context.Background(), f.req("recipient", "", AccessRead), make([]string, maxAccessItems+1))
 	require.Error(t, err)
 }

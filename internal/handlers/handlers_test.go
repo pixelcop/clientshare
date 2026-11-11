@@ -18,7 +18,7 @@ import (
 
 func setupTestApp() (*fiber.App, *gorm.DB) {
 	db, _ := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
-	db.AutoMigrate(&models.User{}, &models.UserClient{}, &models.InviteToken{}, &models.TenantEntitlement{}, &models.ItemGrant{}, &models.AccessInvitation{}, &models.PasskeyCredential{}, &models.AuditEvent{})
+	db.AutoMigrate(&models.User{}, &models.UserClient{}, &models.InviteToken{}, &models.TenantEntitlement{}, &models.ItemGrant{}, &models.AccessInvitation{}, &models.PasskeyCredential{}, &models.AuditEvent{}, &models.AccessProfile{}, &models.AccessRole{}, &models.RoleAssignment{}, &models.AccessGroupMember{})
 	db.Create(&models.TenantEntitlement{TenantID: tenantctx.DefaultTenantID})
 	app := fiber.New()
 	// Middleware to inject admin role for all requests

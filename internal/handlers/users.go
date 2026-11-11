@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"math"
 	"sort"
 	"strings"
@@ -41,6 +42,7 @@ func NewUsersHandler(db *gorm.DB, emailQueue emailpkg.EmailQueue, baseURL, token
 }
 
 func RegisterUserRoutes(router fiber.Router, db *gorm.DB, emailQueue emailpkg.EmailQueue, baseURL, tokenSecret, resetTokenSecret string, inviteTTL, resetTokenTTL time.Duration, tenantSettings *services.TenantSettingsService) {
+	RegisterAccessRoleRoutes(router, db)
 	h := NewUsersHandler(db, emailQueue, baseURL, tokenSecret, resetTokenSecret, inviteTTL, resetTokenTTL, tenantSettings)
 	router.Get("/users", middleware.RoleRequired("manager"), h.ListUsersHandler)
 	router.Post("/users", middleware.RoleRequired("manager"), h.CreateUserHandler)
@@ -68,17 +70,32 @@ func canManageUsers(role string) bool {
 	return role == "admin" || role == "manager"
 }
 
+func (h *UsersHandler) canManageCurrentUsers(c fiber.Ctx) bool {
+	var user models.User
+	if err := h.db.WithContext(c.Context()).Where("tenant_id = ? AND id = ?", tenantIDFromCtx(c), fiber.Locals[string](c, "user_id")).First(&user).Error; err != nil {
+		return false
+	}
+	if user.Role != "admin" && user.Role != "manager" {
+		return false
+	}
+	profile, err := services.AccessProfileFor(h.db.WithContext(c.Context()), user)
+	return err == nil && (profile.OrganizationRole == "administrator" || profile.CanManageUsers)
+}
+
 // GET /api/users - list all users (admin/manager only)
 func (h *UsersHandler) ListUsersHandler(c fiber.Ctx) error {
 	role, _ := c.Locals("role").(string)
 	tenantID := tenantIDFromCtx(c)
-	if !canManageUsers(role) {
+	if !canManageUsers(role) || !h.canManageCurrentUsers(c) {
 		utils.Logger(c).Debug("forbidden", zap.String("role", role))
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "forbidden"})
 	}
 	search := strings.TrimSpace(c.Query("search"))
 	rawRoleFilter := strings.TrimSpace(c.Query("role"))
 	roleFilter := normalizeUserRole(rawRoleFilter)
+	if rawRoleFilter == "internal" || rawRoleFilter == "external" {
+		roleFilter = rawRoleFilter
+	}
 	if rawRoleFilter != "" && roleFilter == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid role filter"})
 	}
@@ -208,7 +225,14 @@ func (h *UsersHandler) userListQuery(ctx context.Context, tenantID, actorID, sea
 		q = q.Where("id IN (?)", matchingUserIDs)
 	}
 	if roleFilter != "" {
-		q = q.Where("users.role = ?", roleFilter)
+		switch roleFilter {
+		case "internal":
+			q = q.Where("users.role IN ?", []string{"admin", "manager"})
+		case "external", "client":
+			q = q.Where("users.role IN ?", []string{"client", "customer"})
+		default:
+			q = q.Where("users.role = ?", roleFilter)
+		}
 	}
 	switch inviteStatusFilter {
 	case "accepted":
@@ -351,6 +375,9 @@ func (h *UsersHandler) userInviteAccepted(user models.User) bool {
 func (h *UsersHandler) attachInviteStatus(users []models.User) {
 	for i := range users {
 		users[i].InviteAccepted = h.userInviteAccepted(users[i])
+		if profile, err := services.AccessProfileFor(h.db, users[i]); err == nil {
+			users[i].AccessProfile = &profile
+		}
 	}
 }
 
@@ -358,11 +385,12 @@ func (h *UsersHandler) attachInviteStatus(users []models.User) {
 func (h *UsersHandler) CreateUserHandler(c fiber.Ctx) error {
 	role, _ := c.Locals("role").(string)
 	tenantID := tenantIDFromCtx(c)
-	if !canManageUsers(role) {
+	if !canManageUsers(role) || !h.canManageCurrentUsers(c) {
 		utils.Logger(c).Debug("forbidden", zap.String("role", role))
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "forbidden"})
 	}
 	var req struct {
+		services.UserAccessInput
 		Email             string                     `json:"email"`
 		Role              string                     `json:"role"`
 		Name              string                     `json:"name"`
@@ -380,6 +408,14 @@ func (h *UsersHandler) CreateUserHandler(c fiber.Ctx) error {
 		return c.Status(409).JSON(fiber.Map{"error": "user already exists"})
 	}
 	resolvedRole := normalizeUserRole(req.Role)
+	if req.UserType != "" {
+		var err error
+		resolvedRole, err = req.UserAccessInput.CompatibilityRole()
+		if err != nil {
+			return c.Status(400).JSON(fiber.Map{"error": err.Error()})
+		}
+		req.ManagerFullAccess = req.AllWorkspaces
+	}
 	if resolvedRole == "" {
 		utils.Logger(c).Debug("invalid role", zap.String("role", req.Role))
 		return c.Status(400).JSON(fiber.Map{"error": "invalid role"})
@@ -388,7 +424,14 @@ func (h *UsersHandler) CreateUserHandler(c fiber.Ctx) error {
 		return c.Status(403).JSON(fiber.Map{"error": "Only administrators may manage staff roles or full access"})
 	}
 	normalizedClientIDs := normalizeClientIDs(req.ClientIDs)
-	if resolvedRole == "client" && len(normalizedClientIDs) == 0 {
+	if req.UserType != "" && req.WorkspaceAccess != nil {
+		ids := []string{}
+		for _, a := range *req.WorkspaceAccess {
+			ids = append(ids, a.ClientID)
+		}
+		normalizedClientIDs = normalizeClientIDs(ids)
+	}
+	if resolvedRole == "client" && len(normalizedClientIDs) == 0 && req.UserType == "" {
 		utils.Logger(c).Debug("client role requires client id")
 		return c.Status(400).JSON(fiber.Map{"error": "client_ids is required for client users"})
 	}
@@ -413,13 +456,15 @@ func (h *UsersHandler) CreateUserHandler(c fiber.Ctx) error {
 		if req.Capabilities != nil {
 			caps = *req.Capabilities
 		}
-		for _, clientID := range normalizedClientIDs {
-			d, err := (&services.AccessService{DB: tx}).Resolve(c.Context(), middleware.AccessRequest(c, clientID, "", services.AccessInviteClient))
-			if err != nil {
-				return err
-			}
-			if !d.Allowed || !d.CanGrant(caps) {
-				return fiber.ErrNotFound
+		if req.UserType == "" {
+			for _, clientID := range normalizedClientIDs {
+				d, err := (&services.AccessService{DB: tx}).Resolve(c.Context(), middleware.AccessRequest(c, clientID, "", services.AccessInviteClient))
+				if err != nil {
+					return err
+				}
+				if !d.Allowed || !d.CanGrant(caps) {
+					return fiber.ErrNotFound
+				}
 			}
 		}
 		if err := services.CheckStaffQuota(tx, &user); err != nil {
@@ -428,10 +473,14 @@ func (h *UsersHandler) CreateUserHandler(c fiber.Ctx) error {
 		if err := tx.Create(&user).Error; err != nil {
 			return err
 		}
-		if err := h.replaceClientAssignments(tx, tenantID, user.ID, createdBy, normalizedClientIDs); err != nil {
+		if req.UserType != "" {
+			if err := services.ApplyUserAccess(c.Context(), tx, tenantID, createdBy, user, req.UserAccessInput); err != nil {
+				return err
+			}
+		} else if err := h.replaceClientAssignments(tx, tenantID, user.ID, createdBy, normalizedClientIDs); err != nil {
 			return err
 		}
-		if resolvedRole == "client" {
+		if resolvedRole == "client" && req.UserType == "" {
 			if err := tx.Model(&models.UserClient{}).Where("tenant_id = ? AND user_id = ?", tenantID, user.ID).Updates(map[string]any{
 				"capabilities_set": true, "can_read": caps.CanRead, "can_upload": caps.CanUpload, "can_delete": caps.CanDelete, "can_share": caps.CanShare,
 				"access_source": "invitation", "invited_by": createdBy,
@@ -446,6 +495,12 @@ func (h *UsersHandler) CreateUserHandler(c fiber.Ctx) error {
 		utils.Logger(c).Error("error creating invited user", zap.Error(err))
 		if accessErr, ok := err.(*fiber.Error); ok {
 			return c.Status(accessErr.Code).JSON(fiber.Map{"error": accessErr.Message})
+		}
+		if errors.Is(err, services.ErrRoleInput) || errors.Is(err, services.ErrSharingCapabilities) {
+			return c.Status(400).JSON(fiber.Map{"error": err.Error()})
+		}
+		if errors.Is(err, services.ErrRoleForbidden) {
+			return c.Status(403).JSON(fiber.Map{"error": err.Error()})
 		}
 		if respondQuotaError(c, err) {
 			return nil
@@ -465,7 +520,7 @@ func (h *UsersHandler) GenerateAccessLinkHandler(c fiber.Ctx) error {
 	}
 	role, _ := c.Locals("role").(string)
 	tenantID := tenantIDFromCtx(c)
-	if !canManageUsers(role) {
+	if !canManageUsers(role) || !h.canManageCurrentUsers(c) {
 		utils.Logger(c).Debug("forbidden", zap.String("role", role))
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "forbidden"})
 	}
@@ -534,7 +589,7 @@ func (h *UsersHandler) GenerateAccessLinkHandler(c fiber.Ctx) error {
 func (h *UsersHandler) ResendInviteHandler(c fiber.Ctx) error {
 	role, _ := c.Locals("role").(string)
 	tenantID := tenantIDFromCtx(c)
-	if !canManageUsers(role) {
+	if !canManageUsers(role) || !h.canManageCurrentUsers(c) {
 		utils.Logger(c).Debug("forbidden", zap.String("role", role))
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "forbidden"})
 	}
@@ -585,7 +640,7 @@ func (h *UsersHandler) ResendInviteHandler(c fiber.Ctx) error {
 func (h *UsersHandler) ResendAllInvitesHandler(c fiber.Ctx) error {
 	role, _ := c.Locals("role").(string)
 	tenantID := tenantIDFromCtx(c)
-	if !canManageUsers(role) {
+	if !canManageUsers(role) || !h.canManageCurrentUsers(c) {
 		utils.Logger(c).Debug("forbidden", zap.String("role", role))
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "forbidden"})
 	}
@@ -718,6 +773,7 @@ func (h *UsersHandler) UpdateUserHandler(c fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "invalid id"})
 	}
 	var req struct {
+		services.UserAccessInput
 		Email             *string   `json:"email"`
 		Password          *string   `json:"password"`
 		Role              *string   `json:"role"`
@@ -735,6 +791,19 @@ func (h *UsersHandler) UpdateUserHandler(c fiber.Ctx) error {
 		return c.Status(404).JSON(fiber.Map{"error": "user not found"})
 	}
 	resolvedRole := user.Role
+	if req.UserType != "" {
+		var err error
+		resolvedRole, err = req.UserAccessInput.CompatibilityRole()
+		if err != nil {
+			return c.Status(400).JSON(fiber.Map{"error": err.Error()})
+		}
+		if id == fiber.Locals[string](c, "user_id") && resolvedRole != "admin" {
+			return c.Status(400).JSON(fiber.Map{"error": "You cannot remove your own administrator access"})
+		}
+		user.Role = resolvedRole
+		req.Role = nil
+		req.ManagerFullAccess = &req.AllWorkspaces
+	}
 	if req.Role != nil {
 		resolvedRole = normalizeUserRole(*req.Role)
 		if resolvedRole == "" {
@@ -742,6 +811,9 @@ func (h *UsersHandler) UpdateUserHandler(c fiber.Ctx) error {
 			return c.Status(400).JSON(fiber.Map{"error": "invalid role"})
 		}
 		user.Role = resolvedRole
+	}
+	if id == fiber.Locals[string](c, "user_id") && resolvedRole != "admin" {
+		return c.Status(400).JSON(fiber.Map{"error": "You cannot remove your own administrator access"})
 	}
 	if resolvedRole != "manager" {
 		user.ManagerFullAccess = false
@@ -772,7 +844,25 @@ func (h *UsersHandler) UpdateUserHandler(c fiber.Ctx) error {
 		if err := services.CheckStaffQuota(tx, &user); err != nil {
 			return err
 		}
-		if req.ClientIDs != nil {
+		if req.UserType != "" {
+			if err := services.ApplyUserAccess(c.Context(), tx, tenantID, fiber.Locals[string](c, "user_id"), user, req.UserAccessInput); err != nil {
+				return err
+			}
+		}
+		if req.UserType == "" && (req.Role != nil || req.ManagerFullAccess != nil) {
+			profile, err := services.AccessProfileFor(tx, user)
+			if err != nil {
+				return err
+			}
+			if req.Role != nil {
+				profile = services.LegacyAccessProfile(user)
+			}
+			profile.AllWorkspaces = user.Role == "admin" || (user.Role == "manager" && user.ManagerFullAccess)
+			if err := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "tenant_id"}, {Name: "user_id"}}, DoUpdates: clause.AssignmentColumns([]string{"user_type", "organization_role", "can_manage_users", "all_workspaces"})}).Create(&profile).Error; err != nil {
+				return err
+			}
+		}
+		if req.ClientIDs != nil && req.UserType == "" {
 			if err := h.replaceClientAssignments(tx, tenantID, user.ID, fiber.Locals[string](c, "user_id"), normalizedClientIDs); err != nil {
 				return err
 			}
@@ -787,6 +877,9 @@ func (h *UsersHandler) UpdateUserHandler(c fiber.Ctx) error {
 		return tx.Save(&user).Error
 	}); err != nil {
 		utils.Logger(c).Error("error saving user", zap.Error(err))
+		if errors.Is(err, services.ErrRoleInput) || errors.Is(err, services.ErrSharingCapabilities) {
+			return c.Status(400).JSON(fiber.Map{"error": err.Error()})
+		}
 		if respondQuotaError(c, err) {
 			return nil
 		}
@@ -827,7 +920,7 @@ func (h *UsersHandler) DeleteUserHandler(c fiber.Ctx) error {
 		if err := services.RevokePendingRecipientInvitations(tx, req, id, recipient.Email, time.Now().UTC()); err != nil {
 			return err
 		}
-		for _, model := range []any{&models.ItemGrant{}, &models.UserClient{}, &models.InviteToken{}} {
+		for _, model := range []any{&models.ItemGrant{}, &models.UserClient{}, &models.InviteToken{}, &models.RoleAssignment{}, &models.AccessGroupMember{}, &models.AccessProfile{}} {
 			if err := tx.Where("tenant_id = ? AND user_id = ?", tenantID, id).Delete(model).Error; err != nil {
 				return err
 			}

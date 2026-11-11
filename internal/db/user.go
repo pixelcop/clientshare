@@ -3,6 +3,7 @@
 package db
 
 import (
+	"github.com/pixelcop/clientshare/internal/models"
 	"gorm.io/cli/gorm/field"
 )
 
@@ -14,6 +15,7 @@ var User = struct {
 	Role                   field.String
 	Name                   field.String
 	ClientIDs              field.Slice[string]
+	AccessProfile          field.Struct[models.AccessProfile]
 	InviteAccepted         field.Bool
 	PasskeyPromptDismissed field.Bool
 	ManagerFullAccess      field.Bool
@@ -27,6 +29,7 @@ var User = struct {
 	Role:                   field.String{}.WithColumn("role"),
 	Name:                   field.String{}.WithColumn("name"),
 	ClientIDs:              field.Slice[string]{}.WithName("ClientIDs"),
+	AccessProfile:          field.Struct[models.AccessProfile]{}.WithName("AccessProfile"),
 	InviteAccepted:         field.Bool{}.WithColumn("invite_accepted"),
 	PasskeyPromptDismissed: field.Bool{}.WithColumn("passkey_prompt_dismissed"),
 	ManagerFullAccess:      field.Bool{}.WithColumn("manager_full_access"),

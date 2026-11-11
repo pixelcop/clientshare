@@ -400,11 +400,7 @@ func (s *FeedService) usersForFileUpload(ctx context.Context, tenantID, clientID
 	if clientID == "" {
 		return nil, errors.New("client id is required")
 	}
-	ids := []string{}
-	err := s.DB.WithContext(ctx).Model(&models.User{}).Where(`users.tenant_id = ? AND (
-		users.role = 'admin' OR (users.role = 'manager' AND users.manager_full_access) OR
-		(users.role IN ? AND EXISTS (SELECT 1 FROM user_clients uc WHERE uc.tenant_id = users.tenant_id AND uc.user_id = users.id AND uc.client_id = ? AND (NOT uc.capabilities_set OR uc.can_read))))`, tenantID, []string{"manager", "client", "customer"}, clientID).Order("users.id ASC").Pluck("users.id", &ids).Error
-	return ids, err
+	return (&AccessService{DB: s.DB}).WorkspaceReaderIDs(ctx, tenantID, clientID, []string{"admin", "manager", "client", "customer"})
 }
 
 func (s *FeedService) usersForInviteAccepted(ctx context.Context, tenantID string) ([]string, error) {

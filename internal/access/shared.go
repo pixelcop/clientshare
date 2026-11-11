@@ -32,7 +32,26 @@ func (s *AccessService) SharedRoots(ctx context.Context, req AccessRequest) ([]m
 		}
 		clients[grant.ClientID] = append(clients[grant.ClientID], grant.FileID)
 	}
+	var assignments []models.RoleAssignment
+	if err := s.DB.WithContext(ctx).Where("tenant_id = ? AND file_id IS NOT NULL AND revoked_at IS NULL AND source_kind NOT IN ('membership','grant')", req.TenantID).
+		Where("user_id = ? OR EXISTS (SELECT 1 FROM access_group_members gm WHERE gm.tenant_id=role_assignments.tenant_id AND gm.group_id=role_assignments.group_id AND gm.user_id=?)", req.Actor.UserID, req.Actor.UserID).Find(&assignments).Error; err != nil {
+		return nil, err
+	}
+	for _, a := range assignments {
+		if a.ExpiresAt == nil || a.ExpiresAt.After(req.Now) {
+			clients[a.ClientID] = append(clients[a.ClientID], *a.FileID)
+		}
+	}
 	for clientID, ids := range clients {
+		unique := []string{}
+		seen := map[string]bool{}
+		for _, id := range ids {
+			if !seen[id] {
+				seen[id] = true
+				unique = append(unique, id)
+			}
+		}
+		ids = unique
 		req.ClientID, req.Operation = clientID, AccessContext
 		nodes := map[string]models.File{}
 		decisions := map[string]AccessDecision{}
@@ -97,5 +116,5 @@ func (s *AccessService) SharedRoots(ctx context.Context, req AccessRequest) ([]m
 }
 
 func capabilitiesCover(a, b models.AccessCapabilities) bool {
-	return (!b.CanRead || a.CanRead) && (!b.CanUpload || a.CanUpload) && (!b.CanDelete || a.CanDelete) && (!b.CanShare || a.CanShare)
+	return b.Permissions().Within(a.Permissions())
 }

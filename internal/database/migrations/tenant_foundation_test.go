@@ -25,7 +25,7 @@ func TestMigrationProviderUpCreatesCurrentSchemaAndSeedsTenant(t *testing.T) {
 
 	results, err := provider.Up(context.Background())
 	require.NoError(t, err)
-	require.Len(t, results, 22)
+	require.Len(t, results, 24)
 
 	requireDefaultTenantSeeded(t, db, dbpkg.DatabaseDriverSQLite)
 	requireColumnPresent(t, db, "passkey_signups", "token_hash")
@@ -45,7 +45,7 @@ func TestMigrationProviderUpCreatesCurrentSchemaAndSeedsTenantPostgres(t *testin
 
 	results, err := provider.Up(context.Background())
 	require.NoError(t, err)
-	require.Len(t, results, 22)
+	require.Len(t, results, 24)
 
 	requireDefaultTenantSeeded(t, db, dbpkg.DatabaseDriverPostgres)
 	requireColumnPresent(t, db, "passkey_signups", "token_hash")
@@ -96,7 +96,7 @@ func TestMigrationProviderResetDropsManagedTables(t *testing.T) {
 
 	results, err := provider.DownTo(context.Background(), 0)
 	require.NoError(t, err)
-	require.Len(t, results, 22)
+	require.Len(t, results, 24)
 
 	requireManagedTablesMissing(t, db, dbpkg.DatabaseDriverSQLite)
 }
@@ -110,7 +110,7 @@ func TestMigrationProviderResetDropsManagedTablesPostgres(t *testing.T) {
 
 	results, err := provider.DownTo(context.Background(), 0)
 	require.NoError(t, err)
-	require.Len(t, results, 22)
+	require.Len(t, results, 24)
 
 	requireManagedTablesMissing(t, db, dbpkg.DatabaseDriverPostgres)
 }
@@ -149,6 +149,8 @@ func newMigrationProviderForTest(t *testing.T, db *sql.DB, dialect goose.Dialect
 			migration.NewGoMigration(53, upAddAccessInvitations, downAddAccessInvitations),
 			migration.NewGoMigration(54, upAddInvitationDeliveryContext, downAddInvitationDeliveryContext),
 			migration.NewGoMigration(55, upAddAccessRoleFoundation, downAddAccessRoleFoundation),
+			migration.NewGoMigration(56, upActivateAccessRoles, downActivateAccessRoles),
+			migration.NewGoMigration(57, upReconcileAccessRoleActivation, downReconcileAccessRoleActivation),
 		},
 	)
 	require.NoError(t, err)
@@ -281,7 +283,7 @@ func requireManagedTablesMissing(t *testing.T, db *sql.DB, driver string) {
 	requireTableMissing(t, db, driver, "user_clients")
 	requireTableMissing(t, db, driver, "item_grants")
 	requireTableMissing(t, db, driver, "access_invitations")
-	for _, table := range []string{"access_profiles", "access_roles", "access_groups", "access_group_members", "role_assignments"} {
+	for _, table := range []string{"access_profiles", "access_roles", "access_groups", "access_group_members", "role_assignments", "access_role_catalogs"} {
 		requireTableMissing(t, db, driver, table)
 	}
 	requireTableMissing(t, db, driver, "invite_tokens")
