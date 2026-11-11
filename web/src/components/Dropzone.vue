@@ -91,7 +91,7 @@ const destination = computed(() => fileManager.context?.folder.filename || 'this
           >Loading…</span
         >
       </div>
-      <div class="workspace-actions">
+      <div id="collect-workspace-actions" class="workspace-actions">
         <template v-if="presentation.canWrite">
           <SplitButton
             label="Upload"
@@ -158,7 +158,12 @@ const destination = computed(() => fileManager.context?.folder.filename || 'this
       <ProgressBar :value="uploadProgress" :showValue="false" aria-label="Upload progress" />
     </div>
     <p v-if="uploadError" class="upload-error" role="alert">{{ uploadError }}</p>
-    <div class="workspace-content" :aria-busy="fileManager.loading" :inert="fileManager.loading">
+    <div
+      id="collect-files"
+      class="workspace-content"
+      :aria-busy="fileManager.loading"
+      :inert="fileManager.loading"
+    >
       <slot />
       <div v-if="dragging" class="upload-highlight" aria-live="polite">
         <i class="oi oi-upload" aria-hidden="true" />

@@ -9,10 +9,12 @@ import CollectionSpotlight from '@/components/CollectionSpotlight.vue';
 import { useBrandingStore } from '@/stores/branding';
 import { useClientsStore } from '@/stores/clients';
 import { guideTopic, useCollectionStore } from '@/stores/collection';
+import { useFileManagerStore } from '@/stores/fileManager';
 import { useSecureLinksStore } from '@/stores/secureLinks';
 
 const workflow = useCollectionStore();
 const clients = useClientsStore();
+const fileManager = useFileManagerStore();
 const branding = useBrandingStore();
 const route = useRoute();
 const tucked = ref(false);
@@ -68,17 +70,24 @@ const nextAction = computed(() => {
         };
   }
   if (workspace && workflow.step < 3) {
+    if (fileManager.context?.folder.id !== fileManager.context?.root_folder_id) {
+      return {
+        targets: ['collect-workspace-actions'],
+        title: 'Return to the workspace root',
+        body: 'Select the client name in the folder path to return to the workspace root. This checklist collects uploads with a client-wide link, not a folder link.',
+      };
+    }
     return {
-      targets: [`collect-links-${clientId}`],
+      targets: [`collect-links-${clientId}`, 'collect-workspace-actions'],
       title: 'Share the client workspace',
-      body: 'Select Share, then Links and Manage links to open this client’s secure links.',
+      body: 'Select Share workspace, then Sharing links and Manage links. On mobile, Share workspace is in the menu beside Upload.',
     };
   }
   if (links && workflow.step === 1) {
     return {
       targets: ['collect-new-link'],
       title: 'Create an upload link',
-      body: 'Select New Link to choose upload access and an expiry date.',
+      body: 'Select New link, choose Collect uploads and check the expiry.',
     };
   }
   if (links && workflow.step === 2) {
@@ -163,8 +172,8 @@ watch(
     } else if (cue.kind === 'link-access') {
       spotlight.value = {
         targets: ['collect-link-access'],
-        title: 'Choose Write access',
-        body: 'Write allows uploads only. Check the expiry date, then select Create Link.',
+        title: 'Choose Upload only',
+        body: 'Collect uploads selects Upload only, which hides existing files and folders. Check Expires in (days), then select Create link.',
       };
     } else {
       spotlight.value = nextAction.value;
@@ -404,30 +413,35 @@ onBeforeUnmount(() => {
                       upload link.</Message
                     >
                     <p>
-                      In the client workspace, open Share, then Links, Manage links and New Link.
+                      At the client workspace root, select Share workspace, then Sharing links,
+                      Manage links and New link. On mobile, find Share workspace in the menu beside
+                      Upload.
                     </p>
                     <div class="collection-permission">
                       <i class="oi oi-lock" aria-hidden="true" />
                       <div>
-                        <strong>Write access · recommended</strong
+                        <strong>Upload only · recommended</strong
                         ><span
                           >Recipients can upload to this workspace but cannot view or download its
                           files.</span
                         >
                       </div>
                     </div>
-                    <p>You can also copy an existing active upload link from Secure Links.</p>
+                    <p>
+                      You can also open Links from the client’s menu in Clients and copy an existing
+                      active upload link from Client-wide links.
+                    </p>
                   </template>
                   <template v-else-if="index === 2">
                     <p>
-                      In Secure Links, select Copy beside your upload link. Paste it into your
+                      In Client-wide links, select Copy beside your upload link. Paste it into your
                       message to the recipient.
                     </p>
                     <Message
                       v-if="workflow.link?.access_type === 'readwrite'"
                       severity="warn"
                       :closable="false"
-                      >Read & Write lets recipients view and download files in this
+                      >View, download & upload lets recipients view and download files in this
                       workspace.</Message
                     >
                     <span class="collection-fine-print">Copying a link does not send it.</span>
