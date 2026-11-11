@@ -125,6 +125,7 @@ const formComponent = computed(() => (props.embedded ? 'div' : 'form'));
     @update:visible="(visible: boolean) => !visible && emit('close')"
     @show="collection && workflow.guidance && !embedded && !result && workflow.guide('link-access')"
     modal
+    :dismissableMask="!loading"
     blockScroll
     :header="`Share client workspace: ${targetName}`"
     :aria-label="`Share client workspace: ${targetName}`"

@@ -56,7 +56,13 @@ async function skipAndDismiss() {
 </script>
 
 <template>
-  <Dialog v-model:visible="visible" modal :closable="!saving" :style="{ width: '30rem' }">
+  <Dialog
+    v-model:visible="visible"
+    modal
+    :dismissableMask="!saving"
+    :closable="!saving"
+    :style="{ width: '30rem' }"
+  >
     <template #header>
       <div class="flex items-center gap-3">
         <i class="oi oi-key text-primary text-xl" />

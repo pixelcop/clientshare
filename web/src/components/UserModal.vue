@@ -2,8 +2,8 @@
 import axios from 'axios';
 
 import AccessSelect from '@/components/AccessSelect.vue';
-import { GROUPS_UI_ENABLED } from '@/features';
 import StaffSeatUsage from '@/components/StaffSeatUsage.vue';
+import { GROUPS_UI_ENABLED } from '@/features';
 import { useAuthStore } from '@/stores/auth';
 import { useStaffQuotaStore } from '@/stores/staffQuota';
 import type { UserCreatePayload } from '@/stores/users';
@@ -250,6 +250,7 @@ function onSubmit() {
   <Dialog
     :visible="show"
     modal
+    :dismissableMask="!loading"
     closable
     blockScroll
     :draggable="false"

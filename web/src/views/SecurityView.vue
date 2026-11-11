@@ -172,6 +172,7 @@ onMounted(() => {
     <Dialog
       v-model:visible="renameVisible"
       modal
+      :dismissableMask="!saving"
       header="Rename passkey"
       :style="{ width: '28rem' }"
     >

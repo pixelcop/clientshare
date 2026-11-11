@@ -26,6 +26,6 @@ const { isPublicLayout } = useLayout();
   </div>
 
   <PasskeyEnrollmentDialog />
-  <ConfirmDialog />
+  <ConfirmDialog dismissableMask />
   <Toast />
 </template>

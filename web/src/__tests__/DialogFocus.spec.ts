@@ -1,5 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils';
 import OpenVue from 'openvue/config';
+import ConfirmationService from 'openvue/confirmationservice';
+import ConfirmDialog from 'openvue/confirmdialog';
 import Dialog from 'openvue/dialog';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -37,6 +39,61 @@ describe('OpenVue dialog initial focus', () => {
       expect(focus.mock.calls.every(([options]) => !options || !('focusVisible' in options))).toBe(
         true,
       );
+    } finally {
+      wrapper.unmount();
+    }
+  });
+
+  it('dismisses only the top dialog on Escape or an outside click', async () => {
+    const bottom = mount(Dialog, {
+      props: { visible: true, modal: true, dismissableMask: true, header: 'Sharing' },
+      global: { plugins: [OpenVue], stubs: { transition: false } },
+      attachTo: document.body,
+    });
+    const top = mount(Dialog, {
+      props: { visible: true, modal: true, dismissableMask: true, header: 'Discard changes?' },
+      global: { plugins: [OpenVue], stubs: { transition: false } },
+      attachTo: document.body,
+    });
+    try {
+      await flushPromises();
+      document.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: 'Escape',
+          code: 'Escape',
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      expect(top.emitted('update:visible')).toEqual([[false]]);
+      expect(bottom.emitted('update:visible')).toBeUndefined();
+      const masks = document.querySelectorAll('.p-dialog-mask');
+      const mask = masks[masks.length - 1];
+      mask.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+      mask.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+      expect(top.emitted('update:visible')).toHaveLength(2);
+      expect(bottom.emitted('update:visible')).toBeUndefined();
+    } finally {
+      top.unmount();
+      bottom.unmount();
+    }
+  });
+
+  it('passes outside-click dismissal through the global confirmation dialog', async () => {
+    const wrapper = mount(ConfirmDialog, {
+      attrs: { dismissableMask: true },
+      global: { plugins: [OpenVue, ConfirmationService], stubs: { transition: false } },
+      attachTo: document.body,
+    });
+    try {
+      wrapper.vm.$confirm.require({ message: 'Confirm this action?' });
+      await flushPromises();
+      expect(wrapper.findComponent(Dialog).props('dismissableMask')).toBe(true);
+      const mask = document.querySelector('.p-dialog-mask')!;
+      mask.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+      mask.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+      await flushPromises();
+      expect(wrapper.findComponent(Dialog).props('visible')).toBe(false);
     } finally {
       wrapper.unmount();
     }

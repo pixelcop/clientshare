@@ -27,6 +27,7 @@ defineEmits<{ open: []; start: [] }>();
   <Dialog
     v-model:visible="visible"
     modal
+    dismissableMask
     :header="contact ? supportLabel : 'Help'"
     :style="{ width: '32rem', maxWidth: 'calc(100vw - 2rem)' }"
   >

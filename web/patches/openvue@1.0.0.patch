@@ -1,5 +1,5 @@
 diff --git a/dialog/Dialog.vue b/dialog/Dialog.vue
-index d1a74e3520316b8d56795f3d360b444070319ecd..2acf1d14ea554f7f536b2b85486ca3961aad0992 100644
+index d1a74e3520316b8d56795f3d360b444070319ecd..ff58251a4f9fd2a9360f4ddc9a0e6261ccf8fbd4 100644
 --- a/dialog/Dialog.vue
 +++ b/dialog/Dialog.vue
 @@ -211,7 +211,7 @@ export default {
@@ -11,8 +11,18 @@ index d1a74e3520316b8d56795f3d360b444070319ecd..2acf1d14ea554f7f536b2b85486ca396
              }
          },
          maximize(event) {
+@@ -238,7 +238,8 @@ export default {
+             }
+         },
+         onKeyDown(event) {
+-            if (event.code === 'Escape' && this.closeOnEscape && !event.isComposing) {
++            if (event.code === 'Escape' && this.closeOnEscape && !event.isComposing && (!this.autoZIndex || ZIndex.get(this.mask) === ZIndex.getCurrent())) {
++                event.preventDefault();
+                 this.close();
+             }
+         },
 diff --git a/dialog/index.mjs b/dialog/index.mjs
-index 69ef963e996ea48fd8584450fc16654828a0bcc2..94521c273f5e42e67f62bdcfcfd21af10c9461e5 100644
+index 69ef963e996ea48fd8584450fc16654828a0bcc2..1230ae33360916103d7800add7b3569309079796 100644
 --- a/dialog/index.mjs
 +++ b/dialog/index.mjs
 @@ -274,9 +274,7 @@ var script = {
@@ -26,3 +36,13 @@ index 69ef963e996ea48fd8584450fc16654828a0bcc2..94521c273f5e42e67f62bdcfcfd21af1
        }
      },
      maximize: function maximize(event) {
+@@ -302,7 +300,8 @@ var script = {
+       }
+     },
+     onKeyDown: function onKeyDown(event) {
+-      if (event.code === 'Escape' && this.closeOnEscape && !event.isComposing) {
++      if (event.code === 'Escape' && this.closeOnEscape && !event.isComposing && (!this.autoZIndex || ZIndex.get(this.mask) === ZIndex.getCurrent())) {
++        event.preventDefault();
+         this.close();
+       }
+     },

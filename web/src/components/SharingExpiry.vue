@@ -120,6 +120,7 @@ function apply() {
     v-model:visible="custom"
     header="Custom expiry"
     modal
+    dismissableMask
     :draggable="false"
     :style="{ width: '24rem', maxWidth: '95vw' }"
   >

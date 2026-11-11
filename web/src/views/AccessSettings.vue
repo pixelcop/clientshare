@@ -406,6 +406,7 @@ async function confirm() {
     <Dialog
       :visible="!!roleEditor"
       modal
+      :dismissableMask="!busy"
       blockScroll
       header="Access role"
       class="w-[min(38rem,calc(100vw-2rem))]"
@@ -487,6 +488,7 @@ async function confirm() {
       v-if="GROUPS_UI_ENABLED"
       :visible="!!groupEditor"
       modal
+      :dismissableMask="!busy"
       blockScroll
       header="Group"
       class="w-[min(44rem,calc(100vw-2rem))]"
@@ -587,6 +589,7 @@ async function confirm() {
     <Dialog
       :visible="!!deleteRole"
       modal
+      :dismissableMask="!busy"
       header="Replace and delete role"
       class="w-[min(32rem,calc(100vw-2rem))]"
       @update:visible="
@@ -623,6 +626,7 @@ async function confirm() {
     <Dialog
       :visible="!!review"
       modal
+      :dismissableMask="!busy"
       header="Review access change"
       class="w-[min(34rem,calc(100vw-2rem))]"
       :closable="!busy"

@@ -180,6 +180,7 @@ function setDirectoryInput(element: Element | ComponentPublicInstance | null) {
     <Dialog
       :visible="showRename"
       modal
+      :dismissableMask="!renameSaving"
       :closable="!renameSaving"
       :closeOnEscape="!renameSaving"
       header="Rename duplicate files"
