@@ -334,7 +334,7 @@ describe('exact-scope sharing panel', () => {
     wrapper.unmount();
   });
 
-  it('moves focus to the sharing page after adding a recipient on mobile', async () => {
+  it('blurs the email input without focusing the panel after adding a recipient on mobile', async () => {
     vi.stubGlobal(
       'matchMedia',
       vi.fn((query: string) => ({
@@ -355,7 +355,8 @@ describe('exact-scope sharing panel', () => {
     await input.setValue('mobile@example.test');
     await wrapper.get('.add-person').trigger('submit');
     await flushPromises();
-    expect(document.activeElement).toBe(wrapper.get('.sharing-panel').element);
+    expect(document.activeElement).toBe(document.body);
+    expect(wrapper.get('.sharing-panel').attributes('tabindex')).toBeUndefined();
     expect(wrapper.get('.draft-people').text()).toContain('mobile@example.test');
     expect(input.element.value).toBe('');
     wrapper.unmount();

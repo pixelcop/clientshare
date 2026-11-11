@@ -69,13 +69,13 @@ const scopeSummary = computed(() =>
       : 'This file only',
 );
 const composing = ref(false);
-const panelElement = ref<HTMLElement | null>(null);
 const isMobile = useMediaQuery('(max-width: 639px)');
 function focusRecipientEntry() {
+  const input = document.getElementById(`${key.value}-email`);
   if (isMobile.value) {
-    panelElement.value?.focus({ preventScroll: true });
+    input?.blur();
   } else {
-    document.getElementById(`${key.value}-email`)?.focus();
+    input?.focus();
   }
 }
 const deliveryKeys = new Map<string, string>();
@@ -775,14 +775,7 @@ async function remove() {
 </script>
 
 <template>
-  <div
-    ref="panelElement"
-    class="sharing-panel"
-    :class="{ 'is-composing': composing }"
-    tabindex="-1"
-    role="region"
-    :aria-label="`Sharing settings for ${scope.name}`"
-  >
+  <div class="sharing-panel" :class="{ 'is-composing': composing }">
     <p v-if="scope.kind === 'client'" class="scope-label muted">
       {{ scope.kind === 'client' ? 'Entire client workspace · all files and folders' : '' }}
     </p>
