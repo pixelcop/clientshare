@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -12,6 +13,111 @@ import (
 	"github.com/pixelcop/clientshare/internal/services/links"
 	"github.com/stretchr/testify/require"
 )
+
+func TestPendingSharingContactsAreListedAndCanBePromotedWithoutChangingIdentity(t *testing.T) {
+	env := setupOtherHandlersEnv(t)
+	viewer := models.DefaultAccessRoles(env.client.TenantID)[0]
+	require.NoError(t, env.db.Create(&viewer).Error)
+	app := lifecycleApp(env, nil)
+	create := jsonAuthRequest(http.MethodPost, "/api/clients/"+env.client.ID+"/invitations", env.adminToken, map[string]any{"email": "pending-contact@example.test", "role_id": viewer.ID})
+	create.Header.Set("Idempotency-Key", "pending-directory-contact")
+	resp, err := app.Test(create)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+	var invitation models.AccessInvitation
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&invitation))
+	resp.Body.Close()
+	require.NotNil(t, invitation.RecipientUserID)
+	for _, token := range []string{env.adminToken, env.managerToken} {
+		for _, query := range []string{
+			"search=pending-contact&invite_status=pending&role=external",
+			"search=pending-contact&client_id=" + env.client.ID,
+		} {
+			resp, err := env.app.Test(jsonAuthRequest(http.MethodGet, "/api/users?"+query, token, nil))
+			require.NoError(t, err)
+			require.Equal(t, http.StatusOK, resp.StatusCode)
+			var result paginatedUsersResponse
+			require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
+			resp.Body.Close()
+			require.Len(t, result.Items, 1)
+			require.Equal(t, *invitation.RecipientUserID, result.Items[0].ID)
+			require.False(t, result.Items[0].InviteAccepted)
+			require.Empty(t, result.Items[0].ClientIDs, "pending invitations are not workspace membership")
+			require.Equal(t, "external", result.Items[0].AccessProfile.UserType)
+		}
+	}
+	resp, err = env.app.Test(jsonAuthRequest(http.MethodPut, "/api/users/"+*invitation.RecipientUserID, env.adminToken, map[string]any{
+		"email": invitation.Email, "name": "New teammate", "user_type": "internal", "organization_role": "member", "workspace_access": []any{},
+	}))
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	resp.Body.Close()
+	var user models.User
+	require.NoError(t, env.db.First(&user, "id = ?", *invitation.RecipientUserID).Error)
+	require.Equal(t, "manager", user.Role)
+	require.Equal(t, invitation.Email, user.Email)
+	profile, err := services.AccessProfileFor(env.db, user)
+	require.NoError(t, err)
+	require.Equal(t, "internal", profile.UserType)
+	require.Equal(t, "member", profile.OrganizationRole)
+	d, err := (&services.AccessService{DB: env.db}).Resolve(t.Context(), services.AccessRequest{TenantID: user.TenantID, ClientID: env.client.ID, Actor: services.AccessActor{UserID: user.ID}, Operation: services.AccessRead})
+	require.NoError(t, err)
+	require.False(t, d.Allowed, "promotion to Member and a pending invitation alone grant no document access")
+	resp, err = env.app.Test(jsonAuthRequest(http.MethodPut, "/api/users/"+user.ID, env.adminToken, map[string]any{
+		"email": user.Email, "name": user.Name, "user_type": "internal", "organization_role": "administrator", "workspace_access": []any{},
+	}))
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	resp.Body.Close()
+	require.NoError(t, env.db.First(&user, "id = ?", *invitation.RecipientUserID).Error)
+	require.Equal(t, "admin", user.Role)
+	require.Equal(t, invitation.Email, user.Email)
+	var count int64
+	require.NoError(t, env.db.Model(&models.User{}).Where("tenant_id = ? AND LOWER(email) = ?", user.TenantID, strings.ToLower(user.Email)).Count(&count).Error)
+	require.EqualValues(t, 1, count)
+}
+
+func TestPendingSharingDirectoryDoesNotLeakPrivateScopes(t *testing.T) {
+	env := setupOtherHandlersEnv(t)
+	service := &services.SharingService{DB: env.db, TokenSecret: "invite-secret"}
+	_, err := service.CreateInvitation(t.Context(), services.AccessRequest{TenantID: env.client.TenantID, ClientID: env.otherClient.ID, Actor: services.AccessActor{UserID: env.adminUser.ID}}, services.InvitationInput{Email: "private-pending@example.test", Capabilities: models.AccessCapabilities{CanRead: true}}, "private-pending")
+	require.NoError(t, err)
+	for _, query := range []string{"search=private-pending", "client_id=" + env.otherClient.ID} {
+		resp, err := env.app.Test(jsonAuthRequest(http.MethodGet, "/api/users?"+query, env.managerToken, nil))
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		var result paginatedUsersResponse
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
+		resp.Body.Close()
+		require.Empty(t, result.Items)
+	}
+}
+
+func TestManagerDirectoryKeepsAcceptedItemOnlyRecipientsWithinScope(t *testing.T) {
+	env := setupOtherHandlersEnv(t)
+	contact := models.User{TenantID: env.client.TenantID, Email: "item-contact@example.test", Role: "client"}
+	require.NoError(t, env.db.Create(&contact).Error)
+	grant := models.ItemGrant{TenantID: env.client.TenantID, ClientID: env.client.ID, UserID: contact.ID, FileID: env.rootFolder.ID, CreatedBy: env.adminUser.ID, AccessCapabilities: models.AccessCapabilities{CanRead: true}}
+	require.NoError(t, env.db.Create(&grant).Error)
+	for _, query := range []string{"search=item-contact", "search=item-contact&client_id=" + env.client.ID} {
+		resp, err := env.app.Test(jsonAuthRequest(http.MethodGet, "/api/users?"+query, env.managerToken, nil))
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		var result paginatedUsersResponse
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
+		resp.Body.Close()
+		require.Len(t, result.Items, 1)
+		require.Equal(t, contact.ID, result.Items[0].ID)
+		require.Empty(t, result.Items[0].ClientIDs)
+	}
+	require.NoError(t, env.db.Model(&grant).Update("revoked_at", models.Now()).Error)
+	resp, err := env.app.Test(jsonAuthRequest(http.MethodGet, "/api/users?search=item-contact", env.managerToken, nil))
+	require.NoError(t, err)
+	var result paginatedUsersResponse
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
+	resp.Body.Close()
+	require.Empty(t, result.Items)
+}
 
 func TestManagerRosterScopeAndNoStaffEscalation(t *testing.T) {
 	env := setupOtherHandlersEnv(t)

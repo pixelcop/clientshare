@@ -53,6 +53,11 @@ func invitationTargetQuery(db *gorm.DB, req AccessRequest) *gorm.DB {
 }
 
 func (s *SharingService) CreateInvitation(ctx context.Context, req AccessRequest, input InvitationInput, requestKey string) (*models.AccessInvitation, error) {
+	address, err := mail.ParseAddress(strings.TrimSpace(input.Email))
+	if err != nil || strings.ContainsAny(input.Email, "\r\n") {
+		return nil, ErrSharingInput
+	}
+	input.Email = strings.ToLower(strings.TrimSpace(address.Address))
 	if input.RoleID == "" && input.Capabilities.Sharing != nil {
 		return nil, ErrSharingInput
 	}
@@ -68,11 +73,6 @@ func (s *SharingService) CreateInvitation(ctx context.Context, req AccessRequest
 	if s.TokenSecret == "" || requestKey == "" || len(requestKey) > 128 || !validGrantInput(GrantInput{Capabilities: input.Capabilities, ExpiresAt: input.GrantExpiresAt}, s.now()) || (req.FileID == "" && input.GrantExpiresAt != nil) {
 		return nil, ErrSharingInput
 	}
-	address, err := mail.ParseAddress(strings.TrimSpace(input.Email))
-	if err != nil || strings.ContainsAny(input.Email, "\r\n") {
-		return nil, ErrSharingInput
-	}
-	input.Email = strings.ToLower(strings.TrimSpace(address.Address))
 	if input.GrantExpiresAt != nil {
 		utc := input.GrantExpiresAt.UTC()
 		input.GrantExpiresAt = &utc
@@ -170,6 +170,15 @@ func (s *SharingService) CreateInvitation(ctx context.Context, req AccessRequest
 			}
 		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
+		}
+		// A pending share is also a tenant-local directory contact, even when
+		// outbound email is disabled. Identity alone confers no document access.
+		if len(recipient) == 0 {
+			user, err := s.createExternalInvitationRecipient(tx, req, input.Email)
+			if err != nil {
+				return err
+			}
+			recipientID = &user.ID
 		}
 		expiry := s.now().Add(7 * 24 * time.Hour)
 		if input.GrantExpiresAt != nil && input.GrantExpiresAt.Before(expiry) {

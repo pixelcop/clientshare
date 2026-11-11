@@ -42,6 +42,8 @@ func sharingError(err error) error {
 		return fiber.NewError(403, "You can only share permissions you already have.")
 	case errors.Is(err, services.ErrSharingInput):
 		return fiber.NewError(400, "Invalid sharing settings")
+	case errors.Is(err, services.ErrRoleInput):
+		return fiber.NewError(400, "Choose an access role available to this person.")
 	default:
 		return fiber.NewError(503, "Sharing is temporarily unavailable. Please try again.")
 	}
@@ -187,7 +189,7 @@ func (h *SharingHandler) EmailInvitation(c fiber.Ctx) error {
 		path = "/accept-invite#token="
 	}
 	inviteURL := baseURL + path + url.QueryEscape(delivery.RawToken)
-		subject, body, htmlBody := emailpkg.RenderUserInviteEmail(delivery.User.Name, inviteURL, services.DefaultSiteTitle, "You have been invited to shared files. Use this email address to accept the invitation.", delivery.ExpiresAt)
+	subject, body, htmlBody := emailpkg.RenderUserInviteEmail(delivery.User.Name, inviteURL, services.DefaultSiteTitle, "You have been invited to shared files. Use this email address to accept the invitation.", delivery.ExpiresAt)
 	item, err := h.emailQueue.Queue(emailpkg.Email{TenantID: req.TenantID, To: delivery.Invitation.Email, Subject: subject, Body: body, HTMLBody: htmlBody, ClientID: &delivery.Invitation.ClientID, AccessInvitationID: &delivery.Invitation.ID, IdentityInviteID: delivery.IdentityInviteID, DeduplicationKey: *key}, models.Now())
 	if err != nil {
 		code, status, message := 503, "failed", "The invitation email could not be sent. Please try again."

@@ -130,3 +130,60 @@ func TestInvitationSurvivesCreatorLossAndCannotTakeOverIndependentMembership(t *
 	_, err = service.CreateInvitation(t.Context(), f.req("admin", "", AccessInviteClient), InvitationInput{Email: "manager@example.test", Capabilities: models.AccessCapabilities{CanRead: true, CanShare: true}}, "no-staff-assignment-key")
 	require.ErrorIs(t, err, ErrSharingInput)
 }
+
+func TestInvitationCreatesExternalDirectoryContactBeforeDeliveryWithoutGrantingAccess(t *testing.T) {
+	f, service := sharingFixture(t)
+	require.NoError(t, f.db.Create(&models.User{ID: "foreign-person", TenantID: "foreign", Email: "new@example.test", Role: "admin"}).Error)
+	req := f.req("admin", "file", AccessShare)
+	input := InvitationInput{Email: "NEW@example.test", Capabilities: models.AccessCapabilities{CanRead: true}}
+	invite, err := service.CreateInvitation(t.Context(), req, input, "directory-contact")
+	require.NoError(t, err)
+	require.NotNil(t, invite.RecipientUserID)
+	var user models.User
+	require.NoError(t, f.db.First(&user, "id = ?", *invite.RecipientUserID).Error)
+	require.Equal(t, "tenant", user.TenantID)
+	require.Equal(t, "new@example.test", user.Email)
+	require.Equal(t, "client", user.Role)
+	require.Empty(t, user.PasswordHash)
+	require.NotEqual(t, "foreign-person", user.ID)
+	profile, err := AccessProfileFor(f.db, user)
+	require.NoError(t, err)
+	require.Equal(t, "external", profile.UserType)
+	require.Equal(t, "none", profile.OrganizationRole)
+	require.False(t, profile.CanManageUsers)
+	require.False(t, profile.AllWorkspaces)
+	for _, model := range []any{&models.UserClient{}, &models.ItemGrant{}, &models.InviteToken{}, &models.PasskeyCredential{}} {
+		var count int64
+		require.NoError(t, f.db.Model(model).Where("user_id = ?", user.ID).Count(&count).Error)
+		require.Zero(t, count)
+	}
+	f.check(t, f.req(user.ID, "file", AccessRead), false)
+	replay, err := service.CreateInvitation(t.Context(), req, input, "directory-contact")
+	require.NoError(t, err)
+	require.Equal(t, invite.ID, replay.ID)
+	second, err := service.CreateInvitation(t.Context(), f.req("admin", "folder", AccessShare), input, "another-scope")
+	require.NoError(t, err)
+	require.Equal(t, invite.RecipientUserID, second.RecipientUserID)
+	var count int64
+	require.NoError(t, f.db.Model(&models.User{}).Where("tenant_id = 'tenant' AND email = 'new@example.test'").Count(&count).Error)
+	require.EqualValues(t, 1, count)
+}
+
+func TestRoleBackedWorkspaceInvitationReusesInternalAccountWithoutTypeHint(t *testing.T) {
+	f, service := sharingFixture(t)
+	viewer := models.DefaultAccessRoles("tenant")[0]
+	require.NoError(t, f.db.Create(&viewer).Error)
+	input := InvitationInput{Email: "Manager <MANAGER@example.test>", RoleID: viewer.ID}
+	invite, err := service.CreateInvitation(t.Context(), f.req("admin", "", AccessShare), input, "implicit-internal-recipient")
+	require.NoError(t, err)
+	require.Equal(t, "manager", *invite.RecipientUserID)
+	delivery, err := service.PrepareInvitationDelivery(t.Context(), f.req("admin", "", AccessShare), invite.ID, time.Hour)
+	require.NoError(t, err)
+	require.Equal(t, "manager", delivery.User.ID)
+	require.Equal(t, "manager", delivery.User.Role)
+	_, err = service.AcceptInvitation(t.Context(), "tenant", "manager", service.invitationToken(invite.ID))
+	require.NoError(t, err)
+	var user models.User
+	require.NoError(t, f.db.First(&user, "id='manager'").Error)
+	require.Equal(t, "manager", user.Role, "sharing must not demote an existing internal account")
+}

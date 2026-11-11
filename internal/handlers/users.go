@@ -190,6 +190,14 @@ func (h *UsersHandler) userListQuery(ctx context.Context, tenantID, actorID, sea
 		return nil, err
 	}
 	var clientScope *gorm.DB
+	pendingRecipients := func() *gorm.DB {
+		return h.db.WithContext(ctx).Table("access_invitations").Select("recipient_user_id").
+			Where("tenant_id = ? AND recipient_user_id IS NOT NULL AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > ?", tenantID, models.Now())
+	}
+	namedRecipients := func(table string) *gorm.DB {
+		return h.db.WithContext(ctx).Table(table).Select("user_id").
+			Where("tenant_id = ? AND user_id IS NOT NULL AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > ?)", tenantID, models.Now())
+	}
 	if actor.Role != "admin" {
 		if actor.Role != "manager" {
 			return q.Where("1 = 0"), nil
@@ -199,7 +207,11 @@ func (h *UsersHandler) userListQuery(ctx context.Context, tenantID, actorID, sea
 		if err != nil {
 			return nil, err
 		}
-		q = q.Where("users.role IN ?", []string{"client", "customer"}).Where(`EXISTS (SELECT 1 FROM user_clients roster_uc WHERE roster_uc.tenant_id = users.tenant_id AND roster_uc.user_id = users.id AND roster_uc.client_id IN (?))`, clientScope.Select("clients.id"))
+		q = q.Where("users.role IN ?", []string{"client", "customer"}).Where(`(EXISTS (SELECT 1 FROM user_clients roster_uc WHERE roster_uc.tenant_id = users.tenant_id AND roster_uc.user_id = users.id AND roster_uc.client_id IN (?)) OR users.id IN (?) OR users.id IN (?) OR users.id IN (?))`,
+			clientScope.Select("clients.id"),
+			pendingRecipients().Where("client_id IN (?)", clientScope.Select("clients.id")),
+			namedRecipients("item_grants").Where("client_id IN (?)", clientScope.Select("clients.id")),
+			namedRecipients("role_assignments").Where("client_id IN (?)", clientScope.Select("clients.id")))
 	}
 
 	search = strings.TrimSpace(search)
@@ -207,8 +219,14 @@ func (h *UsersHandler) userListQuery(ctx context.Context, tenantID, actorID, sea
 		like := "%" + search + "%"
 		matchingUserIDs := h.db.WithContext(ctx).Table("users").
 			Distinct().
-			Select("users.id").
-			Joins("LEFT JOIN user_clients uc ON uc.tenant_id = users.tenant_id AND uc.user_id = users.id").
+			Select("users.id")
+		if clientScope != nil {
+			// Restrict client-name matches, not email/name matches for pending contacts.
+			matchingUserIDs = matchingUserIDs.Joins("LEFT JOIN user_clients uc ON uc.tenant_id = users.tenant_id AND uc.user_id = users.id AND uc.client_id IN (?)", clientScope.Select("clients.id"))
+		} else {
+			matchingUserIDs = matchingUserIDs.Joins("LEFT JOIN user_clients uc ON uc.tenant_id = users.tenant_id AND uc.user_id = users.id")
+		}
+		matchingUserIDs = matchingUserIDs.
 			Joins("LEFT JOIN clients c ON c.tenant_id = uc.tenant_id AND c.id = uc.client_id").
 			Where("users.tenant_id = ?", tenantID).
 			Where(
@@ -218,10 +236,6 @@ func (h *UsersHandler) userListQuery(ctx context.Context, tenantID, actorID, sea
 				like,
 				like,
 			)
-		if clientScope != nil {
-			// Searches must not match the name of a private, unassigned client.
-			matchingUserIDs = matchingUserIDs.Where("uc.client_id IN (?)", clientScope.Select("clients.id"))
-		}
 		q = q.Where("id IN (?)", matchingUserIDs)
 	}
 	if roleFilter != "" {
@@ -242,7 +256,16 @@ func (h *UsersHandler) userListQuery(ctx context.Context, tenantID, actorID, sea
 	}
 	if clientIDFilter != "" {
 		assignedUserIDs := h.db.WithContext(ctx).Table("user_clients").Select("user_id").Where("tenant_id = ? AND client_id = ?", tenantID, clientIDFilter)
-		q = q.Where("users.id IN (?)", assignedUserIDs)
+		pendingUserIDs := pendingRecipients().Where("client_id = ?", clientIDFilter)
+		grantUserIDs := namedRecipients("item_grants").Where("client_id = ?", clientIDFilter)
+		assignmentUserIDs := namedRecipients("role_assignments").Where("client_id = ?", clientIDFilter)
+		if clientScope != nil {
+			assignedUserIDs = assignedUserIDs.Where("client_id IN (?)", clientScope.Select("clients.id"))
+			pendingUserIDs = pendingUserIDs.Where("client_id IN (?)", clientScope.Select("clients.id"))
+			grantUserIDs = grantUserIDs.Where("client_id IN (?)", clientScope.Select("clients.id"))
+			assignmentUserIDs = assignmentUserIDs.Where("client_id IN (?)", clientScope.Select("clients.id"))
+		}
+		q = q.Where("(users.id IN (?) OR users.id IN (?) OR users.id IN (?) OR users.id IN (?))", assignedUserIDs, pendingUserIDs, grantUserIDs, assignmentUserIDs)
 	}
 
 	return q, nil

@@ -69,6 +69,12 @@ do not trust `path`. No long-lived authorization cache.
 - Invitations bind the intended email to a verified tenant-local account;
   acceptance is single-use/idempotent and must not create client membership for
   an item invitation or change an existing account's role.
+- Sharing asks for an email, not an identity classification. Saving an invitation
+  creates a tenant-local External contact without credentials or document access,
+  or reuses the existing account without changing its identity or role. Pending
+  contacts appear in Users even when email delivery is unavailable. Administrators
+  can later promote that same account to Internal Member or Administrator through
+  user management; account creation alone never activates pending document access.
 - Record independent membership provenance. Reinviting an independent member
   cannot transfer management ownership to the inviter.
 - Onward grants/links survive their creator's loss of access. That creator

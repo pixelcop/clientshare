@@ -70,14 +70,9 @@ func (s *SharingService) PrepareInvitationDelivery(ctx context.Context, req Acce
 			if intent.RecipientUserID != nil {
 				return gorm.ErrRecordNotFound
 			}
-			user = models.User{TenantID: req.TenantID, Email: intent.Email, Role: "client", CreatedAt: s.now(), UpdatedAt: s.now()}
-			if err := CheckStaffQuota(tx, &user); err != nil {
-				return err
-			}
-			if err := tx.Create(&user).Error; err != nil {
-				return err
-			}
-			if err := sharingAudit(tx, req, "identity.invite", user.ID, nil, map[string]any{"user_id": user.ID, "email": user.Email, "role": user.Role}); err != nil {
+			var err error
+			user, err = s.createExternalInvitationRecipient(tx, req, intent.Email)
+			if err != nil {
 				return err
 			}
 		} else {
@@ -86,7 +81,7 @@ func (s *SharingService) PrepareInvitationDelivery(ctx context.Context, req Acce
 		if intent.RecipientUserID != nil && *intent.RecipientUserID != user.ID {
 			return gorm.ErrRecordNotFound
 		}
-		if intent.FileID == nil && user.Role != "client" && user.Role != "customer" {
+		if intent.RoleID == nil && intent.FileID == nil && user.Role != "client" && user.Role != "customer" {
 			return ErrSharingInput
 		}
 		if intent.RecipientUserID == nil {
@@ -138,4 +133,16 @@ func (s *SharingService) PrepareInvitationDelivery(ctx context.Context, req Acce
 		return sharingAudit(tx, req, "identity.invitation.create", user.ID, nil, map[string]any{"identity_invite_id": proof.ID, "access_invitation_id": intent.ID, "expires_at": expiry})
 	})
 	return &delivery, err
+}
+
+func (s *SharingService) createExternalInvitationRecipient(tx *gorm.DB, req AccessRequest, email string) (models.User, error) {
+	user := models.User{TenantID: req.TenantID, Email: email, Role: "client", CreatedAt: s.now(), UpdatedAt: s.now()}
+	if err := tx.Create(&user).Error; err != nil {
+		return user, err
+	}
+	profile := models.AccessProfile{TenantID: req.TenantID, UserID: user.ID, UserType: "external", OrganizationRole: "none"}
+	if err := tx.Create(&profile).Error; err != nil {
+		return user, err
+	}
+	return user, sharingAudit(tx, req, "identity.invite", user.ID, nil, map[string]any{"user_id": user.ID, "email": user.Email, "role": user.Role})
 }

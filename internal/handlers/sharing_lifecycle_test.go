@@ -69,7 +69,9 @@ func TestSharingLifecycleHTTPEnforcesExactScopeCeilingsVersionsAndIdentity(t *te
 	post("/api/invitations/"+invite.ID+"/email", env.otherToken, nil, 503)
 	var identities int64
 	require.NoError(t, env.db.Model(&models.User{}).Where("email = 'new-recipient@example.test'").Count(&identities).Error)
-	require.Zero(t, identities, "disabled delivery must not mint/return an identity credential")
+	require.EqualValues(t, 1, identities, "saved shares create directory contacts even with disabled delivery")
+	require.NoError(t, env.db.Model(&models.InviteToken{}).Where("email = 'new-recipient@example.test'").Count(&identities).Error)
+	require.Zero(t, identities, "disabled delivery must not mint an identity credential")
 	post("/api/clients/"+env.client.ID+"/invitations", env.otherToken, map[string]any{"email": "new-member@example.test", "capabilities": models.AccessCapabilities{CanRead: true}}, 404)
 	// Versioned updates cannot overwrite a concurrent change or exceed the
 	// current grantee's ceiling, even through a still-open session.
