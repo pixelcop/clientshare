@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import axios from 'axios';
 
+import AccessSelect from '@/components/AccessSelect.vue';
 import StaffSeatUsage from '@/components/StaffSeatUsage.vue';
 import { useAuthStore } from '@/stores/auth';
 import { useStaffQuotaStore } from '@/stores/staffQuota';
@@ -292,17 +293,33 @@ function onSubmit() {
         </div>
         <div class="grid gap-2">
           <label :id="`${fieldPrefix}-type-label`" :for="`${fieldPrefix}-type`">User type</label>
-          <Select
+          <AccessSelect
             :inputId="`${fieldPrefix}-type`"
             :ariaLabelledby="`${fieldPrefix}-type-label`"
             v-model="userType"
             :options="
               isAdmin
                 ? [
-                    { label: 'Internal — your team', value: 'internal' },
-                    { label: 'External — clients and advisers', value: 'external' },
+                    {
+                      label: 'Internal — your team',
+                      value: 'internal',
+                      description: 'A team identity. Document access is assigned separately.',
+                    },
+                    {
+                      label: 'External — clients and advisers',
+                      value: 'external',
+                      description:
+                        'A client or adviser identity. Document access is assigned separately.',
+                    },
                   ]
-                : [{ label: 'External — clients and advisers', value: 'external' }]
+                : [
+                    {
+                      label: 'External — clients and advisers',
+                      value: 'external',
+                      description:
+                        'A client or adviser identity. Document access is assigned separately.',
+                    },
+                  ]
             "
             optionLabel="label"
             optionValue="value"
@@ -314,13 +331,23 @@ function onSubmit() {
           <label :id="`${fieldPrefix}-organization-label`" :for="`${fieldPrefix}-organization`"
             >Organization role</label
           >
-          <Select
+          <AccessSelect
             :inputId="`${fieldPrefix}-organization`"
             :ariaLabelledby="`${fieldPrefix}-organization-label`"
             v-model="organizationRole"
             :options="[
-              { label: 'Member', value: 'member' },
-              { label: 'Administrator', value: 'administrator' },
+              {
+                label: 'Member',
+                value: 'member',
+                description:
+                  'No organization administration. Document access is assigned separately.',
+              },
+              {
+                label: 'Administrator',
+                value: 'administrator',
+                description:
+                  'Manage settings, people, roles and groups, with access to all client workspaces.',
+              },
             ]"
             optionLabel="label"
             optionValue="value"
@@ -369,7 +396,7 @@ function onSubmit() {
           fluid
         />
         <div v-if="clientIds.length > 1" class="flex gap-2 items-center flex-wrap">
-          <Select
+          <AccessSelect
             v-model="applyRole"
             ariaLabel="Role to apply to all selected workspaces"
             :options="bulkRoles"
@@ -398,7 +425,7 @@ function onSubmit() {
           <label :id="`${fieldPrefix}-${clientId}-label`" :for="`${fieldPrefix}-${clientId}`">{{
             clients.find((c) => c.id === clientId)?.name || clientId
           }}</label>
-          <Select
+          <AccessSelect
             :inputId="`${fieldPrefix}-${clientId}`"
             :ariaLabelledby="`${fieldPrefix}-${clientId}-label`"
             v-model="workspaceRoles[clientId]"
@@ -408,16 +435,7 @@ function onSubmit() {
             :disabled="disabled"
             placeholder="Choose an access role"
             fluid
-          >
-            <template #option="{ option }"
-              ><div class="max-w-xs">
-                <strong>{{ option.name }}</strong
-                ><small class="block text-muted-color whitespace-normal">{{
-                  roleSummary(option)
-                }}</small>
-              </div></template
-            >
-          </Select>
+          />
           <p class="text-sm text-muted-color sm:col-span-2">
             {{
               roles.find((r) => r.id === workspaceRoles[clientId])

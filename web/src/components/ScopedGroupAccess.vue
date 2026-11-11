@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import axios from 'axios';
 
+import AccessSelect from '@/components/AccessSelect.vue';
 import { useAuthStore } from '@/stores/auth';
 import type { GroupDetails, TenantAccessRole } from '@/types/accessRoles';
 import { applicableRole, roleSummary, tenantRoleLabel } from '@/types/accessRoles';
@@ -205,7 +206,8 @@ async function confirm() {
         {{ tenantRoleLabel(roles, a.role_id) }}
       </p>
       <div v-if="a.can_manage && a.user_id" class="flex gap-2 flex-wrap">
-        <Select
+        <AccessSelect
+          :isFile="kind === 'file'"
           v-model="edits[a.id]"
           :options="
             roles.filter(
@@ -249,7 +251,8 @@ async function confirm() {
           placeholder="Choose a group"
       /></label>
       <label class="grid gap-2"
-        >Role at this scope<Select
+        >Role at this scope<AccessSelect
+          :isFile="kind === 'file'"
           ariaLabel="Role at this scope"
           v-model="roleId"
           :options="availableRoles"

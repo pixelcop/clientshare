@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Button, Dialog, Select } from 'openvue';
 
+import AccessSelect from '@/components/AccessSelect.vue';
 import { useCollectionStore } from '@/stores/collection';
 import type { LinkAccessMode } from '@/types/linkAccess';
 import {
@@ -42,14 +43,16 @@ const emit = defineEmits<{
 const purpose = ref<'send' | 'collect'>(props.collection ? 'collect' : 'send');
 const accessType = ref<LinkAccessMode>('read');
 const allowedAccess = computed(() =>
-  linkAccessOptions.filter(
-    (option) =>
-      !props.capabilities ||
-      ((option.value !== 'read' || props.capabilities.can_read) &&
-        (option.value !== 'write' || props.capabilities.can_upload) &&
-        (option.value !== 'readwrite' ||
-          (props.capabilities.can_read && props.capabilities.can_upload))),
-  ),
+  linkAccessOptions
+    .filter(
+      (option) =>
+        !props.capabilities ||
+        ((option.value !== 'read' || props.capabilities.can_read) &&
+          (option.value !== 'write' || props.capabilities.can_upload) &&
+          (option.value !== 'readwrite' ||
+            (props.capabilities.can_read && props.capabilities.can_upload))),
+    )
+    .map((option) => ({ ...option, description: linkAccessDescription(option.value) })),
 );
 const allowsMode = (mode: LinkAccessMode) =>
   allowedAccess.value.some((option) => option.value === mode);
@@ -164,7 +167,7 @@ const formComponent = computed(() => (props.embedded ? 'div' : 'form'));
       </fieldset>
       <div>
         <label :for="`${fieldPrefix}-access`">Permissions</label>
-        <Select
+        <AccessSelect
           :inputId="`${fieldPrefix}-access`"
           v-model="accessType"
           :options="allowedAccess"

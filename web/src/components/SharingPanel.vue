@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import axios from 'axios';
-import { Button, Checkbox, Dialog, InputText, Select } from 'openvue';
+import { Button, Checkbox, Dialog, InputText } from 'openvue';
 
+import AccessSelect from '@/components/AccessSelect.vue';
 import type { TenantAccessRole } from '@/types/accessRoles';
 import {
   applicableRole,
@@ -186,15 +187,22 @@ const pastPeople = computed(() => [
 ]);
 const modes = computed(() =>
   [
-    { label: 'View & download', value: 'read', allowed: view.value?.capabilities.can_read },
+    {
+      label: 'View & download',
+      value: 'read',
+      description: 'Open and download documents. Cannot upload or delete.',
+      allowed: view.value?.capabilities.can_read,
+    },
     {
       label: 'Upload only',
       value: 'write',
+      description: 'Upload documents without viewing existing files.',
       allowed: !isFile.value && view.value?.capabilities.can_upload,
     },
     {
       label: 'View, download & upload',
       value: 'readwrite',
+      description: 'Open, download and upload documents. Cannot delete.',
       allowed:
         !isFile.value && view.value?.capabilities.can_read && view.value?.capabilities.can_upload,
     },
@@ -666,7 +674,7 @@ async function remove() {
                 <strong>{{ person.email }}</strong>
               </div>
               <div class="recipient-controls">
-                <Select
+                <AccessSelect
                   v-model="person.role"
                   :ariaLabel="`Role for ${person.email}`"
                   :options="roleOptions"
@@ -676,14 +684,7 @@ async function remove() {
                   class="role-select"
                   :labelStyle="{ display: 'flex', alignItems: 'center', textAlign: 'start' }"
                   @update:modelValue="updateDraft(person)"
-                >
-                  <template #option="{ option }"
-                    ><div class="role-option">
-                      <strong>{{ option.label }}</strong
-                      ><small>{{ option.description }}</small>
-                    </div></template
-                  >
-                </Select>
+                />
                 <SharingExpiry
                   v-if="scope.kind === 'item'"
                   v-model="person.expiry"
@@ -712,7 +713,7 @@ async function remove() {
               !defaultAccessRole(catalog.filter((r) => roleOptions.some((o) => o.value === r.id)))
             "
             class="grid gap-2 mb-3"
-            >Access role<Select
+            >Access role<AccessSelect
               v-model="selectedRole"
               :options="roleOptions"
               optionLabel="label"
@@ -729,12 +730,20 @@ async function remove() {
             class="grid gap-2 mb-3"
           >
             <label :id="`${key}-recipient-type-label`">Recipient type</label>
-            <Select
+            <AccessSelect
               v-model="recipientType"
               :ariaLabelledby="`${key}-recipient-type-label`"
               :options="[
-                { label: 'External contact', value: 'external' },
-                { label: 'Existing internal team member', value: 'internal' },
+                {
+                  label: 'External contact',
+                  value: 'external',
+                  description: 'Invite a client or adviser with the selected document role.',
+                },
+                {
+                  label: 'Existing internal team member',
+                  value: 'internal',
+                  description: 'Assign access to someone already on your team.',
+                },
               ]"
               optionLabel="label"
               optionValue="value"
@@ -796,7 +805,7 @@ async function remove() {
               <span class="person-avatar" aria-hidden="true">{{ email[0]?.toUpperCase() }}</span
               ><strong>{{ email }}</strong>
             </div>
-            <Select
+            <AccessSelect
               v-model="selectedRole"
               :inputId="`${key}-role`"
               ariaLabel="Role"
@@ -806,14 +815,7 @@ async function remove() {
               :disabled="busy"
               class="role-select"
               :labelStyle="{ display: 'flex', alignItems: 'center', textAlign: 'start' }"
-            >
-              <template #option="{ option }"
-                ><div class="role-option">
-                  <strong>{{ option.label }}</strong
-                  ><small>{{ option.description }}</small>
-                </div></template
-              >
-            </Select>
+            />
           </div>
           <p class="muted">{{ roleDescription }}</p>
           <SharingExpiry v-if="scope.kind === 'item'" v-model="expiry" :disabled="busy" />
@@ -879,7 +881,7 @@ async function remove() {
                 roleLabel(person.role_id)
               }}</span
               ><template v-if="person.can_remove"
-                ><Select
+                ><AccessSelect
                   v-model="memberEdits[person.user_id]"
                   :options="memberRoles(person)"
                   optionLabel="name"
@@ -999,7 +1001,7 @@ async function remove() {
                 <label :id="`${key}-mode-label`" :for="`${key}-mode`"
                   >Anyone with this link can</label
                 >
-                <Select
+                <AccessSelect
                   v-model="linkMode"
                   :inputId="`${key}-mode`"
                   :ariaLabelledby="`${key}-mode-label`"
@@ -1370,16 +1372,6 @@ small {
   margin-top: 16px;
   padding-top: 8px;
   background: var(--p-content-background);
-}
-.role-option {
-  max-width: min(320px, 70vw);
-  white-space: normal;
-}
-.role-option small {
-  display: block;
-  margin-top: 4px;
-  font-size: 12px;
-  color: var(--p-text-muted-color);
 }
 .back-button {
   justify-self: start;

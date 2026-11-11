@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import axios from 'axios';
 
+import AccessSelect from '@/components/AccessSelect.vue';
 import type { GroupDetails, TenantAccessRole } from '@/types/accessRoles';
 import { roleSummary, tenantRoleLabel } from '@/types/accessRoles';
 import type { Client, RolePermissions, User } from '@/types/models';
@@ -421,13 +422,25 @@ async function confirm() {
           >Description<InputText v-model="roleEditor.description" maxlength="500"
         /></label>
         <label class="grid gap-2"
-          >Available to<Select
+          >Available to<AccessSelect
             ariaLabel="Available to"
             v-model="roleEditor.audience"
             :options="[
-              { label: 'Internal and External', value: 'both' },
-              { label: 'Internal only', value: 'internal' },
-              { label: 'External only', value: 'external' },
+              {
+                label: 'Internal and External',
+                value: 'both',
+                description: 'Assignable to team members, clients and advisers.',
+              },
+              {
+                label: 'Internal only',
+                value: 'internal',
+                description: 'Assignable only to your internal team.',
+              },
+              {
+                label: 'External only',
+                value: 'external',
+                description: 'Assignable only to clients and advisers.',
+              },
             ]"
             optionLabel="label"
             optionValue="value"
@@ -525,7 +538,8 @@ async function confirm() {
             }}. The scope is preserved.
           </p>
           <label class="grid gap-2"
-            >Access role<Select
+            >Access role<AccessSelect
+              :isFile="a.scope_type === 'file'"
               :ariaLabel="`Access role for assignment ${index + 1}`"
               v-model="a.role_id"
               :options="groupRoles(a)"
@@ -585,7 +599,7 @@ async function confirm() {
           role has assignments.
         </p>
         <label class="grid gap-2"
-          >Replacement role<Select
+          >Replacement role<AccessSelect
             ariaLabel="Replacement role"
             v-model="replacement"
             :options="roles.filter((r) => r.id !== deleteRole?.id && !r.archived_at)"
