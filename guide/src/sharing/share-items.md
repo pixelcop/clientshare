@@ -39,18 +39,27 @@ collapsed section below the current people, when there are past entries.
 | Viewer | View and download files. |
 | Uploader | Upload to a folder or client workspace without seeing existing files or folders. |
 | Contributor | View, download and upload files. |
-| Editor | View, download, upload and delete files. For a single file, view, download and delete it. |
-| Manager | Everything an Editor can do, plus invite others and create sharing links. |
+| Client contact | View, upload and invite external people. |
+| File manager | View, download, upload and delete files. A single-file assignment does not allow uploads. |
+| Workspace manager | Document and access management; Internal only by default. |
 
-These roles apply only to the shared file, folder or client workspace. **Manager**
-here does not make someone a portal manager or grant administrative access.
-Uploader and Contributor are not offered for individual files. Only roles within
-your own permissions are available; new invitations default to Viewer, or Uploader
-when you can only collect uploads. Delete and sharing are never standalone roles.
+These are tenant-editable starting templates. Their names do not grant organization
+administration. Administrators manage them under **Roles and groups**. Only roles
+applicable to the recipient type, target scope and your permission ceiling appear.
+Uploader, Contributor and Client contact are not offered for individual files by
+default. New invitations select a view-only or upload-only role when available;
+otherwise choose permissions explicitly. Select **Existing internal team member**
+when sharing with your team; create new internal identities in **Users** first.
 
-Existing combinations that do not match a role appear as **Custom access**. Their
-permissions are preserved when changing expiry; choosing a role explicitly replaces
-that combination. Access inherited from elsewhere is not reduced by a role here.
+Existing combinations are preserved as named legacy roles during upgrade. Changing
+expiry retains the role; selecting another role explicitly replaces its permissions.
+An archived role keeps existing access but cannot be assigned to new recipients.
+Access inherited from elsewhere is not reduced by a direct role change.
+
+Administrators can assign an existing group at this scope from **Group and
+additional access**. Review the affected members before confirming. Removing a
+group here leaves that group's assignments in other workspaces/folders untouched.
+Individual group membership is managed in **Roles and groups** or the user editor.
 
 ## Share a link
 

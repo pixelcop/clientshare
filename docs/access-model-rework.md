@@ -1,7 +1,9 @@
 # Roles and access implementation plan
 
-Status: implementation in progress. This document describes the target model,
-not currently available functionality.
+Status: role-backed authorization, management APIs and user/sharing interfaces
+implemented. Legacy fields remain compatibility snapshots for older clients and
+upgraded installations; they are not the source of a role-backed assignment's
+permissions.
 
 ## Contract
 
@@ -61,16 +63,18 @@ for the three separate new sharing permissions.
 
 ## Current checkpoint
 
-The additive foundation migration creates profiles, role templates, groups and
-role assignments, and snapshots existing memberships/grants into the new model.
-It does **not** change the active resolver, account creation, invitations or UI.
-Original authorization records remain the source of truth. No management API
-may edit the shadow assignments until cutover: subsequent legacy changes must
-be reconciled before activation, and new tenants/users must receive their new
-records through the corresponding creation transactions.
+Migration 055 is additive. Migrations 056–057 attach tenant-local roles to live
+memberships, grants and invitations, reconcile checkpoint-era changes, and remove
+obsolete shadow snapshots. Direct grants retain their original identities,
+versions, credentials, provenance and expiry. Group/additive grants use
+`role_assignments`. A tenant catalog marker prevents deleted default roles from
+being recreated. Role names and template keys never authorize operations.
 
-The permission conversion preserves the old sharing flags as candidate role
-permissions, not as a substitute for ownership/provenance rules. Cutover tests
-must retain current restrictions on which recipients and invitations a person
-can manage, including legacy external sharing. Pending invitations and links
-are deliberately left unchanged until their lifecycle is migrated atomically.
+Legacy sharing roles preserve ownership/provenance rules; changing their sharing
+permissions explicitly switches to the independent sharing-rights contract.
+Pending invitations reference roles while keeping credentials and lifecycle.
+Independent accepted invitations remain separate assignments rather than
+flattening scoped roles/expiries into stronger legacy capability bits. Link
+authorization, legacy link routes, notifications and workspace lists use current
+rights. Downgrade refuses independent sharing/group data that the older schema
+cannot safely represent; replace/remove those assignments before downgrading.
