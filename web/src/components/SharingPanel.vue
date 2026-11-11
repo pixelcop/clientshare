@@ -83,7 +83,7 @@ const mobileTitle = computed(() =>
 function mobileBack() {
   if (activeTab.value === 'links') {
     activeTab.value = 'people';
-    mobileScreen.value = 'manage';
+    mobileScreen.value = 'share';
   } else {
     mobileScreen.value = 'share';
   }
@@ -332,7 +332,6 @@ const visibleGrants = computed<EditableGrant[]>(() =>
 const visibleInvitations = computed(() => (view.value?.invitations || []).filter(active));
 const hasLinkHistory = computed(() => links.value.some((link) => !active(link)));
 const visibleLinks = computed(() => links.value.filter((link) => history.value || active(link)));
-const activeLinks = computed(() => links.value.filter(active));
 const previewPeople = computed(() => {
   const people = [
     ...(view.value?.people || []).map((p) => ({ name: p.name || p.email, email: p.email })),
@@ -923,32 +922,6 @@ async function remove() {
         Access also comes from a containing folder. Change the assignment at that folder to remove
         its inherited access.
       </p>
-      <section
-        v-if="isMobile && activeTab === 'people' && mobileScreen === 'manage'"
-        class="mobile-general-section"
-        aria-label="General access"
-      >
-        <h3>General access</h3>
-        <button
-          type="button"
-          class="mobile-general-access"
-          :disabled="busy || !canCreateLinks"
-          @click="activeTab = 'links'"
-        >
-          <span class="person-avatar" aria-hidden="true"
-            ><i :class="activeLinks.length ? 'oi oi-link' : 'oi oi-lock'"
-          /></span>
-          <span
-            ><strong>{{ activeLinks.length ? 'Sharing links enabled' : 'Restricted' }}</strong
-            ><small>{{
-              activeLinks.length
-                ? 'Anyone with an active link can use its permissions.'
-                : 'Only people with access can open this item.'
-            }}</small></span
-          >
-          <i v-if="canCreateLinks" class="oi oi-chevron-right" aria-hidden="true" />
-        </button>
-      </section>
       <div
         v-if="activeTab === 'people'"
         :class="{ 'mobile-share-content': isMobile && mobileScreen === 'share' }"
@@ -1435,7 +1408,7 @@ async function remove() {
       </section>
       <div v-if="!composing" class="sharing-footer">
         <Button
-          v-if="activeTab === 'people' && canCreateLinks && !isMobile"
+          v-if="activeTab === 'people' && canCreateLinks && (!isMobile || mobileScreen === 'share')"
           label="Sharing links"
           icon="oi oi-link"
           severity="secondary"
@@ -1602,14 +1575,6 @@ async function remove() {
 .mobile-sharing-header > div {
   min-width: 0;
 }
-.mobile-general-section h3 {
-  font-size: 15px;
-  margin: 0 0 12px;
-}
-.mobile-general-section {
-  margin-bottom: 24px;
-}
-.mobile-general-access,
 .mobile-manage-access,
 .mobile-role-options button {
   display: flex;
@@ -1624,25 +1589,17 @@ async function remove() {
   cursor: pointer;
   padding: 12px 0;
 }
-.mobile-general-access > span:nth-child(2),
 .mobile-role-options button > span {
   flex: 1;
 }
-.mobile-general-access strong,
-.mobile-general-access small,
 .mobile-role-options strong,
 .mobile-role-options small {
   display: block;
 }
-.mobile-general-access small,
 .mobile-role-options small {
   color: var(--p-text-muted-color);
   margin-top: 4px;
   font-size: 13px;
-}
-.mobile-general-access:disabled {
-  opacity: 1;
-  cursor: default;
 }
 .mobile-manage-access {
   justify-content: space-between;

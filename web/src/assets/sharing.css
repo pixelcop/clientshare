@@ -33,6 +33,14 @@
     margin-top: auto;
   }
 
+  .sharing-dialog .sharing-panel .mobile-access-preview {
+    margin-top: auto;
+  }
+
+  .sharing-dialog .sharing-panel .mobile-access-preview + .sharing-footer {
+    margin-top: 16px;
+  }
+
   .p-dialog.sharing-person-sheet {
     margin: 0 !important;
     border-radius: 20px 20px 0 0;

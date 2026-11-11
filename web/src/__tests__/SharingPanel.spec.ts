@@ -399,9 +399,16 @@ describe('exact-scope sharing panel', () => {
     });
     await flushPromises();
     expect(wrapper.get('.mobile-sharing-header h2').text()).toBe('Share');
+    expect(wrapper.find('[aria-label="Sharing links"]').exists()).toBe(true);
+    await wrapper.get('[aria-label="Sharing links"]').trigger('click');
+    expect(wrapper.get('.mobile-sharing-header h2').text()).toBe('Sharing links');
+    await wrapper.get('[aria-label="Back to share"]').trigger('click');
+    expect(wrapper.get('.mobile-sharing-header h2').text()).toBe('Share');
     expect(wrapper.find('[aria-label="People with access"]').exists()).toBe(false);
     await wrapper.get('.mobile-manage-access').trigger('click');
     expect(wrapper.get('.mobile-sharing-header h2').text()).toBe('Manage access');
+    expect(wrapper.text()).not.toContain('General access');
+    expect(wrapper.find('[aria-label="Sharing links"]').exists()).toBe(false);
     expect(wrapper.find('.add-person').exists()).toBe(false);
     await wrapper.get('[aria-label="Change access for amber@example.test"]').trigger('click');
     await flushPromises();
