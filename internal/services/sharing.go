@@ -159,7 +159,9 @@ func (s *SharingService) CreateGrant(ctx context.Context, req AccessRequest, inp
 		}
 		err := tx.Where("tenant_id = ? AND client_id = ? AND file_id = ? AND user_id = ?", req.TenantID, req.ClientID, req.FileID, input.UserID).First(&grant).Error
 		if err == nil {
-			if grant.RevokedAt == nil && (grant.ExpiresAt == nil || grant.ExpiresAt.After(s.now())) && models.SameAccessCapabilities(grant.AccessCapabilities, input.Capabilities) && sameGrantExpiry(grant.ExpiresAt, input.ExpiresAt) {
+			sameRole := (grant.RoleID == nil && input.RoleID == "") || (grant.RoleID != nil && *grant.RoleID == input.RoleID)
+			samePermissions := grant.RoleID != nil || models.SameAccessCapabilities(grant.AccessCapabilities, input.Capabilities)
+			if sameRole && samePermissions && grant.RevokedAt == nil && (grant.ExpiresAt == nil || grant.ExpiresAt.After(s.now())) && sameGrantExpiry(grant.ExpiresAt, input.ExpiresAt) {
 				return nil
 			}
 			return ErrSharingConflict // creation never silently updates/reactivates

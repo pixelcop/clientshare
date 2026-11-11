@@ -227,3 +227,46 @@ func TestManageAccessDoesNotRequireExternalInvitationOrLinkPermission(t *testing
 	require.NoError(t, s.RemoveMember(ctx, req, "recipient", false))
 	f.check(t, f.req("recipient", "file", AccessRead), false)
 }
+
+func TestRoleBackedGrantReplayKeepsRoleIdentity(t *testing.T) {
+	f, _, roles := roleFixture(t)
+	ctx := context.Background()
+	s := &SharingService{DB: f.db}
+	input := GrantInput{UserID: "recipient", RoleID: roles["client-contact"].ID}
+	grant, err := s.CreateGrant(ctx, f.req("admin", "folder", AccessShare), input)
+	require.NoError(t, err)
+	replayed, err := s.CreateGrant(ctx, f.req("admin", "folder", AccessShare), input)
+	require.NoError(t, err)
+	require.Equal(t, grant.ID, replayed.ID)
+	copy := roles["client-contact"]
+	copy.ID = "renamable-independent-role"
+	copy.TemplateKey = nil
+	copy.Name = "Independent contact"
+	require.NoError(t, f.db.Create(&copy).Error)
+	input.RoleID = copy.ID
+	_, err = s.CreateGrant(ctx, f.req("admin", "folder", AccessShare), input)
+	require.ErrorIs(t, err, ErrSharingConflict, "identical current permissions do not make distinct editable roles interchangeable")
+}
+
+func TestWorkspaceRoleInvitationDoesNotOverwriteIndependentMembership(t *testing.T) {
+	f, _, roles := roleFixture(t)
+	ctx := context.Background()
+	viewer := roles["viewer"]
+	require.NoError(t, f.db.Model(&models.UserClient{}).Where("user_id='member'").Updates(map[string]any{"role_id": viewer.ID, "capabilities_set": true, "can_read": true, "can_upload": false, "can_share": false}).Error)
+	s := &SharingService{DB: f.db, TokenSecret: "test", Now: func() time.Time { return accessTestNow }}
+	invite, err := s.CreateInvitation(ctx, f.req("admin", "", AccessShare), InvitationInput{Email: "member@example.test", RoleID: roles["contributor"].ID}, "workspace-additive")
+	require.NoError(t, err)
+	_, err = s.AcceptInvitation(ctx, "tenant", "member", s.invitationToken(invite.ID))
+	require.NoError(t, err)
+	f.check(t, f.req("member", "folder", AccessUpload), true)
+	var member models.UserClient
+	require.NoError(t, f.db.First(&member, "user_id='member'").Error)
+	require.Equal(t, viewer.ID, *member.RoleID)
+	require.Equal(t, "independent", member.AccessSource)
+	view, err := s.ClientAccess(ctx, f.req("admin", "", AccessShare))
+	require.NoError(t, err)
+	require.Len(t, view.AdditionalAccess, 1)
+	require.NoError(t, s.UpdateRoleAssignment(ctx, "tenant", "admin", view.AdditionalAccess[0].ID, view.AdditionalAccess[0].Version, "", nil, true))
+	f.check(t, f.req("member", "folder", AccessUpload), false)
+	f.check(t, f.req("member", "file", AccessRead), true)
+}

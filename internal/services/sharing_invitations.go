@@ -330,9 +330,14 @@ func (s *SharingService) AcceptInvitation(ctx context.Context, tenantID, userID,
 				}
 			} else if err != nil {
 				return err
+			} else if invitation.RoleID != nil {
+				assignment := models.RoleAssignment{TenantID: tenantID, ClientID: invitation.ClientID, UserID: &user.ID, RoleID: *invitation.RoleID, SourceKind: "invitation", SourceID: &invitation.ID, Version: 1}
+				if err := tx.Create(&assignment).Error; err != nil {
+					return err
+				}
 			}
-			// An independently authorized member is never taken over, reduced
-			// or upgraded by a later invitation from somebody else.
+			// Independent membership is never taken over or rewritten. New
+			// role-backed intent stays separately removable and auditable.
 		} else {
 			req.FileID = *invitation.FileID
 			file, err := (&AccessService{DB: tx}).ValidateTarget(ctx, tenantID, invitation.ClientID, req.FileID)
