@@ -1,6 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils';
 import axios from 'axios';
-import { ToggleSwitch } from 'openvue';
+import { Dialog, ToggleSwitch } from 'openvue';
 import OpenVue from 'openvue/config';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -72,6 +72,22 @@ describe('file email options', () => {
     expect(axios.get).toHaveBeenLastCalledWith('/api/email/queue', {
       params: { client_id: 'client' },
     });
+    wrapper.unmount();
+  });
+
+  it('restores focus to the original options trigger after the pending dialog closes', async () => {
+    const wrapper = setup();
+    await flushPromises();
+    const trigger = wrapper.get('button[aria-label="Email options, 0 pending"]');
+    const focus = vi.spyOn(trigger.element as HTMLElement, 'focus');
+    await trigger.trigger('click');
+    await flushPromises();
+    await wrapper.get('.pending-email-action').trigger('click');
+    await flushPromises();
+    focus.mockClear();
+    wrapper.getComponent(Dialog).vm.$emit('after-hide');
+    await flushPromises();
+    expect(focus).toHaveBeenCalledOnce();
     wrapper.unmount();
   });
 

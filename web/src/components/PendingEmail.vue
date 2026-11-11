@@ -23,10 +23,10 @@ const {
 const notificationsEnabled = defineModel<boolean>('notificationsEnabled', { default: true });
 const emailOptions = ref<InstanceType<typeof Popover> | null>(null);
 const notificationId = useId();
-let emailTrigger: HTMLElement | null = null;
+const emailTrigger = shallowRef<HTMLElement | null>(null);
 
 function toggleEmailOptions(event: MouseEvent) {
-  emailTrigger = event.currentTarget as HTMLElement;
+  emailTrigger.value = event.currentTarget as HTMLElement;
   emailOptions.value?.toggle(event);
 }
 

@@ -251,11 +251,11 @@ const stopClients = clients.$onAction(({ name, after }) => {
   });
 });
 const stopLinks = useSecureLinksStore().$onAction(({ name, args, after }) => {
-  after((result) => {
-    if (!workflow.progress) {
-      return;
-    }
-    if (name === 'createLink' && args[0] === workflow.progress.clientId) {
+  if (name === 'createLink') {
+    after((result) => {
+      if (!workflow.progress || args[0] !== workflow.progress.clientId) {
+        return;
+      }
       if (['write', 'readwrite'].includes(result.access_type)) {
         workflow.selectLink(result.id);
         if (result.email_queued) {
@@ -263,11 +263,14 @@ const stopLinks = useSecureLinksStore().$onAction(({ name, args, after }) => {
         }
       }
       void workflow.reconcile();
-    }
-    if (name === 'revokeLink') {
-      void workflow.reconcile();
-    }
-  });
+    });
+  } else if (name === 'revokeLink') {
+    after(() => {
+      if (workflow.progress) {
+        void workflow.reconcile();
+      }
+    });
+  }
 });
 onMounted(() => {
   window.addEventListener('focus', refreshChecklist);

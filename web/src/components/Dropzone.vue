@@ -2,6 +2,7 @@
 import { useMediaQuery } from '@vueuse/core';
 import { Button, Dialog, InputText, ProgressBar, SplitButton } from 'openvue';
 import type { MenuItem } from 'openvue/menuitem';
+import type { ComponentPublicInstance } from 'vue';
 
 import { useUploadController } from '@/composables/useUploadController';
 import { useWorkspacePresentation } from '@/composables/useWorkspacePresentation';
@@ -70,6 +71,12 @@ const uploadActions = computed<MenuItem[]>(() => [
     : []),
 ]);
 const destination = computed(() => fileManager.context?.folder.filename || 'this folder');
+function setFileInput(element: Element | ComponentPublicInstance | null) {
+  fileInput.value = element instanceof HTMLInputElement ? element : null;
+}
+function setDirectoryInput(element: Element | ComponentPublicInstance | null) {
+  directoryInput.value = element instanceof HTMLInputElement ? element : null;
+}
 </script>
 
 <template>
@@ -126,7 +133,7 @@ const destination = computed(() => fileManager.context?.folder.filename || 'this
     </div>
     <input
       v-if="fileManager.canWrite"
-      ref="fileInput"
+      :ref="setFileInput"
       type="file"
       hidden
       multiple
@@ -135,7 +142,7 @@ const destination = computed(() => fileManager.context?.folder.filename || 'this
     />
     <input
       v-if="fileManager.canWrite"
-      ref="directoryInput"
+      :ref="setDirectoryInput"
       type="file"
       hidden
       webkitdirectory

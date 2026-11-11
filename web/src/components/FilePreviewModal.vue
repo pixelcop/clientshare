@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { breakpointsTailwind, useBreakpoints } from '@vueuse/core';
 import { Button, Dialog } from 'openvue';
+import type { DialogProps, DialogState } from 'openvue/dialog';
 import { storeToRefs } from 'pinia';
+import type { ComponentPublicInstance } from 'vue';
 
 import { useFile } from '@/composables/useFile';
 import { useBrandingStore } from '@/stores/branding';
@@ -16,7 +18,7 @@ const { file, fileType, visible } = defineProps<{
   visible: boolean;
 }>();
 
-const dialog = ref<InstanceType<typeof Dialog> | null>(null);
+const dialog = ref<ComponentPublicInstance<DialogProps, object, DialogState> | null>(null);
 const emit = defineEmits(['close', 'download']);
 
 const breakpoints = useBreakpoints(breakpointsTailwind);
@@ -46,7 +48,7 @@ function close() {
 function onShowDialog() {
   if (dialog.value && xs.value) {
     // start maximized on small screens
-    dialog.value.maximized = true;
+    dialog.value.$data.maximized = true;
   }
 }
 

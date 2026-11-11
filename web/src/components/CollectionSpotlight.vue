@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Button, Panel } from 'openvue';
+import type { ComponentPublicInstance } from 'vue';
 
 import type { SpotlightRect } from '@/composables/collectionSpotlight';
 import { placeCollectionCoach } from '@/composables/collectionSpotlight';
@@ -15,7 +16,7 @@ const coachHeight = ref(164);
 const viewport = ref({ width: window.innerWidth, height: window.innerHeight, top: 0, left: 0 });
 const portal = ref<HTMLElement | string>('body');
 const origin = ref({ left: 0, top: 0 });
-const coach = ref<InstanceType<typeof Panel>>();
+const coach = ref<ComponentPublicInstance>();
 const placement = computed(
   () => rect.value && placeCollectionCoach(rect.value, viewport.value, coachHeight.value),
 );
