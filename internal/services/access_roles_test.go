@@ -270,3 +270,31 @@ func TestWorkspaceRoleInvitationDoesNotOverwriteIndependentMembership(t *testing
 	f.check(t, f.req("member", "folder", AccessUpload), false)
 	f.check(t, f.req("member", "file", AccessRead), true)
 }
+
+func TestGroupDetailsExposeExactAssignmentScopes(t *testing.T) {
+	_, s, roles := roleFixture(t)
+	input := GroupInput{Name: "Scoped team", MemberIDs: []string{}, Assignments: []GroupAssignmentInput{
+		{ClientID: "client", RoleID: roles["viewer"].ID},
+		{ClientID: "client", FileID: accessPtr("folder"), RoleID: roles["viewer"].ID},
+		{ClientID: "client", FileID: accessPtr("file"), RoleID: roles["viewer"].ID},
+	}}
+	impact, err := s.PreviewGroup(t.Context(), "tenant", "admin", "", input)
+	require.NoError(t, err)
+	input.Impact = impact.Fingerprint
+	saved, err := s.SaveGroup(t.Context(), "tenant", "admin", "", input)
+	require.NoError(t, err)
+	groups, err := s.Groups(t.Context(), "tenant", "admin")
+	require.NoError(t, err)
+	require.Len(t, groups, 1)
+	for _, group := range []*GroupDetails{saved, &groups[0]} {
+		scopes := map[string]string{}
+		for _, assignment := range group.Assignments {
+			key := "workspace"
+			if assignment.FileID != nil {
+				key = *assignment.FileID
+			}
+			scopes[key] = assignment.ScopeType
+		}
+		require.Equal(t, map[string]string{"workspace": "workspace", "folder": "folder", "file": "file"}, scopes)
+	}
+}

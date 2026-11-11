@@ -36,7 +36,8 @@ type AccessGroupMember struct {
 // RoleAssignment references exactly one tenant-local person/group and one scope.
 // Source fields identify migrated rows without replacing their original records.
 type RoleAssignment struct {
-	ScopeName string `gorm:"-" json:"scope_name,omitempty"`
+	ScopeName  string     `gorm:"-" json:"scope_name,omitempty"`
+	ScopeType  string     `gorm:"-" json:"scope_type,omitempty"`
 	ID         string     `gorm:"primaryKey;size:26" json:"id"`
 	TenantID   string     `gorm:"not null;index:idx_role_assignment_target,priority:1;uniqueIndex:idx_role_assignment_source,priority:1" json:"tenant_id"`
 	RoleID     string     `gorm:"not null;index" json:"role_id"`

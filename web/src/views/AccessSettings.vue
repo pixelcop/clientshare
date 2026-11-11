@@ -2,7 +2,7 @@
 import axios from 'axios';
 
 import type { GroupDetails, TenantAccessRole } from '@/types/accessRoles';
-import { applicableRole, roleSummary, tenantRoleLabel } from '@/types/accessRoles';
+import { roleSummary, tenantRoleLabel } from '@/types/accessRoles';
 import type { Client, RolePermissions, User } from '@/types/models';
 
 const roles = ref<TenantAccessRole[]>([]);
@@ -21,7 +21,7 @@ const groupEditor = ref<{
   description: string;
   version: number;
   member_ids: string[];
-  assignments: { client_id: string; file_id?: string; role_id: string }[];
+  assignments: { client_id: string; file_id?: string; scope_type?: string; role_id: string }[];
 } | null>(null);
 const permissionFields: { key: keyof RolePermissions; label: string }[] = [
   { key: 'can_read', label: 'View and download' },
@@ -178,12 +178,20 @@ function editGroup(group?: GroupDetails) {
         assignments: group.assignments.map((a) => ({
           client_id: a.client_id,
           file_id: a.file_id,
+          scope_type: a.scope_type,
           role_id: a.role_id,
         })),
       }
     : { id: '', name: '', description: '', version: 0, member_ids: [], assignments: [] };
 }
-function groupRoles(assignment: { file_id?: string; role_id: string }) {
+function groupRoles(assignment: { file_id?: string; scope_type?: string; role_id: string }) {
+  const scope = assignment.file_id ? assignment.scope_type : 'workspace';
+  if (scope !== 'workspace' && scope !== 'folder' && scope !== 'file') {
+    return [];
+  }
+  if (assignment.file_id && scope === 'workspace') {
+    return [];
+  }
   const kinds = (groupEditor.value?.member_ids || []).map((id) => {
     const u = users.value.find((u) => u.id === id);
     return (
@@ -195,13 +203,33 @@ function groupRoles(assignment: { file_id?: string; role_id: string }) {
     (r) =>
       (r.id === assignment.role_id || !r.archived_at) &&
       kinds.every((kind) => r.audience === 'both' || r.audience === kind) &&
-      (assignment.file_id
-        ? r.allow_folder || r.allow_file
-        : applicableRole(r, r.audience === 'internal' ? 'internal' : 'external', 'workspace')),
+      { workspace: r.allow_workspace, folder: r.allow_folder, file: r.allow_file }[scope],
   );
 }
+watch(
+  [groupEditor, roles, users],
+  () => {
+    for (const assignment of groupEditor.value?.assignments || []) {
+      if (
+        assignment.role_id &&
+        !groupRoles(assignment).some((role) => role.id === assignment.role_id)
+      ) {
+        assignment.role_id = '';
+        review.value = null;
+      }
+    }
+  },
+  { deep: true },
+);
 async function reviewGroup(remove = false) {
   if (!groupEditor.value || busy.value) {
+    return;
+  }
+  if (
+    !remove &&
+    groupEditor.value.assignments.some((a) => !groupRoles(a).some((role) => role.id === a.role_id))
+  ) {
+    error.value = 'Choose an eligible role for each assignment’s exact scope and group members.';
     return;
   }
   busy.value = true;

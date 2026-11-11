@@ -51,6 +51,7 @@ export interface AccessGroupMember {
  */
 export interface RoleAssignment {
   scope_name?: string;
+  scope_type?: string;
   id: string;
   tenant_id: string;
   role_id: string;

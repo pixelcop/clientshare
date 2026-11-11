@@ -53,15 +53,17 @@ func groupDetails(tx *gorm.DB, tenantID, id string) (GroupDetails, error) {
 		assignment := &d.Assignments[i]
 		if assignment.FileID != nil {
 			var file models.File
-			err := tx.Select("filename").Where("tenant_id = ? AND client_id = ? AND id = ?", tenantID, assignment.ClientID, *assignment.FileID).First(&file).Error
+			err := tx.Select("filename,type").Where("tenant_id = ? AND client_id = ? AND id = ?", tenantID, assignment.ClientID, *assignment.FileID).First(&file).Error
 			if err != nil && err != gorm.ErrRecordNotFound {
 				return d, err
 			}
 			assignment.ScopeName = file.Filename
+			assignment.ScopeType = file.Type
 			if assignment.ScopeName == "" {
 				assignment.ScopeName = "Shared item"
 			}
 		} else {
+			assignment.ScopeType = "workspace"
 			var client models.Client
 			err := tx.Select("name").Where("tenant_id = ? AND id = ?", tenantID, assignment.ClientID).First(&client).Error
 			if err != nil && err != gorm.ErrRecordNotFound {
