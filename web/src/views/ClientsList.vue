@@ -98,7 +98,7 @@ watch(search, (value) => {
 });
 
 const showLinks = computed(() => authStore.user?.role === 'admin');
-const showUsers = computed(() => ['admin', 'manager'].includes(authStore.user?.role ?? ''));
+const showUsers = computed(() => authStore.canManageUsers);
 
 const handlePageChange = (event: PageState) => {
   void clientsStore.fetchClientPage(event.page + 1, event.rows, search.value);
@@ -187,6 +187,7 @@ function remove() {
     <div class="flex items-center justify-between mb-4">
       <h1 class="text-2xl font-bold">Clients</h1>
       <Button
+        v-if="showUsers"
         id="collect-new-client"
         @click="
           createLinkError = null;

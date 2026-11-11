@@ -12,6 +12,16 @@ export interface AccessCapabilities {
   can_upload: boolean;
   can_delete: boolean;
   can_share: boolean;
+  /**
+   * Nil is the pre-role compatibility contract. Role-backed capabilities carry
+   * independent sharing rights; never infer them from the summary CanShare bit.
+   */
+  sharing?: SharingPermissions;
+}
+export interface SharingPermissions {
+  invite_external: boolean;
+  create_links: boolean;
+  manage_access: boolean;
 }
 
 //////////
@@ -40,6 +50,7 @@ export interface AccessGroupMember {
  * Source fields identify migrated rows without replacing their original records.
  */
 export interface RoleAssignment {
+  scope_name?: string;
   id: string;
   tenant_id: string;
   role_id: string;
@@ -65,6 +76,7 @@ export interface RoleAssignment {
  */
 export interface AccessInvitation {
   id: string;
+  role_id?: string;
   tenant_id: string;
   client_id: string;
   file_id?: string;
@@ -103,6 +115,13 @@ export interface AccessProfile {
 // source: access_role.go
 
 /**
+ * AccessRoleCatalog records one-time seeding so deleting a default role never
+ * recreates it on the next visit to the sharing dropdown.
+ */
+export interface AccessRoleCatalog {
+  tenant_id: string;
+}
+/**
  * RolePermissions intentionally does not embed AccessCapabilities. Legacy
  * CanShare combines three different authorities and cannot represent this model.
  */
@@ -124,6 +143,7 @@ export interface AccessRole {
   name: string;
   description: string;
   template_key?: string;
+  legacy_sharing: boolean;
   audience: string;
   allow_workspace: boolean;
   allow_folder: boolean;
@@ -309,6 +329,7 @@ export interface InviteToken {
  */
 export interface ItemGrant {
   id: string;
+  role_id?: string;
   tenant_id: string;
   client_id: string;
   user_id: string;
@@ -533,6 +554,7 @@ export interface User {
   role: string;
   name: string;
   client_ids?: string[];
+  access_profile?: AccessProfile;
   invite_accepted: boolean;
   manager_full_access: boolean;
   created_at: string;
@@ -549,6 +571,7 @@ export interface UserClient {
   tenant_id: string;
   user_id: string;
   client_id: string;
+  role_id?: string;
   /**
    * Unset capabilities preserve legacy role-specific membership behavior.
    * An explicit all-false membership grants nothing, rather than legacy rights.

@@ -24,6 +24,16 @@ const xs = breakpoints.smaller('sm');
 
 const clientsStore = useClientsStore();
 const isAdmin = computed(() => useAuthStore().user?.role === 'admin');
+const internal = computed(
+  () =>
+    user.access_profile?.user_type === 'internal' ||
+    (!user.access_profile && ['admin', 'manager'].includes(user.role)),
+);
+const organizationLabel = computed(() =>
+  user.access_profile?.organization_role === 'administrator' || user.role === 'admin'
+    ? 'Administrator'
+    : 'Member',
+);
 
 const clientsById = computed(() => {
   const map = new Map<string, Client>();
@@ -33,7 +43,7 @@ const clientsById = computed(() => {
 
 function clientNames(user: User) {
   if (!user.client_ids || user.client_ids.length === 0) {
-    return '-';
+    return 'No direct workspaces';
   }
   return user.client_ids
     .map((clientId) => clientsById.value.get(clientId)?.name || `Client #${clientId}`)
@@ -123,7 +133,17 @@ const userActions = computed<MenuItem[]>(() => {
   <tr>
     <td class="px-4 py-2">{{ user.name || '-' }}</td>
     <td class="px-4 py-2">{{ user.email }}</td>
-    <td class="px-4 py-2 capitalize">{{ user.role }}</td>
+    <td class="px-4 py-2">
+      <span class="inline-flex rounded border border-surface px-2 py-1 text-xs">{{
+        internal ? 'Internal' : 'External'
+      }}</span>
+      <small v-if="internal" class="block mt-1 text-muted-color"
+        >{{ organizationLabel
+        }}<template v-if="organizationLabel === 'Member' && user.access_profile?.can_manage_users">
+          · legacy management</template
+        ></small
+      >
+    </td>
     <td class="px-4 py-2">
       <span
         class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset text-nowrap"
@@ -133,7 +153,12 @@ const userActions = computed<MenuItem[]>(() => {
       </span>
     </td>
     <td class="px-4 py-2">
-      <span v-if="user.role === 'manager' && user.manager_full_access"
+      <span
+        v-if="
+          user.role === 'admin' ||
+          user.access_profile?.all_workspaces ||
+          (user.role === 'manager' && user.manager_full_access)
+        "
         >All current and future clients</span
       >
       <span v-else-if="['manager', 'customer', 'client'].includes(user.role)">{{

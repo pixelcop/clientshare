@@ -10,7 +10,8 @@ import { defaultBrandingTitle, useBrandingStore } from '@/stores/branding';
 import { useCollectionStore } from '@/stores/collection';
 
 const { branding } = storeToRefs(useBrandingStore());
-const { user } = storeToRefs(useAuthStore());
+const auth = useAuthStore();
+const { user } = storeToRefs(auth);
 const route = useRoute();
 const collection = useCollectionStore();
 function guideNavigation() {
@@ -38,13 +39,20 @@ const menuItems = computed<MenuItem[]>(() => {
       to: '/activity',
       props: { active: route.path.startsWith('/activity') },
     });
-    items.push({
-      type: 'custom',
-      label: 'Users',
-      to: '/users',
-      props: { active: route.path.startsWith('/users') },
-    });
+    if (auth.canManageUsers)
+      items.push({
+        type: 'custom',
+        label: 'Users',
+        to: '/users',
+        props: { active: route.path.startsWith('/users') },
+      });
     if (role === 'admin') {
+      items.push({
+        type: 'custom',
+        label: 'Roles and groups',
+        to: '/settings/access',
+        props: { active: route.path === '/settings/access' },
+      });
       items.push({
         type: 'custom',
         label: 'Settings',

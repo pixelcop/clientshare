@@ -2,6 +2,14 @@
 import axios from 'axios';
 import { Button, Checkbox, Dialog, InputText, Select } from 'openvue';
 
+import type { TenantAccessRole } from '@/types/accessRoles';
+import {
+  applicableRole,
+  defaultAccessRole,
+  roleCapabilities,
+  roleSummary,
+  tenantRoleLabel,
+} from '@/types/accessRoles';
 import type { AccessCapabilities, AccessInvitation, SecureLink } from '@/types/models';
 import {
   describeCapabilities,
@@ -10,13 +18,9 @@ import {
   type SharingAccess,
   type SharingScope,
 } from '@/types/sharing';
-import {
-  sameCapabilities,
-  sharingRoleLabel,
-  sharingRoles,
-  withinCeiling,
-} from '@/types/sharingRoles';
+import { withinCeiling } from '@/types/sharingRoles';
 
+import ScopedGroupAccess from './ScopedGroupAccess.vue';
 import SharingExpiry from './SharingExpiry.vue';
 
 const { scope } = defineProps<{ scope: SharingScope }>();
@@ -42,11 +46,13 @@ const blank = (): AccessCapabilities => ({
 });
 const rights = ref<AccessCapabilities>(blank());
 const email = ref('');
+const recipientType = ref<'internal' | 'external'>('external');
 type DraftPerson = {
   id: string;
   requestKey: string;
   email: string;
   role: string;
+  userType: 'internal' | 'external';
   expiry: Date | null;
 };
 const drafts = ref<DraftPerson[]>([]);
@@ -70,39 +76,73 @@ const linkExpiry = ref<Date | null>(new Date(Date.now() + 7 * 86400000));
 const linkKey = ref(crypto.randomUUID());
 const result = ref<SecureLink | null>(null);
 const recipient = ref('');
+const memberEdits = ref<Record<string, string>>({});
+function memberRoles(person: MemberAccess) {
+  return catalog.value.filter(
+    (r) =>
+      (applicableRole(r, person.user_type || 'external', 'workspace') || r.id === person.role_id) &&
+      withinCeiling(roleCapabilities(r), view.value?.capabilities || blank()),
+  );
+}
+async function saveMember(person: MemberAccess) {
+  if (!memberEdits.value[person.user_id] || busy.value) {
+    return;
+  }
+  busy.value = true;
+  error.value = '';
+  try {
+    await axios.put(`${base.value}/members/${person.user_id}/role`, {
+      role_id: memberEdits.value[person.user_id],
+      expected_role_id: person.role_id || '',
+    });
+    status.value = 'Workspace role updated. Other access is unchanged.';
+    await load();
+  } catch (e) {
+    error.value = failure(e, 'Workspace role could not be updated.');
+  } finally {
+    busy.value = false;
+  }
+}
 const linkEmailKey = ref(crypto.randomUUID());
 const copied = ref(false);
 const resultHeading = ref<HTMLElement | null>(null);
 let version = 0;
 let disposed = false;
 const isFile = computed(() => scope.kind === 'item' && scope.itemType !== 'folder');
+const catalog = ref<TenantAccessRole[]>([]);
+const selectedRoleId = ref('');
+const roleLabel = (id?: string) => tenantRoleLabel(catalog.value, id);
+const canInvite = computed(() =>
+  view.value?.capabilities.sharing
+    ? view.value.capabilities.sharing.invite_external ||
+      view.value.capabilities.sharing.manage_access
+    : view.value?.capabilities.can_share,
+);
+const canCreateLinks = computed(
+  () => view.value?.capabilities.sharing?.create_links ?? view.value?.capabilities.can_share,
+);
 const roleOptions = computed(() => {
-  const roles = sharingRoles(isFile.value).filter((role) =>
-    withinCeiling(role.capabilities, view.value?.capabilities || blank()),
-  );
-  if (
-    editing.value &&
-    withinCeiling(rights.value, view.value?.capabilities || blank()) &&
-    !roles.some((role) => sameCapabilities(role.capabilities, rights.value))
-  ) {
-    return [
-      ...roles,
-      {
-        value: 'custom',
-        label: 'Custom access',
-        description: describeCapabilities(rights.value),
-        capabilities: rights.value,
-      },
-    ];
-  }
-  return roles;
+  const kind = editing.value?.recipient_user_type || recipientType.value;
+  const target = isFile.value ? 'file' : scope.kind === 'client' ? 'workspace' : 'folder';
+  return catalog.value
+    .filter(
+      (r) =>
+        (applicableRole(r, kind, target) || (r.id === editing.value?.role_id && r.archived_at)) &&
+        withinCeiling(roleCapabilities(r, isFile.value), view.value?.capabilities || blank()),
+    )
+    .map((r) => ({
+      value: r.id,
+      label: `${r.name}${r.archived_at ? ' (archived)' : ''}`,
+      description: roleSummary(r, isFile.value),
+      capabilities: roleCapabilities(r, isFile.value),
+    }));
 });
 const selectedRole = computed({
-  get: () =>
-    roleOptions.value.find((role) => sameCapabilities(role.capabilities, rights.value))?.value,
+  get: () => selectedRoleId.value,
   set: (value: string | undefined) => {
     const role = roleOptions.value.find((role) => role.value === value);
     if (role) {
+      selectedRoleId.value = role.value;
       rights.value = { ...role.capabilities };
     }
   },
@@ -110,6 +150,13 @@ const selectedRole = computed({
 const roleDescription = computed(
   () => roleOptions.value.find((role) => role.value === selectedRole.value)?.description,
 );
+watch(recipientType, () => {
+  selectedRoleId.value = defaultAccessRole(
+    catalog.value.filter((r) => roleOptions.value.some((o) => o.value === r.id)),
+  );
+  rights.value =
+    roleOptions.value.find((r) => r.value === selectedRoleId.value)?.capabilities || blank();
+});
 function active(item: { revoked_at?: string; expires_at?: string; accepted_at?: string }) {
   return (
     !item.revoked_at &&
@@ -186,6 +233,11 @@ function resetForm() {
   drafts.value = [];
   expiry.value = null;
   rights.value = { ...(roleOptions.value[0]?.capabilities || blank()) };
+  selectedRoleId.value = defaultAccessRole(
+    catalog.value.filter((r) => roleOptions.value.some((o) => o.value === r.id)),
+  );
+  const safe = roleOptions.value.find((r) => r.value === selectedRoleId.value);
+  rights.value = safe?.capabilities || blank();
 }
 async function addPerson() {
   if (!email.value.trim() || !selectedRole.value || busy.value) {
@@ -200,7 +252,8 @@ async function addPerson() {
     id: crypto.randomUUID(),
     requestKey: crypto.randomUUID(),
     email: address,
-    role: roleOptions.value[0]!.value,
+    userType: recipientType.value,
+    role: selectedRole.value,
     expiry: null,
   });
   email.value = '';
@@ -238,15 +291,36 @@ async function load() {
   links.value = [];
   error.value = '';
   try {
-    const [access, list] = await Promise.all([
+    const [access, roles] = await Promise.all([
       axios.get<SharingAccess>(`${base.value}/access`),
-      axios.get<SecureLink[]>(`${base.value}/links`),
+      axios.get<TenantAccessRole[]>('/api/access-roles'),
     ]);
     if (current !== version) {
       return;
     }
     view.value = access.data;
-    links.value = list.data;
+    catalog.value = roles.data;
+    const missing = [
+      ...(access.data.grants || []),
+      ...(access.data.invitations || []),
+      ...(access.data.people || []),
+      ...(access.data.additional_access || []),
+    ]
+      .map((g) => g.role_id)
+      .filter((id): id is string => !!id && !catalog.value.some((r) => r.id === id));
+    const preserved = await Promise.all(
+      [...new Set(missing)].map((id) => axios.get<TenantAccessRole>(`/api/access-roles/${id}`)),
+    );
+    if (current !== version) {
+      return;
+    }
+    catalog.value.push(...preserved.map((r) => r.data));
+    const canLinks =
+      access.data.capabilities.sharing?.create_links ?? access.data.capabilities.can_share;
+    links.value = canLinks ? (await axios.get<SecureLink[]>(`${base.value}/links`)).data : [];
+    if (current !== version) {
+      return;
+    }
     if (!editing.value && !drafts.value.length) {
       resetForm();
     }
@@ -326,7 +400,16 @@ async function sendPeople() {
       if (disposed || target !== key.value) {
         return;
       }
-      const role = roleOptions.value.find((option) => option.value === person.role);
+      const tenantRole = catalog.value.find(
+        (r) =>
+          r.id === person.role &&
+          applicableRole(
+            r,
+            person.userType,
+            isFile.value ? 'file' : scope.kind === 'client' ? 'workspace' : 'folder',
+          ),
+      );
+      const role = tenantRole ? { capabilities: roleCapabilities(tenantRole, isFile.value) } : null;
       if (!role || !view.value || !withinCeiling(role.capabilities, view.value.capabilities)) {
         throw new Error('Invalid role');
       }
@@ -334,6 +417,8 @@ async function sendPeople() {
         `${endpoint}/invitations`,
         {
           email: person.email,
+          user_type: person.userType,
+          role_id: person.role,
           capabilities: role.capabilities,
           expires_at: person.expiry?.toISOString() || null,
         },
@@ -383,6 +468,7 @@ async function savePerson() {
   try {
     const settings = {
       capabilities: { ...rights.value },
+      role_id: selectedRole.value,
       expires_at: expiry.value?.toISOString() || null,
     };
     await axios.patch(`${base.value}/grants/${editing.value.id}`, {
@@ -414,6 +500,7 @@ async function edit(grant: GrantAccess) {
   editTrigger.value = `${key.value}-grant-${grant.id}`;
   composing.value = true;
   editing.value = grant;
+  selectedRoleId.value = grant.role_id || '';
   email.value = grant.recipient_email;
   expiry.value = grant.expires_at ? new Date(grant.expires_at) : null;
   rights.value = {
@@ -421,19 +508,14 @@ async function edit(grant: GrantAccess) {
     can_upload: grant.can_upload,
     can_delete: grant.can_delete,
     can_share: grant.can_share,
+    sharing: grant.sharing,
   };
   await nextTick();
   document.getElementById(`${key.value}-role`)?.focus();
 }
 function canEdit(grant: GrantAccess) {
   const ceiling = view.value?.capabilities;
-  return (
-    ceiling &&
-    (!grant.can_read || ceiling.can_read) &&
-    (!grant.can_upload || ceiling.can_upload) &&
-    (!grant.can_delete || ceiling.can_delete) &&
-    (!grant.can_share || ceiling.can_share)
-  );
+  return ceiling && grant.can_manage !== false && withinCeiling(grant, ceiling);
 }
 async function createLink() {
   if (!linkExpiry.value) {
@@ -565,6 +647,14 @@ async function remove() {
     </div>
     <p v-if="status" role="status" class="delivery-status">{{ status }}</p>
     <template v-if="view && !loading">
+      <p v-if="view.inherits_client_access" class="inheritance-note">
+        Access also comes from the client workspace, including any workspace group assignments.
+        Removing access added here does not remove that inherited access.
+      </p>
+      <p v-if="view.inherits_folder_access" class="inheritance-note">
+        Access also comes from a containing folder. Change the assignment at that folder to remove
+        its inherited access.
+      </p>
       <div v-if="activeTab === 'people'">
         <div v-if="drafts.length" class="draft-people" aria-label="People to invite">
           <div v-for="person in drafts" :key="person.id" class="draft-person">
@@ -614,7 +704,46 @@ async function remove() {
             </div>
           </div>
         </div>
-        <form v-if="!editing" class="add-person" @submit.prevent="addPerson">
+        <form v-if="!editing && canInvite" class="add-person" @submit.prevent="addPerson">
+          <label
+            v-if="
+              !drafts.length &&
+              roleOptions.length &&
+              !defaultAccessRole(catalog.filter((r) => roleOptions.some((o) => o.value === r.id)))
+            "
+            class="grid gap-2 mb-3"
+            >Access role<Select
+              v-model="selectedRole"
+              :options="roleOptions"
+              optionLabel="label"
+              optionValue="value"
+              ariaLabel="Access role for new invitation"
+              placeholder="Choose the permissions to grant"
+              :disabled="busy"
+          /></label>
+          <div
+            v-if="
+              !drafts.length &&
+              (view.capabilities.sharing?.manage_access ?? view.capabilities.can_share)
+            "
+            class="grid gap-2 mb-3"
+          >
+            <label :id="`${key}-recipient-type-label`">Recipient type</label>
+            <Select
+              v-model="recipientType"
+              :ariaLabelledby="`${key}-recipient-type-label`"
+              :options="[
+                { label: 'External contact', value: 'external' },
+                { label: 'Existing internal team member', value: 'internal' },
+              ]"
+              optionLabel="label"
+              optionValue="value"
+              :disabled="busy"
+            />
+            <p v-if="recipientType === 'internal'" class="muted">
+              Use an existing team member’s email. Create new internal accounts from Users first.
+            </p>
+          </div>
           <div class="recipient-entry">
             <InputText
               :id="`${key}-email`"
@@ -720,6 +849,16 @@ async function remove() {
           </div>
         </form>
         <section v-if="!composing" aria-label="People with access" class="people-section">
+          <ScopedGroupAccess
+            :key="key"
+            :scope="scope"
+            :clientId="view.client_id || (scope.kind === 'client' ? scope.id : '')"
+            :roles="
+              catalog.filter((r) => withinCeiling(roleCapabilities(r, isFile), view!.capabilities))
+            "
+            :assignments="view.additional_access || []"
+            @changed="load"
+          />
           <h3>People with access</h3>
           <p
             v-if="!view.people?.length && !visibleGrants.length && !visibleInvitations.length"
@@ -737,8 +876,21 @@ async function remove() {
             </div>
             <div class="row-buttons">
               <span class="role-label" :title="describeCapabilities(person.capabilities)">{{
-                sharingRoleLabel(person.capabilities, isFile)
+                roleLabel(person.role_id)
               }}</span
+              ><template v-if="person.can_remove"
+                ><Select
+                  v-model="memberEdits[person.user_id]"
+                  :options="memberRoles(person)"
+                  optionLabel="name"
+                  optionValue="id"
+                  :ariaLabel="`Workspace role for ${person.email}`"
+                  :placeholder="roleLabel(person.role_id)"
+                  :disabled="busy" /><Button
+                  label="Save role"
+                  severity="secondary"
+                  :disabled="busy || !memberEdits[person.user_id]"
+                  @click="saveMember(person)" /></template
               ><Button
                 v-if="person.can_remove"
                 label="Remove"
@@ -763,9 +915,9 @@ async function remove() {
               <Button
                 v-if="canEdit(grant)"
                 :id="`${key}-grant-${grant.id}`"
-                :label="sharingRoleLabel(grant, isFile)"
+                :label="roleLabel(grant.role_id)"
                 :aria-label="`Change access for ${grant.recipient_email}`"
-                :aria-description="`Current role: ${sharingRoleLabel(grant, isFile)}`"
+                :aria-description="`Current role: ${roleLabel(grant.role_id)}`"
                 icon="oi oi-chevron-down"
                 iconPos="right"
                 severity="secondary"
@@ -773,7 +925,7 @@ async function remove() {
                 variant="text"
                 @click="edit(grant)"
               /><span v-else class="role-label" :title="describeCapabilities(grant)">{{
-                sharingRoleLabel(grant, isFile)
+                roleLabel(grant.role_id)
               }}</span>
             </div>
           </div>
@@ -790,7 +942,7 @@ async function remove() {
                         ? 'Awaiting acceptance'
                         : 'Expired'
                 }}
-                · {{ sharingRoleLabel(invitation, isFile)
+                · {{ roleLabel(invitation.role_id)
                 }}<template v-if="invitation.grant_expires_at">
                   · Access expires {{ date(invitation.grant_expires_at) }}</template
                 ></small
@@ -972,7 +1124,7 @@ async function remove() {
       </div>
       <div v-if="!composing" class="sharing-footer">
         <Button
-          v-if="activeTab === 'people'"
+          v-if="activeTab === 'people' && canCreateLinks"
           label="Sharing links"
           icon="oi oi-link"
           severity="secondary"

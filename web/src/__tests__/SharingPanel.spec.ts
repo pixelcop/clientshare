@@ -7,10 +7,40 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import SharingExpiry from '@/components/SharingExpiry.vue';
 import SharingPanel from '@/components/SharingPanel.vue';
 import type { AccessInvitation, SecureLink } from '@/types/models';
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ user: null }) }));
 
 const capabilities = { can_read: true, can_upload: false, can_delete: false, can_share: true };
 const scope = { kind: 'item' as const, id: 'file', name: 'Selected document', itemType: 'file' };
 const access = { capabilities, grants: [], invitations: [], links: [] };
+const role = (
+  id: string,
+  name: string,
+  read = true,
+  upload = false,
+  del = false,
+  share = false,
+) => ({
+  id,
+  name,
+  audience: 'both',
+  allow_workspace: true,
+  allow_folder: true,
+  allow_file: !upload,
+  can_read: read,
+  can_upload: upload,
+  can_delete: del,
+  can_invite_external: share,
+  can_create_links: share,
+  can_manage_access: share,
+  legacy_sharing: true,
+});
+const catalog = [
+  role('viewer', 'Viewer'),
+  role('uploader', 'Uploader', false, true),
+  role('contributor', 'Contributor', true, true),
+  role('file-manager', 'File manager', true, true, true),
+  role('client-contact', 'Client contact', true, true, false, true),
+];
 
 describe('exact-scope sharing panel', () => {
   beforeEach(() => {
@@ -36,7 +66,7 @@ describe('exact-scope sharing panel', () => {
       })),
     );
     vi.spyOn(axios, 'get').mockImplementation(async (url) => ({
-      data: String(url).endsWith('/access') ? access : [],
+      data: url === '/api/access-roles' ? catalog : String(url).endsWith('/access') ? access : [],
     }));
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
@@ -84,7 +114,8 @@ describe('exact-scope sharing panel', () => {
     },
   ])('only offers link history when it exists: $state', async ({ links, hasHistory }) => {
     vi.mocked(axios.get).mockImplementation(async (url) => ({
-      data: String(url).endsWith('/access') ? access : links,
+      data:
+        url === '/api/access-roles' ? catalog : String(url).endsWith('/access') ? access : links,
     }));
     const wrapper = mount(SharingPanel, { props: { scope }, global: { plugins: [OpenVue] } });
     await flushPromises();
@@ -205,6 +236,7 @@ describe('exact-scope sharing panel', () => {
       id: 'grant',
       user_id: 'recipient',
       version: 7,
+      role_id: 'viewer',
       recipient_email: 'recipient@example.test',
       can_read: true,
       can_upload: false,
@@ -212,9 +244,12 @@ describe('exact-scope sharing panel', () => {
       can_delete: false,
     };
     vi.mocked(axios.get).mockImplementation(async (url) => ({
-      data: String(url).endsWith('/access')
-        ? { ...access, inherits_client_access: true, grants: [grant] }
-        : [],
+      data:
+        url === '/api/access-roles'
+          ? catalog
+          : String(url).endsWith('/access')
+            ? { ...access, inherits_client_access: true, grants: [grant] }
+            : [],
     }));
     const patch = vi.spyOn(axios, 'patch').mockResolvedValue({ data: grant });
     const wrapper = mount(SharingPanel, { props: { scope }, global: { plugins: [OpenVue] } });
@@ -235,6 +270,7 @@ describe('exact-scope sharing panel', () => {
     expect(patch).toHaveBeenCalledExactlyOnceWith('/api/files/file/grants/grant', {
       version: 7,
       user_id: 'recipient',
+      role_id: 'viewer',
       capabilities: { can_read: true, can_upload: false, can_share: false, can_delete: false },
       expires_at: null,
     });
@@ -280,6 +316,7 @@ describe('exact-scope sharing panel', () => {
       id: 'custom',
       user_id: 'person',
       version: 3,
+      role_id: 'legacy-delete',
       recipient_email: 'custom@example.test',
       can_read: false,
       can_upload: false,
@@ -288,13 +325,21 @@ describe('exact-scope sharing panel', () => {
       expires_at: new Date(Date.now() + 86400000).toISOString(),
     };
     vi.mocked(axios.get).mockImplementation(async (url) => ({
-      data: String(url).endsWith('/access')
-        ? {
-            ...access,
-            capabilities: { can_read: true, can_upload: true, can_delete: true, can_share: true },
-            grants: [grant],
-          }
-        : [],
+      data:
+        url === '/api/access-roles'
+          ? [...catalog, role('legacy-delete', 'Legacy deletion', false, false, true)]
+          : String(url).endsWith('/access')
+            ? {
+                ...access,
+                capabilities: {
+                  can_read: true,
+                  can_upload: true,
+                  can_delete: true,
+                  can_share: true,
+                },
+                grants: [grant],
+              }
+            : [],
     }));
     const patch = vi.spyOn(axios, 'patch').mockResolvedValue({ data: grant });
     const wrapper = mount(SharingPanel, { props: { scope }, global: { plugins: [OpenVue] } });
@@ -303,7 +348,7 @@ describe('exact-scope sharing panel', () => {
     expect(wrapper.findComponent(SharingExpiry).props('modelValue')?.toISOString()).toBe(
       grant.expires_at,
     );
-    expect(wrapper.findAllComponents(Select)[0].props('modelValue')).toBe('custom');
+    expect(wrapper.findAllComponents(Select)[0].props('modelValue')).toBe('legacy-delete');
     await wrapper.get('.person-form').trigger('submit');
     await flushPromises();
     expect(patch.mock.calls[0][1]).toEqual(
@@ -318,15 +363,23 @@ describe('exact-scope sharing panel', () => {
 
   it('separates past invitations from current people and never offers standalone delete or share', async () => {
     vi.mocked(axios.get).mockImplementation(async (url) => ({
-      data: String(url).endsWith('/access')
-        ? {
-            ...access,
-            capabilities: { can_read: true, can_upload: true, can_delete: true, can_share: true },
-            invitations: [
-              { id: 'past', email: 'past@example.test', revoked_at: new Date().toISOString() },
-            ],
-          }
-        : [],
+      data:
+        url === '/api/access-roles'
+          ? catalog
+          : String(url).endsWith('/access')
+            ? {
+                ...access,
+                capabilities: {
+                  can_read: true,
+                  can_upload: true,
+                  can_delete: true,
+                  can_share: true,
+                },
+                invitations: [
+                  { id: 'past', email: 'past@example.test', revoked_at: new Date().toISOString() },
+                ],
+              }
+            : [],
     }));
     const wrapper = mount(SharingPanel, {
       props: { scope: { ...scope, itemType: 'folder' } },
@@ -342,8 +395,8 @@ describe('exact-scope sharing panel', () => {
       'Viewer',
       'Uploader',
       'Contributor',
-      'Editor',
-      'Manager',
+      'File manager',
+      'Client contact',
     ]);
     select.vm.$emit('update:modelValue', 'uploader');
     await flushPromises();

@@ -2,17 +2,27 @@ import axios from 'axios';
 import { defineStore } from 'pinia';
 
 import type { PaginatedResult, PaginationResponse, User } from '@/types/models';
+import type { WorkspaceAccessInput } from '@/types/accessRoles';
+
+export interface UserAccessPayload {
+  user_type?: 'internal' | 'external';
+  organization_role?: 'member' | 'administrator' | 'none';
+  all_workspaces?: boolean;
+  workspace_access?: WorkspaceAccessInput[];
+  group_ids?: string[];
+  can_manage_users?: boolean;
+}
 import { defaultPagination } from '@/types/util';
 
-export interface UserCreatePayload {
+export interface UserCreatePayload extends UserAccessPayload {
   email: string;
-  role: string;
+  role?: string;
   name: string;
   client_ids?: string[];
   manager_full_access?: boolean;
 }
 
-export interface UserUpdatePayload {
+export interface UserUpdatePayload extends UserAccessPayload {
   email?: string;
   password?: string;
   role?: string;

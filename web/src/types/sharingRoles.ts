@@ -58,12 +58,25 @@ export function sharingRoles(isFile: boolean): SharingRole[] {
 }
 
 export function sameCapabilities(a: AccessCapabilities, b: AccessCapabilities) {
-  return (Object.keys(a) as (keyof AccessCapabilities)[]).every((key) => a[key] === b[key]);
+  return withinCeiling(a, b) && withinCeiling(b, a);
 }
 
 export function withinCeiling(rights: AccessCapabilities, ceiling: AccessCapabilities) {
-  return (Object.keys(rights) as (keyof AccessCapabilities)[]).every(
-    (key) => !rights[key] || ceiling[key],
+  const sharing = (c: AccessCapabilities) =>
+    c.sharing || {
+      invite_external: c.can_share,
+      create_links: c.can_share,
+      manage_access: c.can_share,
+    };
+  const a = sharing(rights);
+  const b = sharing(ceiling);
+  return (
+    (!rights.can_read || ceiling.can_read) &&
+    (!rights.can_upload || ceiling.can_upload) &&
+    (!rights.can_delete || ceiling.can_delete) &&
+    (!a.invite_external || b.invite_external) &&
+    (!a.create_links || b.create_links) &&
+    (!a.manage_access || b.manage_access)
   );
 }
 

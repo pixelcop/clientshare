@@ -52,6 +52,11 @@ export const useAuthStore = defineStore('auth', () => {
   const token = ref<string | null>(null);
   const loading = ref(false);
   const error = ref<string | null>(null);
+  const canManageUsers = computed(
+    () =>
+      user.value?.role === 'admin' ||
+      (user.value?.role === 'manager' && user.value.access_profile?.can_manage_users !== false),
+  );
   const passkeyEnrollmentPrompt = ref(false);
 
   // Set token in axios headers
@@ -208,6 +213,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   return {
     user,
+    canManageUsers,
     token,
     loading,
     error,

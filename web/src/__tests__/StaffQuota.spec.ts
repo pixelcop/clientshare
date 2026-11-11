@@ -78,31 +78,62 @@ describe('staff invitation quota', () => {
           Dialog: { template: '<div><slot name="header" /><slot /></div>' },
           Button: { template: '<button><slot /></button>' },
           MultiSelect: true,
+          Select: {
+            props: ['modelValue', 'options', 'optionValue', 'inputId', 'disabled'],
+            emits: ['update:modelValue'],
+            template:
+              '<select :id="inputId" :value="modelValue" :disabled="disabled" @change="$emit(\'update:modelValue\', $event.target.value)"><option v-for="option in options" :key="option[optionValue]" :value="option[optionValue]">{{ option.label || option.name }}</option></select>',
+          },
         },
       },
     });
-    vi.mocked(axios.get).mockResolvedValue({ data: { staff_users: 2, max_users: 2 } });
+    vi.mocked(axios.get).mockImplementation(async (url) => {
+      if (url === '/api/access-roles')
+        return {
+          data: [
+            {
+              id: 'viewer',
+              template_key: 'viewer',
+              name: 'Viewer',
+              audience: 'both',
+              allow_workspace: true,
+              allow_folder: true,
+              allow_file: true,
+              can_read: true,
+            },
+          ],
+        };
+      if (url === '/api/access-groups') return { data: [] };
+      if (String(url).endsWith('/access-settings'))
+        return {
+          data: {
+            profile: {
+              user_type:
+                user?.role === 'manager' || user?.role === 'admin' ? 'internal' : 'external',
+              organization_role: user?.role === 'admin' ? 'administrator' : 'member',
+              all_workspaces: user?.manager_full_access || false,
+            },
+            workspaces: (user?.client_ids || []).map((id) => ({
+              client_id: id,
+              role_id: 'viewer',
+            })),
+            group_ids: [],
+          },
+        };
+      return { data: { staff_users: 2, max_users: 2 } };
+    });
     await wrapper.setProps({ show: true });
     await flushPromises();
     return wrapper;
   }
 
-  it('blocks staff before form entry but still permits customer invitations', async () => {
+  it('blocks staff submission but permits an external account without workspace access', async () => {
     const wrapper = await openModal();
-    expect(wrapper.find('input[type="email"]').exists()).toBe(false);
-    expect(wrapper.get('option[value="admin"]').attributes('disabled')).toBeDefined();
-    expect(wrapper.get('option[value="manager"]').attributes('disabled')).toBeDefined();
+    expect(wrapper.find('input[type="email"]').exists()).toBe(true);
     expect(wrapper.get('button[type="submit"]').attributes('disabled')).toBeDefined();
     await wrapper.get('form').trigger('submit');
     expect(wrapper.emitted('submit')).toBeUndefined();
-    await wrapper.get('select').setValue('client');
-    await wrapper.get('input[type="text"]').setValue('Customer');
-    await wrapper.get('input[type="email"]').setValue('customer@example.com');
-    // Client assignment is still required for customer invitations.
-    await wrapper.setProps({ defaultClientIds: ['client-1'] });
-    await wrapper.setProps({ show: false });
-    await wrapper.setProps({ defaultRole: 'client', show: true });
-    await flushPromises();
+    await wrapper.get('select[id$="-type"]').setValue('external');
     await wrapper.get('input[type="text"]').setValue('Customer');
     await wrapper.get('input[type="email"]').setValue('customer@example.com');
     await wrapper.get('form').trigger('submit');
@@ -110,8 +141,11 @@ describe('staff invitation quota', () => {
       {
         name: 'Customer',
         email: 'customer@example.com',
-        role: 'client',
-        client_ids: ['client-1'],
+        user_type: 'external',
+        organization_role: 'none',
+        all_workspaces: false,
+        workspace_access: [],
+        group_ids: [],
       },
     ]);
     wrapper.unmount();
@@ -127,7 +161,12 @@ describe('staff invitation quota', () => {
     await staff.get('form').trigger('submit');
     expect(staff.emitted('submit')).toHaveLength(1);
     expect(staff.emitted('submit')?.[0]).toEqual([
-      expect.objectContaining({ manager_full_access: false, client_ids: [] }),
+      expect.objectContaining({
+        user_type: 'internal',
+        organization_role: 'member',
+        all_workspaces: false,
+        workspace_access: [],
+      }),
     ]);
     staff.unmount();
     const customer = await openModal({
@@ -135,7 +174,8 @@ describe('staff invitation quota', () => {
       name: 'Customer',
       email: 'client@example.com',
     } as User);
-    await customer.get('select').setValue('admin');
+    await customer.get('select[id$="-type"]').setValue('internal');
+    await customer.get('select[id$="-organization"]').setValue('administrator');
     await customer.get('form').trigger('submit');
     expect(customer.emitted('submit')).toBeUndefined();
     customer.unmount();
@@ -152,7 +192,10 @@ describe('staff invitation quota', () => {
     expect(wrapper.findComponent(Checkbox).props('modelValue')).toBe(true);
     await wrapper.get('form').trigger('submit');
     expect(wrapper.emitted('submit')?.[0]).toEqual([
-      expect.objectContaining({ manager_full_access: true, client_ids: ['client-1'] }),
+      expect.objectContaining({
+        all_workspaces: true,
+        workspace_access: [{ client_id: 'client-1', role_id: 'viewer' }],
+      }),
     ]);
     wrapper.findComponent(Checkbox).vm.$emit('update:modelValue', false);
     await flushPromises();
@@ -163,9 +206,9 @@ describe('staff invitation quota', () => {
   it('offers managers only customer creation, never staff escalation', async () => {
     useAuthStore().user = { id: 'manager', role: 'manager' } as User;
     const wrapper = await openModal();
-    expect(wrapper.find('option[value="admin"]').exists()).toBe(false);
-    expect(wrapper.find('option[value="manager"]').exists()).toBe(false);
-    expect(wrapper.get('select').element.value).toBe('client');
+    expect(wrapper.find('option[value="internal"]').exists()).toBe(false);
+    expect(wrapper.find('select[id$="-organization"]').exists()).toBe(false);
+    expect(wrapper.get('select[id$="-type"]').element.value).toBe('external');
     expect(wrapper.find('input[type="email"]').exists()).toBe(true);
     wrapper.unmount();
   });
@@ -181,7 +224,7 @@ describe('staff invitation quota', () => {
       } as User);
       await wrapper.get('form').trigger('submit');
       expect(wrapper.emitted('submit')?.[0]).toEqual([
-        expect.objectContaining({ role: 'client', client_ids: [] }),
+        expect.objectContaining({ user_type: 'external', workspace_access: [] }),
       ]);
       wrapper.unmount();
     },
@@ -196,7 +239,8 @@ describe('staff invitation quota', () => {
     await wrapper.get('input[type="email"]').setValue('new@example.com');
     quota.usage = { staff_users: 2, max_users: 2 };
     await flushPromises();
-    expect(wrapper.find('input[type="email"]').exists()).toBe(false);
+    expect(wrapper.find('input[type="email"]').exists()).toBe(true);
+    expect(wrapper.get('button[type="submit"]').attributes('disabled')).toBeDefined();
     vi.mocked(axios.get).mockResolvedValue({ data: { staff_users: 2, max_users: 5 } });
     window.dispatchEvent(new Event('focus'));
     await flushPromises();

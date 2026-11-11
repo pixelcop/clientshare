@@ -48,7 +48,7 @@ const clientActions = computed<MenuItem[]>(() => [
     command: () => {
       showAccess.value = true;
     },
-    visible: showUsers || showLinks,
+    visible: client.capabilities?.can_share ?? (showUsers || showLinks),
   },
   {
     label: 'View Files',
@@ -59,13 +59,13 @@ const clientActions = computed<MenuItem[]>(() => [
     label: 'View Users',
     icon: 'oi oi-users',
     command: () => onClickUsers(),
-    visible: showUsers,
+    visible: showUsers && (client.can_manage ?? true),
   },
   {
     label: 'Add User',
     icon: 'oi oi-user-plus',
     command: () => onClickAddUser(),
-    visible: showUsers,
+    visible: showUsers && (client.can_manage ?? true),
   },
   {
     label: 'Links',

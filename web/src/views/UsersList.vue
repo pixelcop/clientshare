@@ -50,9 +50,10 @@ const inviteStatusOptions = [
   { label: 'Pending invite', value: 'pending' },
 ];
 const roleOptions = [
-  { label: 'All roles', value: '' },
-  { label: 'Admin', value: 'admin' },
-  { label: 'Manager', value: 'manager' },
+  { label: 'All people', value: '' },
+  { label: 'Internal', value: 'internal' },
+  { label: 'External', value: 'external' },
+  { label: 'Administrators', value: 'admin' },
 ];
 const selectedInviteStatus = ref('');
 const selectedRole = ref('');
@@ -262,12 +263,18 @@ function clearClientScope() {
             scopedClient
               ? 'Manage users assigned to this client.'
               : isAdmin
-                ? 'Manage admin, manager, and customer accounts.'
-                : 'Invite customers to your clients. To remove someone’s access, open Share in their client workspace.'
+                ? 'Manage internal team members and external contacts. Organization roles and document access are separate.'
+                : 'Invite external people to your clients. Manage their document access from Share in the client workspace.'
           }}
         </p>
       </div>
       <div class="flex items-center gap-2">
+        <Button
+          v-if="isAdmin"
+          label="Roles and groups"
+          severity="secondary"
+          @click="router.push('/settings/access')"
+        />
         <Button
           v-if="!scopedClientId"
           outlined
@@ -282,7 +289,7 @@ function clearClientScope() {
           View All Users
         </Button>
         <Button :disabled="resendingAllInvites || usersStore.loading" @click="showCreate = true">
-          New User
+          Add person
         </Button>
       </div>
     </div>
@@ -297,7 +304,7 @@ function clearClientScope() {
             v-model="search"
             type="text"
             fluid
-            placeholder="Search users by name, email, role, or client..."
+            placeholder="Search by name, email, or client workspace…"
             class="px-3 py-2 border rounded"
           />
         </div>
@@ -312,7 +319,7 @@ function clearClientScope() {
           />
         </div>
         <div v-if="isAdmin" class="w-full lg:w-56">
-          <label class="block text-sm font-medium text-muted-color mb-1">Role</label>
+          <label class="block text-sm font-medium text-muted-color mb-1">User type</label>
           <Select
             v-model="selectedRole"
             :options="roleOptions"
@@ -339,9 +346,9 @@ function clearClientScope() {
               <tr>
                 <th class="px-4 py-2 text-left">Name</th>
                 <th class="px-4 py-2 text-left">Email</th>
-                <th class="px-4 py-2 text-left">Role</th>
+                <th class="px-4 py-2 text-left">Type / organization role</th>
                 <th class="px-4 py-2 text-left">Invite Status</th>
-                <th class="px-4 py-2 text-left">Clients</th>
+                <th class="px-4 py-2 text-left">Direct workspace access</th>
                 <th class="px-4 py-2 text-left">Created</th>
                 <th class="px-4 py-2 text-left">Actions</th>
               </tr>
