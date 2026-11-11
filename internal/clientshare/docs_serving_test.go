@@ -39,7 +39,9 @@ func TestNewWebAppServesEmbeddedDocs(t *testing.T) {
 				require.Contains(t, string(body), "ClientShare")
 				require.Contains(t, string(body), "/docs/assets/")
 				if page == "/docs/files/upload.html" {
-					require.Contains(t, string(body), "/docs/screenshots/upload-and-files.png")
+					require.Contains(t, string(body), `id="upload-files"`)
+					require.Contains(t, string(body), `id="resolve-duplicate-names"`)
+					require.Contains(t, string(body), `href="./organize-folders.html"`)
 				}
 			}
 			docsFS, err := static.GetEmbeddedGuideFS(nil)
