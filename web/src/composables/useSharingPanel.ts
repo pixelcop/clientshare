@@ -522,6 +522,7 @@ export function useSharingPanel(getScope: () => SharingScope, close: () => void)
   watch(
     key,
     () => {
+      busy.value = false;
       resetForm();
       memberEdits.value = {};
       grantEdits.value = {};
@@ -765,9 +766,10 @@ export function useSharingPanel(getScope: () => SharingScope, close: () => void)
     }
   }
   async function createLink() {
-    if (!linkExpiry.value) {
+    if (busy.value || !linkExpiry.value) {
       return;
     }
+    const target = key.value;
     busy.value = true;
     error.value = '';
     status.value = '';
@@ -781,29 +783,38 @@ export function useSharingPanel(getScope: () => SharingScope, close: () => void)
         },
         { headers: { 'Idempotency-Key': linkKey.value } },
       );
+      if (disposed || target !== key.value) {
+        return;
+      }
       result.value = response.data;
+      links.value = [response.data, ...links.value.filter((link) => link.id !== response.data.id)];
       recipient.value = '';
       copied.value = false;
-      await load();
       await nextTick();
       resultHeading.value?.focus();
     } catch (e) {
-      error.value = failure(e, 'The link could not be created. Please try again.');
+      if (!disposed && target === key.value) {
+        error.value = failure(e, 'The link could not be created. Please try again.');
+      }
     } finally {
-      busy.value = false;
+      if (!disposed && target === key.value) {
+        busy.value = false;
+      }
     }
   }
   function createAnotherLink() {
     result.value = null;
     linkKey.value = crypto.randomUUID();
   }
-  function useLink(link: SecureLink) {
+  async function useLink(link: SecureLink) {
     result.value = link;
     recipient.value = '';
     linkEmailKey.value = crypto.randomUUID();
     copied.value = false;
     status.value = '';
     error.value = '';
+    await nextTick();
+    resultHeading.value?.focus();
   }
   async function copy(link: SecureLink) {
     try {

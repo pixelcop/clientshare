@@ -294,6 +294,78 @@ describe('exact-scope sharing panel', () => {
     wrapper.unmount();
   });
 
+  it('creates a link in place without reloading or remounting the links panel', async () => {
+    const link = {
+      id: 'created-link',
+      access_type: 'read',
+      link_url: 'https://portal.example.test/links/new',
+      expires_at: new Date(Date.now() + 86400000).toISOString(),
+    } as SecureLink;
+    const post = vi.spyOn(axios, 'post').mockResolvedValue({ data: link });
+    const wrapper = mount(SharingPanel, {
+      attachTo: document.body,
+      props: { scope },
+      global: { plugins: [OpenVue] },
+    });
+    await flushPromises();
+    await wrapper.get('[aria-label="Sharing links"]').trigger('click');
+    const backButton = wrapper.get('[aria-label="Back to sharing"]').element;
+    const requests = vi.mocked(axios.get).mock.calls.length;
+    await wrapper.get('.link-composer').trigger('submit');
+    await flushPromises();
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(axios.get).toHaveBeenCalledTimes(requests);
+    expect(wrapper.get('[aria-label="Back to sharing"]').element).toBe(backButton);
+    expect(wrapper.find('[role="status"]').text()).not.toContain('Loading');
+    expect(wrapper.findAll('.existing-links .access-row')).toHaveLength(1);
+    expect(document.activeElement?.textContent).toContain('Link ready');
+    expect(wrapper.find('[aria-label="Open recipient view"]').exists()).toBe(false);
+    await wrapper.get('.link-address button').trigger('click');
+    await flushPromises();
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(link.link_url);
+    expect(wrapper.get('.copy-status').text()).toBe('Link copied.');
+    wrapper.unmount();
+  });
+
+  it('selects an existing link for copying or email, focuses it, and shows recorded opens', async () => {
+    const links = [
+      {
+        id: 'used',
+        access_type: 'read',
+        link_url: 'https://portal.example.test/links/used',
+        last_accessed: '2026-01-05T12:00:00Z',
+      },
+      {
+        id: 'no-activity',
+        access_type: 'read',
+        link_url: 'https://portal.example.test/links/other',
+      },
+    ];
+    vi.mocked(axios.get).mockImplementation(async (url) => {
+      if (url === '/api/access-roles') return { data: catalog };
+      return { data: String(url).endsWith('/access') ? access : links };
+    });
+    const post = vi.spyOn(axios, 'post');
+    const wrapper = mount(SharingPanel, {
+      attachTo: document.body,
+      props: { scope },
+      global: { plugins: [OpenVue] },
+    });
+    await flushPromises();
+    await wrapper.get('[aria-label="Sharing links"]').trigger('click');
+    expect(wrapper.findAll('.link-usage')[0]!.text()).toContain('Last opened');
+    expect(wrapper.findAll('.link-usage')[1]!.text()).toBe('No recorded opens');
+    await wrapper.findAll('[aria-label="Copy or email"]')[0]!.trigger('click');
+    await flushPromises();
+    expect((wrapper.get('#item-file-url').element as HTMLInputElement).value).toBe(
+      links[0]!.link_url,
+    );
+    expect(document.activeElement?.textContent).toContain('Link ready');
+    expect(wrapper.get('[aria-label="Selected"]').attributes('disabled')).toBeDefined();
+    expect(post).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
   it('edits a direct grant with its concurrency version and explains remaining inheritance', async () => {
     const grant = {
       id: 'grant',

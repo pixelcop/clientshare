@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Button, Checkbox, InputText } from 'openvue';
+import { Button, Checkbox, InputGroup, InputText } from 'openvue';
 
 import AccessSelect from '@/components/AccessSelect.vue';
 import type { SharingPanelSession } from '@/composables/useSharingPanel';
@@ -35,6 +35,16 @@ const {
   emailLink,
   confirmRemove,
 } = session;
+
+function openedAt(value: string) {
+  return new Date(value).toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
 </script>
 
 <template>
@@ -86,7 +96,12 @@ const {
           :disabled="!linkMode || !linkExpiry"
         />
       </form>
-      <div v-if="result && active(result)" class="access-form" aria-label="Created link">
+      <div
+        v-if="result && active(result)"
+        :id="`${key}-link-details`"
+        class="access-form"
+        aria-label="Created link"
+      >
         <h4 :ref="(element) => (resultHeading = element as HTMLElement | null)" tabindex="-1">
           Link ready: {{ scope.name }}
         </h4>
@@ -96,30 +111,28 @@ const {
         </p>
         <p class="muted">Copy the link to share it yourself, or send it by email below.</p>
         <label :for="`${key}-url`">Link address</label>
-        <InputText :id="`${key}-url`" :modelValue="result.link_url" readonly fluid />
-        <div class="row-buttons">
+        <InputGroup class="link-address">
+          <InputText :id="`${key}-url`" :modelValue="result.link_url" readonly fluid />
           <Button
             :label="copied ? 'Copied' : 'Copy link'"
+            :icon="copied ? 'oi oi-check' : 'oi oi-copy'"
             :disabled="!result.link_url"
             @click="copy(result)"
           />
-          <Button
-            as="a"
-            :href="result.link_url"
-            target="_blank"
-            rel="noopener noreferrer"
-            label="Open recipient view"
-            severity="secondary"
-          />
-        </div>
-        <form class="access-form" @submit.prevent="emailLink">
+        </InputGroup>
+        <span class="copy-status" role="status">{{ copied ? 'Link copied.' : '' }}</span>
+        <form class="link-email-form" @submit.prevent="emailLink">
           <label :for="`${key}-link-email`">Email link to</label>
-          <InputText :id="`${key}-link-email`" v-model="recipient" type="email" required fluid />
-          <Button type="submit" label="Email link" :loading="busy" />
+          <InputGroup>
+            <InputText :id="`${key}-link-email`" v-model="recipient" type="email" required fluid />
+            <Button type="submit" label="Email link" severity="secondary" :loading="busy" />
+          </InputGroup>
         </form>
         <Button
           label="Create another link"
           severity="secondary"
+          variant="text"
+          class="create-another-link"
           :disabled="busy"
           @click="createAnotherLink"
         />
@@ -152,13 +165,19 @@ const {
                   ? `Expires ${date(link.expires_at)}`
                   : `Expired ${date(link.expires_at)}`
             }}</small>
+            <small class="link-usage">{{
+              link.last_accessed
+                ? `Last opened ${openedAt(link.last_accessed)}`
+                : 'No recorded opens'
+            }}</small>
           </div>
           <div class="row-buttons">
             <Button
               v-if="active(link) && link.link_url"
-              label="Use link"
+              :label="result?.id === link.id ? 'Selected' : 'Copy or email'"
               severity="secondary"
-              :disabled="busy"
+              :aria-controls="result?.id === link.id ? `${key}-link-details` : undefined"
+              :disabled="busy || result?.id === link.id"
               @click="useLink(link)"
             />
             <Button
@@ -170,6 +189,7 @@ const {
             />
           </div>
         </div>
+        <p class="muted link-history-note">No recorded opens doesn’t guarantee a link is unused.</p>
       </section>
       <router-link
         v-if="scope.kind === 'client' && view?.can_manage"
@@ -184,10 +204,44 @@ const {
 <style scoped src="@/assets/sharing-panel.css"></style>
 
 <style scoped>
+.link-address {
+  min-width: 0;
+}
+.link-address :deep(input) {
+  min-width: 0;
+  text-overflow: ellipsis;
+}
+.link-address :deep(.p-button) {
+  flex-shrink: 0;
+}
+.copy-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
 .access-form {
   display: grid;
   gap: 12px;
   margin-top: 20px;
+}
+.access-form > p {
+  margin: 0;
+}
+.link-email-form {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+.link-email-form :deep(input) {
+  min-width: 0;
+}
+.link-email-form :deep(.p-button) {
+  flex-shrink: 0;
+}
+.create-another-link {
+  justify-self: start;
 }
 .link-settings {
   display: grid;
