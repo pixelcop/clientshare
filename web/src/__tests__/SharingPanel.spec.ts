@@ -5,7 +5,9 @@ import Select from 'openvue/select';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import SharingExpiry from '@/components/SharingExpiry.vue';
+import SharingLinks from '@/components/SharingLinks.vue';
 import SharingPanel from '@/components/SharingPanel.vue';
+import SharingPeople from '@/components/SharingPeople.vue';
 import type { AccessInvitation, SecureLink } from '@/types/models';
 
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ user: null }) }));
@@ -99,14 +101,20 @@ describe('exact-scope sharing panel', () => {
   it('opens links separately without losing typed email, and resets for a new target', async () => {
     const wrapper = mount(SharingPanel, { props: { scope }, global: { plugins: [OpenVue] } });
     await flushPromises();
+    expect(wrapper.findComponent(SharingPeople).exists()).toBe(true);
+    expect(wrapper.findComponent(SharingLinks).exists()).toBe(false);
+    const requests = vi.mocked(axios.get).mock.calls.length;
     expect(wrapper.find('[role="tab"]').exists()).toBe(false);
     await wrapper.get('input#item-file-email').setValue('draft@example.test');
     await wrapper.get('[aria-label="Sharing links"]').trigger('click');
+    expect(wrapper.findComponent(SharingPeople).exists()).toBe(false);
+    expect(wrapper.findComponent(SharingLinks).exists()).toBe(true);
     expect(wrapper.find('#item-file-email').exists()).toBe(false);
     await wrapper.get('[aria-label="Back to sharing"]').trigger('click');
     expect((wrapper.get('input#item-file-email').element as HTMLInputElement).value).toBe(
       'draft@example.test',
     );
+    expect(axios.get).toHaveBeenCalledTimes(requests);
     await wrapper.get('[aria-label="Sharing links"]').trigger('click');
     await wrapper.setProps({
       scope: { kind: 'item', id: 'folder', name: 'Reports', itemType: 'folder' },
@@ -115,6 +123,39 @@ describe('exact-scope sharing panel', () => {
     expect(wrapper.find('[aria-label="Sharing links"]').exists()).toBe(true);
     expect((wrapper.get('input#item-folder-email').element as HTMLInputElement).value).toBe('');
     wrapper.unmount();
+  });
+
+  it('preserves link settings across child remounts without reloading access', async () => {
+    const wrapper = mount(SharingPanel, { props: { scope }, global: { plugins: [OpenVue] } });
+    await flushPromises();
+    const requests = vi.mocked(axios.get).mock.calls.length;
+    await wrapper.get('[aria-label="Sharing links"]').trigger('click');
+    const expiry = new Date(Date.now() + 14 * 86400000);
+    wrapper.findComponent(SharingExpiry).vm.$emit('update:modelValue', expiry);
+    await flushPromises();
+    await wrapper.get('[aria-label="Back to sharing"]').trigger('click');
+    await wrapper.get('[aria-label="Sharing links"]').trigger('click');
+    expect(wrapper.findComponent(SharingExpiry).props('modelValue')).toEqual(expiry);
+    expect(axios.get).toHaveBeenCalledTimes(requests);
+    wrapper.unmount();
+  });
+
+  it('keeps sharing sessions isolated between mounted panels', async () => {
+    const first = mount(SharingPanel, { props: { scope }, global: { plugins: [OpenVue] } });
+    const second = mount(SharingPanel, {
+      props: { scope: { ...scope, id: 'another-file' } },
+      global: { plugins: [OpenVue] },
+    });
+    await flushPromises();
+    await first.get('#item-file-email').setValue('draft@example.test');
+    await first.get('[aria-label="Sharing links"]').trigger('click');
+    expect(second.findComponent(SharingPeople).exists()).toBe(true);
+    expect((second.get('input[type="email"]').element as HTMLInputElement).value).toBe('');
+    second.vm.requestClose();
+    expect(second.emitted('close')).toHaveLength(1);
+    expect(first.emitted('close')).toBeUndefined();
+    first.unmount();
+    second.unmount();
   });
 
   it.each([

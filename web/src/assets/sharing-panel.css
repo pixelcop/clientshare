@@ -1,0 +1,53 @@
+/* Shared primitives; imported as scoped styles by each sharing panel. */
+.muted,
+small {
+  color: var(--p-text-muted-color);
+  line-height: 1.5;
+}
+strong,
+small {
+  display: block;
+}
+small {
+  font-size: 12px;
+  margin-top: 4px;
+}
+h3,
+h4 {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+h3 {
+  font-size: 18px;
+  margin-bottom: 12px;
+}
+h4 {
+  margin-bottom: 4px;
+}
+section {
+  min-width: 0;
+}
+.access-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+}
+.access-row > div:first-child {
+  flex: 1;
+  min-width: 160px;
+  overflow-wrap: anywhere;
+}
+.row-buttons,
+.history-toggle {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.history-toggle {
+  min-height: 44px;
+  margin-top: 12px;
+}
