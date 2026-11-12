@@ -1,6 +1,6 @@
 // Sharing mutations are sequential so partial saves remain retryable without replaying successes.
 /* eslint-disable no-await-in-loop, no-restricted-syntax */
-import { useMediaQuery } from '@vueuse/core';
+import { useIntervalFn, useMediaQuery, useTimestamp } from '@vueuse/core';
 import axios from 'axios';
 import { computed, nextTick, onBeforeUnmount, ref, toRef, watch } from 'vue';
 
@@ -47,6 +47,7 @@ type MobilePerson = Exclude<Removal, { kind: 'link' }>;
 // One session per panel: switching child panels must preserve drafts, edits and retry keys.
 export function useSharingPanel(getScope: () => SharingScope, close: () => void) {
   const scope = toRef(getScope);
+  const now = useTimestamp({ scheduler: (update) => useIntervalFn(update, 30_000) });
   const isFile = computed(() => scope.value.kind === 'item' && scope.value.itemType !== 'folder');
   const roleTarget = computed(() => {
     if (isFile.value) {
@@ -146,7 +147,7 @@ export function useSharingPanel(getScope: () => SharingScope, close: () => void)
     return (
       !item.revoked_at &&
       !item.accepted_at &&
-      (!item.expires_at || Date.parse(item.expires_at) > Date.now())
+      (!item.expires_at || Date.parse(item.expires_at) > now.value)
     );
   }
   const visibleGrants = computed<EditableGrant[]>(() =>
@@ -324,7 +325,38 @@ export function useSharingPanel(getScope: () => SharingScope, close: () => void)
   );
   const visibleInvitations = computed(() => (view.value?.invitations || []).filter(active));
   const hasLinkHistory = computed(() => links.value.some((link) => !active(link)));
-  const visibleLinks = computed(() => links.value.filter((link) => history.value || active(link)));
+  const visibleLinks = computed(() =>
+    links.value
+      .filter((link) => history.value || active(link))
+      .sort((left, right) => {
+        const activityOrder = Number(!active(left)) - Number(!active(right));
+        const creationOrder =
+          (Date.parse(right.created_at) || 0) - (Date.parse(left.created_at) || 0);
+        return activityOrder || creationOrder || right.id.localeCompare(left.id);
+      }),
+  );
+  const relativeTime = new Intl.RelativeTimeFormat('en', { numeric: 'always' });
+  function linkExpiryText(value?: string) {
+    if (!value) {
+      return 'No expiry';
+    }
+    const remaining = Date.parse(value) - now.value;
+    const distance = Math.abs(remaining);
+    if (distance < 60_000) {
+      return remaining > 0 ? 'Expires in less than a minute' : 'Expired less than a minute ago';
+    }
+    let unit: Intl.RelativeTimeFormatUnit = 'day';
+    let duration = 86_400_000;
+    if (distance < 3_600_000) {
+      unit = 'minute';
+      duration = 60_000;
+    } else if (distance < 86_400_000) {
+      unit = 'hour';
+      duration = 3_600_000;
+    }
+    const amount = Math.round(distance / duration) * Math.sign(remaining);
+    return `${remaining > 0 ? 'Expires' : 'Expired'} ${relativeTime.format(amount, unit)}`;
+  }
   const previewPeople = computed(() => {
     const people = [
       ...(view.value?.people || []).map((p) => ({ name: p.name || p.email, email: p.email })),
@@ -936,6 +968,7 @@ export function useSharingPanel(getScope: () => SharingScope, close: () => void)
     visibleInvitations,
     hasLinkHistory,
     visibleLinks,
+    linkExpiryText,
     previewPeople,
     mobilePersonDetails,
     mobileRoleLabel,

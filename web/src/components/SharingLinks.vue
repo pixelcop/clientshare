@@ -23,7 +23,7 @@ const {
   modes,
   hasLinkHistory,
   visibleLinks,
-  date,
+  linkExpiryText,
   linkMode,
   linkExpiry,
   result,
@@ -107,7 +107,10 @@ function openedAt(value: string) {
         </h4>
         <p class="muted">
           {{ modes.find((mode) => mode.value === result?.access_type)?.label }} ·
-          {{ scopeSummary }} · Expires {{ date(result.expires_at) }}
+          {{ scopeSummary }} ·
+          <span :title="new Date(result.expires_at).toLocaleString()">{{
+            linkExpiryText(result.expires_at)
+          }}</span>
         </p>
         <p class="muted">Copy the link to share it yourself, or send it by email below.</p>
         <label :for="`${key}-url`">Link address</label>
@@ -158,13 +161,10 @@ function openedAt(value: string) {
                   ? 'View, download & upload'
                   : 'View & download'
             }}</strong>
-            <small>{{
-              link.revoked_at
-                ? 'Revoked'
-                : active(link)
-                  ? `Expires ${date(link.expires_at)}`
-                  : `Expired ${date(link.expires_at)}`
-            }}</small>
+            <small
+              :title="link.expires_at ? new Date(link.expires_at).toLocaleString() : undefined"
+              >{{ link.revoked_at ? 'Revoked' : linkExpiryText(link.expires_at) }}</small
+            >
             <small class="link-usage">{{
               link.last_accessed
                 ? `Last opened ${openedAt(link.last_accessed)}`
@@ -174,7 +174,7 @@ function openedAt(value: string) {
           <div class="row-buttons">
             <Button
               v-if="active(link) && link.link_url"
-              :label="result?.id === link.id ? 'Selected' : 'Copy or email'"
+              :label="result?.id === link.id ? 'Selected' : 'Copy'"
               severity="secondary"
               :aria-controls="result?.id === link.id ? `${key}-link-details` : undefined"
               :disabled="busy || result?.id === link.id"
@@ -189,7 +189,6 @@ function openedAt(value: string) {
             />
           </div>
         </div>
-        <p class="muted link-history-note">No recorded opens doesn’t guarantee a link is unused.</p>
       </section>
       <router-link
         v-if="scope.kind === 'client' && view?.can_manage"

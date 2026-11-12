@@ -140,6 +140,87 @@ describe('exact-scope sharing panel', () => {
     wrapper.unmount();
   });
 
+  it('orders active links newest first, followed by inactive links newest first without a divider', async () => {
+    const links = [
+      { id: 'active-old', created_at: '2026-01-01T00:00:00Z' },
+      { id: 'revoked-new', created_at: '2026-06-01T00:00:00Z', revoked_at: '2026-07-01T00:00:00Z' },
+      { id: 'active-new', created_at: '2026-04-01T00:00:00Z' },
+      { id: 'expired-old', created_at: '2026-02-01T00:00:00Z', expires_at: '2000-01-01T00:00:00Z' },
+      { id: 'active-middle', created_at: '2026-03-01T00:00:00Z' },
+    ];
+    vi.mocked(axios.get).mockImplementation(async (url) => {
+      if (url === '/api/access-roles') return { data: catalog };
+      return { data: String(url).endsWith('/access') ? access : links };
+    });
+    const wrapper = mount(SharingPanel, { props: { scope }, global: { plugins: [OpenVue] } });
+    await flushPromises();
+    await wrapper.get('[aria-label="Sharing links"]').trigger('click');
+    const session = wrapper.findComponent(SharingLinks).props('session');
+    expect(session.visibleLinks.value.map((link) => link.id)).toEqual([
+      'active-new',
+      'active-middle',
+      'active-old',
+    ]);
+    await wrapper.get('#item-file-history').setValue(true);
+    expect(session.visibleLinks.value.map((link) => link.id)).toEqual([
+      'active-new',
+      'active-middle',
+      'active-old',
+      'revoked-new',
+      'expired-old',
+    ]);
+    expect(wrapper.findAll('.existing-links > .access-row')).toHaveLength(5);
+    expect(wrapper.text()).not.toContain('No recorded opens doesn’t guarantee');
+    await wrapper.get('#item-file-history').setValue(false);
+    expect(wrapper.findAll('.existing-links > .access-row')).toHaveLength(3);
+    wrapper.unmount();
+  });
+
+  it('formats expiry distance in minutes, hours and days and updates while open', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+    vi.setSystemTime(new Date('2026-01-01T12:00:00Z'));
+    const soon = new Date(Date.now() + 120_000).toISOString();
+    vi.mocked(axios.get).mockImplementation(async (url) => {
+      if (url === '/api/access-roles') return { data: catalog };
+      return {
+        data: String(url).endsWith('/access') ? access : [{ id: 'soon', expires_at: soon }],
+      };
+    });
+    const wrapper = mount(SharingPanel, { props: { scope }, global: { plugins: [OpenVue] } });
+    try {
+      await flushPromises();
+      await wrapper.get('[aria-label="Sharing links"]').trigger('click');
+      const { linkExpiryText } = wrapper.findComponent(SharingLinks).props('session');
+      expect(linkExpiryText(new Date(Date.now() + 7 * 86400000).toISOString())).toBe(
+        'Expires in 7 days',
+      );
+      expect(linkExpiryText(new Date(Date.now() + 2 * 3600000).toISOString())).toBe(
+        'Expires in 2 hours',
+      );
+      expect(linkExpiryText(new Date(Date.now() + 5 * 60000).toISOString())).toBe(
+        'Expires in 5 minutes',
+      );
+      expect(linkExpiryText(new Date(Date.now() + 30000).toISOString())).toBe(
+        'Expires in less than a minute',
+      );
+      expect(linkExpiryText(new Date(Date.now() - 2 * 3600000).toISOString())).toBe(
+        'Expired 2 hours ago',
+      );
+      expect(wrapper.get('.existing-links .access-row').text()).toContain('Expires in 2 minutes');
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(wrapper.get('.existing-links .access-row').text()).toContain('Expires in 1 minute');
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(wrapper.findAll('.existing-links .access-row')).toHaveLength(0);
+      await wrapper.get('#item-file-history').setValue(true);
+      expect(wrapper.get('.existing-links .access-row').text()).toContain(
+        'Expired less than a minute ago',
+      );
+    } finally {
+      wrapper.unmount();
+      vi.useRealTimers();
+    }
+  });
+
   it('keeps sharing sessions isolated between mounted panels', async () => {
     const first = mount(SharingPanel, { props: { scope }, global: { plugins: [OpenVue] } });
     const second = mount(SharingPanel, {
@@ -355,7 +436,7 @@ describe('exact-scope sharing panel', () => {
     await wrapper.get('[aria-label="Sharing links"]').trigger('click');
     expect(wrapper.findAll('.link-usage')[0]!.text()).toContain('Last opened');
     expect(wrapper.findAll('.link-usage')[1]!.text()).toBe('No recorded opens');
-    await wrapper.findAll('[aria-label="Copy or email"]')[0]!.trigger('click');
+    await wrapper.findAll('[aria-label="Copy"]')[0]!.trigger('click');
     await flushPromises();
     expect((wrapper.get('#item-file-url').element as HTMLInputElement).value).toBe(
       links[0]!.link_url,
