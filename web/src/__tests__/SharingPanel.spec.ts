@@ -161,6 +161,7 @@ describe('exact-scope sharing panel', () => {
       'active-middle',
       'active-old',
     ]);
+    await wrapper.findAll('[role="tab"]')[1]!.trigger('click');
     await wrapper.get('#item-file-history').setValue(true);
     expect(session.visibleLinks.value.map((link) => link.id)).toEqual([
       'active-new',
@@ -206,6 +207,7 @@ describe('exact-scope sharing panel', () => {
       expect(linkExpiryText(new Date(Date.now() - 2 * 3600000).toISOString())).toBe(
         'Expired 2 hours ago',
       );
+      await wrapper.findAll('[role="tab"]')[1]!.trigger('click');
       expect(wrapper.get('.existing-links .access-row').text()).toContain('Expires in 2 minutes');
       await vi.advanceTimersByTimeAsync(60_000);
       expect(wrapper.get('.existing-links .access-row').text()).toContain('Expires in 1 minute');
@@ -239,6 +241,44 @@ describe('exact-scope sharing panel', () => {
     second.unmount();
   });
 
+  it('separates creation and management, preserves their state, and puts sharing navigation in the footer', async () => {
+    vi.mocked(axios.get).mockImplementation(async (url) => {
+      if (url === '/api/access-roles') return { data: catalog };
+      return {
+        data: String(url).endsWith('/access')
+          ? access
+          : [{ id: 'expired', expires_at: '2000-01-01T00:00:00Z' }],
+      };
+    });
+    const wrapper = mount(SharingPanel, { props: { scope }, global: { plugins: [OpenVue] } });
+    await flushPromises();
+    const requests = vi.mocked(axios.get).mock.calls.length;
+    await wrapper.get('.sharing-footer [aria-label="Sharing links"]').trigger('click');
+    expect(wrapper.get('.sharing-footer [aria-label="Back to sharing"]').exists()).toBe(true);
+    expect(
+      wrapper.findComponent(SharingLinks).find('[aria-label="Back to sharing"]').exists(),
+    ).toBe(false);
+    expect(wrapper.find('.link-composer').exists()).toBe(true);
+    expect(wrapper.find('.existing-links').exists()).toBe(false);
+    const expiry = new Date(Date.now() + 14 * 86400000);
+    wrapper.findComponent(SharingExpiry).vm.$emit('update:modelValue', expiry);
+    await wrapper.findAll('[role="tab"]')[1]!.trigger('click');
+    expect(wrapper.find('.link-composer').exists()).toBe(false);
+    expect(wrapper.find('.existing-links').exists()).toBe(true);
+    await wrapper.get('#item-file-history').setValue(true);
+    await wrapper.findAll('[role="tab"]')[0]!.trigger('click');
+    expect(wrapper.findComponent(SharingExpiry).props('modelValue')).toEqual(expiry);
+    await wrapper.findAll('[role="tab"]')[1]!.trigger('click');
+    expect(wrapper.findAll('.existing-links .access-row')).toHaveLength(1);
+    await wrapper.get('.sharing-footer [aria-label="Back to sharing"]').trigger('click');
+    expect(wrapper.findComponent(SharingPeople).exists()).toBe(true);
+    await wrapper.get('.sharing-footer [aria-label="Sharing links"]').trigger('click');
+    expect(wrapper.findAll('[role="tab"]')[1]!.attributes('aria-selected')).toBe('true');
+    expect(wrapper.findAll('.existing-links .access-row')).toHaveLength(1);
+    expect(axios.get).toHaveBeenCalledTimes(requests);
+    wrapper.unmount();
+  });
+
   it.each([
     { state: 'empty', links: [], hasHistory: false },
     { state: 'active only', links: [{ id: 'active' }], hasHistory: false },
@@ -264,14 +304,17 @@ describe('exact-scope sharing panel', () => {
     const wrapper = mount(SharingPanel, { props: { scope }, global: { plugins: [OpenVue] } });
     await flushPromises();
     await wrapper.get('[aria-label="Sharing links"]').trigger('click');
-    expect(wrapper.find('[aria-label="Existing links"]').exists()).toBe(links.length > 0);
+    expect(wrapper.findComponent(SharingExpiry).props('compact')).toBe(false);
+    expect(wrapper.findComponent(SharingExpiry).props('label')).toBe('Link expiry');
+    expect(wrapper.get('.link-settings').text()).toContain('Link expiry');
+    expect(wrapper.find('[aria-label="Existing links"]').exists()).toBe(false);
+    await wrapper.findAll('[role="tab"]')[1]!.trigger('click');
+    expect(wrapper.find('[aria-label="Existing links"]').exists()).toBe(true);
     expect(wrapper.find('#item-file-history').exists()).toBe(hasHistory);
     expect(wrapper.findAll('.existing-links .access-row')).toHaveLength(
       links.filter((link) => link.id === 'active').length,
     );
-    expect(wrapper.findComponent(SharingExpiry).props('compact')).toBe(false);
-    expect(wrapper.findComponent(SharingExpiry).props('label')).toBe('Link expiry');
-    expect(wrapper.get('.link-settings').text()).toContain('Link expiry');
+    expect(wrapper.find('.link-settings').exists()).toBe(false);
     if (hasHistory) {
       await wrapper.get('#item-file-history').setValue(true);
       expect(wrapper.findAll('.existing-links .access-row')).toHaveLength(links.length);
@@ -398,17 +441,20 @@ describe('exact-scope sharing panel', () => {
     expect(axios.get).toHaveBeenCalledTimes(requests);
     expect(wrapper.get('[aria-label="Back to sharing"]').element).toBe(backButton);
     expect(wrapper.find('[role="status"]').text()).not.toContain('Loading');
-    expect(wrapper.findAll('.existing-links .access-row')).toHaveLength(1);
+    expect(wrapper.findAll('.existing-links .access-row')).toHaveLength(0);
     expect(document.activeElement?.textContent).toContain('Link ready');
     expect(wrapper.find('[aria-label="Open recipient view"]').exists()).toBe(false);
     await wrapper.get('.link-address button').trigger('click');
     await flushPromises();
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith(link.link_url);
     expect(wrapper.get('.copy-status').text()).toBe('Link copied.');
+    await wrapper.findAll('[role="tab"]')[1]!.trigger('click');
+    expect(wrapper.findAll('.existing-links .access-row')).toHaveLength(1);
+    expect(wrapper.find('.link-address').exists()).toBe(false);
     wrapper.unmount();
   });
 
-  it('selects an existing link for copying or email, focuses it, and shows recorded opens', async () => {
+  it('copies an existing link directly without leaving management, and shows recorded opens', async () => {
     const links = [
       {
         id: 'used',
@@ -434,15 +480,15 @@ describe('exact-scope sharing panel', () => {
     });
     await flushPromises();
     await wrapper.get('[aria-label="Sharing links"]').trigger('click');
+    await wrapper.findAll('[role="tab"]')[1]!.trigger('click');
     expect(wrapper.findAll('.link-usage')[0]!.text()).toContain('Last opened');
     expect(wrapper.findAll('.link-usage')[1]!.text()).toBe('No recorded opens');
     await wrapper.findAll('[aria-label="Copy"]')[0]!.trigger('click');
     await flushPromises();
-    expect((wrapper.get('#item-file-url').element as HTMLInputElement).value).toBe(
-      links[0]!.link_url,
-    );
-    expect(document.activeElement?.textContent).toContain('Link ready');
-    expect(wrapper.get('[aria-label="Selected"]').attributes('disabled')).toBeDefined();
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(links[0]!.link_url);
+    expect(wrapper.get('[aria-label="Copied"]').exists()).toBe(true);
+    expect(wrapper.findAll('[role="tab"]')[1]!.attributes('aria-selected')).toBe('true');
+    expect(wrapper.find('#item-file-url').exists()).toBe(false);
     expect(post).not.toHaveBeenCalled();
     wrapper.unmount();
   });

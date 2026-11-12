@@ -1,5 +1,15 @@
 <script setup lang="ts">
-import { Button, Checkbox, InputGroup, InputText } from 'openvue';
+import {
+  Button,
+  Checkbox,
+  InputGroup,
+  InputText,
+  Tab,
+  TabList,
+  TabPanel,
+  TabPanels,
+  Tabs,
+} from 'openvue';
 
 import AccessSelect from '@/components/AccessSelect.vue';
 import type { SharingPanelSession } from '@/composables/useSharingPanel';
@@ -14,10 +24,10 @@ const {
   links,
   busy,
   history,
-  activeTab,
+  linkTab,
   scopeSummary,
-  isMobile,
   copied,
+  copiedLinkId,
   resultHeading,
   active,
   modes,
@@ -30,7 +40,6 @@ const {
   recipient,
   createLink,
   createAnotherLink,
-  useLink,
   copy,
   emailLink,
   confirmRemove,
@@ -49,160 +58,172 @@ function openedAt(value: string) {
 
 <template>
   <div>
-    <Button
-      v-if="!isMobile"
-      label="Back to sharing"
-      icon="oi oi-arrow-left"
-      severity="secondary"
-      variant="text"
-      :disabled="busy"
-      @click="activeTab = 'people'"
-    />
-    <section aria-label="Sharing links">
-      <form
-        v-if="!result && modes.length"
-        class="access-form link-composer"
-        @submit.prevent="createLink"
-      >
-        <h4>Create a link for {{ scope.name }}</h4>
-        <div class="link-settings">
-          <div class="link-setting">
-            <label :id="`${key}-mode-label`" :for="`${key}-mode`">Anyone with this link can</label>
-            <AccessSelect
-              v-model="linkMode"
-              :inputId="`${key}-mode`"
-              :ariaLabelledby="`${key}-mode-label`"
-              :options="modes"
-              optionLabel="label"
-              optionValue="value"
-              :disabled="busy"
-              fluid
-              class="link-role-select"
-            />
-          </div>
-          <div class="link-setting">
-            <span class="setting-label">Link expiry</span>
-            <SharingExpiry v-model="linkExpiry" :disabled="busy" label="Link expiry" required />
-          </div>
-        </div>
-        <p class="muted">
-          Anyone with the link can use it until it expires or you revoke it. Removing a person from
-          sharing won’t stop them using this link.
-        </p>
-        <Button
-          type="submit"
-          label="Create link"
-          :loading="busy"
-          :disabled="!linkMode || !linkExpiry"
-        />
-      </form>
-      <div
-        v-if="result && active(result)"
-        :id="`${key}-link-details`"
-        class="access-form"
-        aria-label="Created link"
-      >
-        <h4 :ref="(element) => (resultHeading = element as HTMLElement | null)" tabindex="-1">
-          Link ready: {{ scope.name }}
-        </h4>
-        <p class="muted">
-          {{ modes.find((mode) => mode.value === result?.access_type)?.label }} ·
-          {{ scopeSummary }} ·
-          <span :title="new Date(result.expires_at).toLocaleString()">{{
-            linkExpiryText(result.expires_at)
-          }}</span>
-        </p>
-        <p class="muted">Copy the link to share it yourself, or send it by email below.</p>
-        <label :for="`${key}-url`">Link address</label>
-        <InputGroup class="link-address">
-          <InputText :id="`${key}-url`" :modelValue="result.link_url" readonly fluid />
-          <Button
-            :label="copied ? 'Copied' : 'Copy link'"
-            :icon="copied ? 'oi oi-check' : 'oi oi-copy'"
-            :disabled="!result.link_url"
-            @click="copy(result)"
-          />
-        </InputGroup>
-        <span class="copy-status" role="status">{{ copied ? 'Link copied.' : '' }}</span>
-        <form class="link-email-form" @submit.prevent="emailLink">
-          <label :for="`${key}-link-email`">Email link to</label>
-          <InputGroup>
-            <InputText :id="`${key}-link-email`" v-model="recipient" type="email" required fluid />
-            <Button type="submit" label="Email link" severity="secondary" :loading="busy" />
-          </InputGroup>
-        </form>
-        <Button
-          label="Create another link"
-          severity="secondary"
-          variant="text"
-          class="create-another-link"
-          :disabled="busy"
-          @click="createAnotherLink"
-        />
-      </div>
-      <section v-if="links.length" class="existing-links" aria-label="Existing links">
-        <div class="links-heading">
-          <h4>Existing links</h4>
-          <label v-if="hasLinkHistory" class="history-toggle" :for="`${key}-history`">
-            <Checkbox v-model="history" binary :inputId="`${key}-history`" />
-            Show inactive links
-          </label>
-        </div>
-        <p v-if="history && hasLinkHistory" class="muted link-history-note">
-          Includes expired and revoked links. These links no longer work.
-        </p>
-        <p v-if="!visibleLinks.length" class="muted">No active links.</p>
-        <div v-for="link in visibleLinks" :key="link.id" class="access-row">
-          <div>
-            <strong>{{
-              link.access_type === 'write'
-                ? 'Upload only'
-                : link.access_type === 'readwrite'
-                  ? 'View, download & upload'
-                  : 'View & download'
-            }}</strong>
-            <small
-              :title="link.expires_at ? new Date(link.expires_at).toLocaleString() : undefined"
-              >{{ link.revoked_at ? 'Revoked' : linkExpiryText(link.expires_at) }}</small
-            >
-            <small class="link-usage">{{
-              link.last_accessed
-                ? `Last opened ${openedAt(link.last_accessed)}`
-                : 'No recorded opens'
-            }}</small>
-          </div>
-          <div class="row-buttons">
+    <Tabs v-model:value="linkTab" lazy class="sharing-link-tabs">
+      <TabList :pt="{ tabList: { 'aria-label': 'Link sharing views' } }">
+        <Tab value="create" :disabled="busy">Create a link</Tab>
+        <Tab value="manage" :disabled="busy">Manage links</Tab>
+      </TabList>
+      <TabPanels class="link-tab-panels">
+        <TabPanel value="create">
+          <form
+            v-if="!result && modes.length"
+            class="access-form link-composer"
+            @submit.prevent="createLink"
+          >
+            <h4>Create a link for {{ scope.name }}</h4>
+            <div class="link-settings">
+              <div class="link-setting">
+                <label :id="`${key}-mode-label`" :for="`${key}-mode`"
+                  >Anyone with this link can</label
+                >
+                <AccessSelect
+                  v-model="linkMode"
+                  :inputId="`${key}-mode`"
+                  :ariaLabelledby="`${key}-mode-label`"
+                  :options="modes"
+                  optionLabel="label"
+                  optionValue="value"
+                  :disabled="busy"
+                  fluid
+                  class="link-role-select"
+                />
+              </div>
+              <div class="link-setting">
+                <span class="setting-label">Link expiry</span>
+                <SharingExpiry v-model="linkExpiry" :disabled="busy" label="Link expiry" required />
+              </div>
+            </div>
+            <p class="muted">
+              Anyone with the link can use it until it expires or you revoke it. Removing a person
+              from sharing won’t stop them using this link.
+            </p>
             <Button
-              v-if="active(link) && link.link_url"
-              :label="result?.id === link.id ? 'Selected' : 'Copy'"
-              severity="secondary"
-              :aria-controls="result?.id === link.id ? `${key}-link-details` : undefined"
-              :disabled="busy || result?.id === link.id"
-              @click="useLink(link)"
+              type="submit"
+              label="Create link"
+              :loading="busy"
+              :disabled="!linkMode || !linkExpiry"
             />
+          </form>
+          <div
+            v-if="result && active(result)"
+            :id="`${key}-link-details`"
+            class="access-form"
+            aria-label="Created link"
+          >
+            <h4 :ref="(element) => (resultHeading = element as HTMLElement | null)" tabindex="-1">
+              Link ready: {{ scope.name }}
+            </h4>
+            <p class="muted">
+              {{ modes.find((mode) => mode.value === result?.access_type)?.label }} ·
+              {{ scopeSummary }} ·
+              <span :title="new Date(result.expires_at).toLocaleString()">{{
+                linkExpiryText(result.expires_at)
+              }}</span>
+            </p>
+            <p class="muted">Copy the link to share it yourself, or send it by email below.</p>
+            <label :for="`${key}-url`">Link address</label>
+            <InputGroup class="link-address">
+              <InputText :id="`${key}-url`" :modelValue="result.link_url" readonly fluid />
+              <Button
+                :label="copied ? 'Copied' : 'Copy link'"
+                :icon="copied ? 'oi oi-check' : 'oi oi-copy'"
+                :disabled="!result.link_url"
+                @click="copy(result)"
+              />
+            </InputGroup>
+            <form class="link-email-form" @submit.prevent="emailLink">
+              <label :for="`${key}-link-email`">Email link to</label>
+              <InputGroup>
+                <InputText
+                  :id="`${key}-link-email`"
+                  v-model="recipient"
+                  type="email"
+                  required
+                  fluid
+                />
+                <Button type="submit" label="Email link" severity="secondary" :loading="busy" />
+              </InputGroup>
+            </form>
             <Button
-              v-if="active(link)"
-              label="Revoke"
+              label="Create another link"
               severity="secondary"
+              variant="text"
+              class="create-another-link"
               :disabled="busy"
-              @click="confirmRemove({ kind: 'link', item: link })"
+              @click="createAnotherLink"
             />
           </div>
-        </div>
-      </section>
-      <router-link
-        v-if="scope.kind === 'client' && view?.can_manage"
-        :to="`/clients/${scope.id}/links`"
-        class="management-link"
-        >Manage links</router-link
-      >
-    </section>
+        </TabPanel>
+        <TabPanel value="manage">
+          <section class="existing-links" aria-label="Existing links">
+            <div class="links-heading">
+              <h4>Existing links</h4>
+              <label v-if="hasLinkHistory" class="history-toggle" :for="`${key}-history`">
+                <Checkbox v-model="history" binary :inputId="`${key}-history`" />
+                Show inactive links
+              </label>
+            </div>
+            <p v-if="history && hasLinkHistory" class="muted link-history-note">
+              Includes expired and revoked links. These links no longer work.
+            </p>
+            <p v-if="!links.length" class="muted">No links created yet.</p>
+            <p v-else-if="!visibleLinks.length" class="muted">No active links.</p>
+            <div v-for="link in visibleLinks" :key="link.id" class="access-row">
+              <div>
+                <strong>{{
+                  link.access_type === 'write'
+                    ? 'Upload only'
+                    : link.access_type === 'readwrite'
+                      ? 'View, download & upload'
+                      : 'View & download'
+                }}</strong>
+                <small
+                  :title="link.expires_at ? new Date(link.expires_at).toLocaleString() : undefined"
+                  >{{ link.revoked_at ? 'Revoked' : linkExpiryText(link.expires_at) }}</small
+                >
+                <small class="link-usage">{{
+                  link.last_accessed
+                    ? `Last opened ${openedAt(link.last_accessed)}`
+                    : 'No recorded opens'
+                }}</small>
+              </div>
+              <div class="row-buttons">
+                <Button
+                  v-if="active(link) && link.link_url"
+                  :label="copiedLinkId === link.id ? 'Copied' : 'Copy'"
+                  severity="secondary"
+                  :disabled="busy"
+                  @click="copy(link)"
+                />
+                <Button
+                  v-if="active(link)"
+                  label="Revoke"
+                  severity="secondary"
+                  :disabled="busy"
+                  @click="confirmRemove({ kind: 'link', item: link })"
+                />
+              </div>
+            </div>
+          </section>
+          <router-link
+            v-if="scope.kind === 'client' && view?.can_manage"
+            :to="`/clients/${scope.id}/links`"
+            class="management-link"
+            >Manage links</router-link
+          >
+        </TabPanel>
+      </TabPanels>
+    </Tabs>
+    <span class="copy-status" role="status">{{ copiedLinkId ? 'Link copied.' : '' }}</span>
   </div>
 </template>
 
 <style scoped src="@/assets/sharing-panel.css"></style>
 
 <style scoped>
+.link-tab-panels {
+  padding: 0;
+}
 .link-address {
   min-width: 0;
 }
@@ -277,9 +298,8 @@ function openedAt(value: string) {
   justify-self: end;
 }
 .existing-links {
-  margin-top: 24px;
+  margin-top: 0;
   padding-top: 16px;
-  border-top: 1px solid var(--p-content-border-color);
 }
 .links-heading {
   display: flex;

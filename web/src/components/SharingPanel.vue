@@ -91,6 +91,15 @@ defineExpose({ requestClose });
           variant="text"
           @click="activeTab = 'links'"
         />
+        <Button
+          v-else-if="activeTab === 'links'"
+          label="Back to sharing"
+          icon="oi oi-arrow-left"
+          severity="secondary"
+          variant="text"
+          :disabled="busy"
+          @click="mobileBack"
+        />
         <span v-else />
         <div class="footer-actions">
           <span v-if="pendingChanges" class="muted pending-label" role="status"

@@ -73,6 +73,8 @@ describe('client access entry', () => {
     ).toBe(false);
     if (people) {
       await wrapper.get('[aria-label="Sharing links"]').trigger('click');
+      expect(wrapper.findAll('a').some((link) => link.text() === 'Manage links')).toBe(false);
+      await wrapper.findAll('[role="tab"]')[1]!.trigger('click');
     }
     expect(
       wrapper.findAll('a').some((link) => link.text() === 'Manage links' && link.isVisible()),

@@ -68,6 +68,7 @@ export function useSharingPanel(getScope: () => SharingScope, close: () => void)
   const status = ref('');
   const history = ref(false);
   const activeTab = ref('people');
+  const linkTab = ref('create');
   watch(activeTab, () => {
     error.value = '';
     status.value = '';
@@ -244,7 +245,8 @@ export function useSharingPanel(getScope: () => SharingScope, close: () => void)
     }
   }
   const linkEmailKey = ref(crypto.randomUUID());
-  const copied = ref(false);
+  const copiedLinkId = ref<string | null>(null);
+  const copied = computed(() => !!result.value && copiedLinkId.value === result.value.id);
   const resultHeading = ref<HTMLElement | null>(null);
   let version = 0;
   let disposed = false;
@@ -570,6 +572,8 @@ export function useSharingPanel(getScope: () => SharingScope, close: () => void)
       linkKey.value = crypto.randomUUID();
       history.value = false;
       activeTab.value = 'people';
+      linkTab.value = 'create';
+      copiedLinkId.value = null;
       deliveryKeys.clear();
       void load();
     },
@@ -821,7 +825,7 @@ export function useSharingPanel(getScope: () => SharingScope, close: () => void)
       result.value = response.data;
       links.value = [response.data, ...links.value.filter((link) => link.id !== response.data.id)];
       recipient.value = '';
-      copied.value = false;
+      copiedLinkId.value = null;
       await nextTick();
       resultHeading.value?.focus();
     } catch (e) {
@@ -838,20 +842,10 @@ export function useSharingPanel(getScope: () => SharingScope, close: () => void)
     result.value = null;
     linkKey.value = crypto.randomUUID();
   }
-  async function useLink(link: SecureLink) {
-    result.value = link;
-    recipient.value = '';
-    linkEmailKey.value = crypto.randomUUID();
-    copied.value = false;
-    status.value = '';
-    error.value = '';
-    await nextTick();
-    resultHeading.value?.focus();
-  }
   async function copy(link: SecureLink) {
     try {
       await navigator.clipboard.writeText(link.link_url || '');
-      copied.value = true;
+      copiedLinkId.value = link.id;
     } catch {
       status.value = 'Could not copy. Select and copy the link address.';
     }
@@ -929,6 +923,7 @@ export function useSharingPanel(getScope: () => SharingScope, close: () => void)
     status,
     history,
     activeTab,
+    linkTab,
     email,
     drafts,
     scopeSummary,
@@ -953,6 +948,7 @@ export function useSharingPanel(getScope: () => SharingScope, close: () => void)
     setGrantRole,
     setMemberRole,
     copied,
+    copiedLinkId,
     resultHeading,
     isFile,
     catalog,
@@ -992,7 +988,6 @@ export function useSharingPanel(getScope: () => SharingScope, close: () => void)
     recipient,
     createLink,
     createAnotherLink,
-    useLink,
     copy,
     emailLink,
     removal,
