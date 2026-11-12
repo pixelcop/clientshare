@@ -69,14 +69,6 @@ const menuItems = computed<MenuItem[]>(() => {
       props: { active: route.path.startsWith('/activity') },
     });
   }
-  if (role !== 'link') {
-    items.push({
-      type: 'custom',
-      label: 'Shared with me',
-      to: '/shared-with-me',
-      props: { active: route.path.startsWith('/shared-with-me') },
-    });
-  }
   return items;
 });
 </script>
