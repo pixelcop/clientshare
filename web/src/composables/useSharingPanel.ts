@@ -125,6 +125,7 @@ export function useSharingPanel(getScope: () => SharingScope, close: () => void)
   const deliveryKeys = new Map<string, string>();
   const linkMode = ref('read');
   const linkExpiry = ref<Date | null>(new Date(Date.now() + 7 * 86400000));
+  const linkExpiryPreset = ref('7');
   const linkKey = ref(crypto.randomUUID());
   const result = ref<SecureLink | null>(null);
   const recipient = ref('');
@@ -569,6 +570,7 @@ export function useSharingPanel(getScope: () => SharingScope, close: () => void)
       status.value = '';
       linkMode.value = 'read';
       linkExpiry.value = new Date(Date.now() + 7 * 86400000);
+      linkExpiryPreset.value = '7';
       linkKey.value = crypto.randomUUID();
       history.value = false;
       activeTab.value = 'people';
@@ -984,6 +986,7 @@ export function useSharingPanel(getScope: () => SharingScope, close: () => void)
     canEdit,
     linkMode,
     linkExpiry,
+    linkExpiryPreset,
     result,
     recipient,
     createLink,

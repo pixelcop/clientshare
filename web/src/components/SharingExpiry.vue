@@ -8,12 +8,15 @@ const {
   required = false,
   compact = false,
   label = 'Expiry',
+  preset,
 } = defineProps<{
   disabled?: boolean;
   required?: boolean;
   compact?: boolean;
   label?: string;
+  preset?: string;
 }>();
+const emit = defineEmits<{ 'update:preset': [value: string] }>();
 const custom = ref(false);
 const draft = ref<Date | null>(null);
 const choice = ref(value.value ? '7' : 'none');
@@ -51,14 +54,19 @@ const zone = new Intl.DateTimeFormat(undefined, { timeZoneName: 'short' })
   .formatToParts(new Date())
   .find((part) => part.type === 'timeZoneName')?.value;
 watch(
-  value,
-  (next) => {
-    const preset =
+  [value, () => preset],
+  ([next, selectedPreset]) => {
+    // Composer presets are user choices, not distances to infer again after a remount.
+    if (selectedPreset) {
+      choice.value = next ? selectedPreset : 'none';
+      return;
+    }
+    const inferredPreset =
       next &&
       ['7', '30'].find(
         (days) => Math.abs(next.getTime() - Date.now() - Number(days) * 86400000) < 60000,
       );
-    choice.value = !next ? 'none' : preset || 'custom';
+    choice.value = !next ? 'none' : inferredPreset || 'custom';
   },
   { immediate: true },
 );
@@ -69,6 +77,7 @@ function select(next: string) {
     return;
   }
   choice.value = next;
+  emit('update:preset', next);
   value.value = next === 'none' ? null : new Date(Date.now() + Number(next) * 86400000);
 }
 function apply() {
@@ -79,6 +88,7 @@ function apply() {
   end.setHours(23, 59, 59, 999);
   value.value = end;
   choice.value = 'custom';
+  emit('update:preset', 'custom');
   custom.value = false;
 }
 </script>

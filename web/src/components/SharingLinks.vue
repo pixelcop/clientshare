@@ -36,6 +36,7 @@ const {
   linkExpiryText,
   linkMode,
   linkExpiry,
+  linkExpiryPreset,
   result,
   recipient,
   createLink,
@@ -103,7 +104,13 @@ function openedAt(value: string) {
               </div>
               <div class="link-setting">
                 <span class="setting-label">Link expiry</span>
-                <SharingExpiry v-model="linkExpiry" :disabled="busy" label="Link expiry" required />
+                <SharingExpiry
+                  v-model="linkExpiry"
+                  v-model:preset="linkExpiryPreset"
+                  :disabled="busy"
+                  label="Link expiry"
+                  required
+                />
               </div>
             </div>
             <p class="muted">

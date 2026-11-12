@@ -3,13 +3,13 @@ import Button from 'openvue/button';
 import DatePicker from 'openvue/datepicker';
 import Dialog from 'openvue/dialog';
 import Select from 'openvue/select';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import SharingExpiry from '@/components/SharingExpiry.vue';
 
-function control(modelValue: Date | null = null, required = false) {
+function control(modelValue: Date | null = null, required = false, preset?: string) {
   return mount(SharingExpiry, {
-    props: { modelValue, required },
+    props: { modelValue, required, preset },
     global: {
       stubs: {
         Select: {
@@ -62,6 +62,41 @@ describe('sharing expiry', () => {
     expect(wrapper.getComponent(Select).props('modelValue')).toBe('30');
     expect(wrapper.getComponent(Select).props('ariaLabel')).toBe('Expiry: Expires in 30 days');
     expect(wrapper.emitted('update:modelValue')).toBeUndefined();
+    wrapper.unmount();
+  });
+
+  it.each(['7', '30'])(
+    'keeps a chosen %s-day composer preset after time passes and the control remounts',
+    (preset) => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      try {
+        vi.setSystemTime(new Date('2026-11-12T12:00:00Z'));
+        const expiry = new Date(Date.now() + Number(preset) * 86400000);
+        const first = control(expiry, true, preset);
+        expect(first.getComponent(Select).props('modelValue')).toBe(preset);
+        first.unmount();
+        vi.setSystemTime(new Date('2026-11-12T14:00:00Z'));
+        const remounted = control(expiry, true, preset);
+        expect(remounted.getComponent(Select).props('modelValue')).toBe(preset);
+        expect(remounted.getComponent(Select).props('ariaLabel')).toBe(
+          `Expiry: Expires in ${preset} days`,
+        );
+        expect(remounted.emitted('update:modelValue')).toBeUndefined();
+        remounted.unmount();
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
+
+  it('reports the chosen preset without committing a cancelled custom selection', async () => {
+    const wrapper = control(new Date(Date.now() + 7 * 86400000), true, '7');
+    wrapper.getComponent(Select).vm.$emit('update:modelValue', '30');
+    await wrapper.vm.$nextTick();
+    expect(wrapper.emitted('update:preset')).toEqual([['30']]);
+    wrapper.getComponent(Select).vm.$emit('update:modelValue', 'custom');
+    await wrapper.vm.$nextTick();
+    expect(wrapper.emitted('update:preset')).toEqual([['30']]);
     wrapper.unmount();
   });
 

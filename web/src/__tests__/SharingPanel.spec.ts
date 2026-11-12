@@ -140,6 +140,40 @@ describe('exact-scope sharing panel', () => {
     wrapper.unmount();
   });
 
+  it.each(['7', '30'])(
+    'preserves the selected %s-day expiry option across delayed tab and panel remounts',
+    async (preset) => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-11-12T12:00:00Z'));
+      const wrapper = mount(SharingPanel, { props: { scope }, global: { plugins: [OpenVue] } });
+      try {
+        await flushPromises();
+        await wrapper.get('[aria-label="Sharing links"]').trigger('click');
+        wrapper
+          .findComponent(SharingExpiry)
+          .findComponent(Select)
+          .vm.$emit('update:modelValue', preset);
+        await flushPromises();
+        const expiry = wrapper.findComponent(SharingExpiry).props('modelValue');
+        vi.setSystemTime(new Date('2026-11-12T14:00:00Z'));
+        await wrapper.findAll('[role="tab"]')[1]!.trigger('click');
+        await wrapper.findAll('[role="tab"]')[0]!.trigger('click');
+        expect(wrapper.findComponent(SharingExpiry).findComponent(Select).props('modelValue')).toBe(
+          preset,
+        );
+        await wrapper.get('[aria-label="Back to sharing"]').trigger('click');
+        await wrapper.get('[aria-label="Sharing links"]').trigger('click');
+        expect(wrapper.findComponent(SharingExpiry).findComponent(Select).props('ariaLabel')).toBe(
+          `Link expiry: Expires in ${preset} days`,
+        );
+        expect(wrapper.findComponent(SharingExpiry).props('modelValue')).toEqual(expiry);
+      } finally {
+        wrapper.unmount();
+        vi.useRealTimers();
+      }
+    },
+  );
+
   it('orders active links newest first, followed by inactive links newest first without a divider', async () => {
     const links = [
       { id: 'active-old', created_at: '2026-01-01T00:00:00Z' },
