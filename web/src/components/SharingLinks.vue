@@ -45,6 +45,19 @@ const {
   confirmRemove,
 } = session;
 
+const emailExpanded = ref(!!recipient.value);
+watch(
+  () => result.value?.id,
+  () => {
+    emailExpanded.value = false;
+  },
+);
+async function revealEmail() {
+  emailExpanded.value = true;
+  await nextTick();
+  document.getElementById(`${key.value}-link-email`)?.focus();
+}
+
 function openedAt(value: string) {
   return new Date(value).toLocaleString(undefined, {
     month: 'short',
@@ -120,10 +133,14 @@ function openedAt(value: string) {
                 linkExpiryText(result.expires_at)
               }}</span>
             </p>
-            <p class="muted">Copy the link to share it yourself, or send it by email below.</p>
-            <label :for="`${key}-url`">Link address</label>
             <InputGroup class="link-address">
-              <InputText :id="`${key}-url`" :modelValue="result.link_url" readonly fluid />
+              <InputText
+                :id="`${key}-url`"
+                :modelValue="result.link_url"
+                aria-label="Link address"
+                readonly
+                fluid
+              />
               <Button
                 :label="copied ? 'Copied' : 'Copy link'"
                 :icon="copied ? 'oi oi-check' : 'oi oi-copy'"
@@ -131,27 +148,47 @@ function openedAt(value: string) {
                 @click="copy(result)"
               />
             </InputGroup>
-            <form class="link-email-form" @submit.prevent="emailLink">
-              <label :for="`${key}-link-email`">Email link to</label>
+            <form
+              v-if="emailExpanded"
+              :id="`${key}-email-form`"
+              class="link-email-form"
+              @submit.prevent="emailLink"
+            >
               <InputGroup>
                 <InputText
                   :id="`${key}-link-email`"
                   v-model="recipient"
+                  placeholder="Email link to"
+                  aria-label="Email link to"
+                  autocomplete="email"
                   type="email"
+                  :disabled="busy"
                   required
                   fluid
                 />
                 <Button type="submit" label="Email link" severity="secondary" :loading="busy" />
               </InputGroup>
             </form>
-            <Button
-              label="Create another link"
-              severity="secondary"
-              variant="text"
-              class="create-another-link"
-              :disabled="busy"
-              @click="createAnotherLink"
-            />
+            <div class="link-actions">
+              <Button
+                v-if="!emailExpanded"
+                label="Email link"
+                variant="link"
+                size="small"
+                class="email-link-toggle"
+                :aria-expanded="false"
+                :aria-controls="`${key}-email-form`"
+                :disabled="busy"
+                @click="revealEmail"
+              />
+              <Button
+                label="Create another link"
+                severity="secondary"
+                variant="text"
+                :disabled="busy"
+                @click="createAnotherLink"
+              />
+            </div>
           </div>
         </TabPanel>
         <TabPanel value="manage">
@@ -260,8 +297,14 @@ function openedAt(value: string) {
 .link-email-form :deep(.p-button) {
   flex-shrink: 0;
 }
-.create-another-link {
-  justify-self: start;
+.link-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+.email-link-toggle {
+  padding-inline: 0;
 }
 .link-settings {
   display: grid;

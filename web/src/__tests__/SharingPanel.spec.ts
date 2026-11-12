@@ -404,6 +404,12 @@ describe('exact-scope sharing panel', () => {
     await copy.trigger('click');
     await flushPromises();
     expect(navigator.clipboard.writeText).toHaveBeenCalledExactlyOnceWith(link.link_url);
+    expect(wrapper.find('input#item-file-link-email').exists()).toBe(false);
+    await wrapper.get('[aria-label="Email link"]').trigger('click');
+    expect(document.activeElement?.id).toBe('item-file-link-email');
+    expect(wrapper.get('input#item-file-link-email').attributes('placeholder')).toBe(
+      'Email link to',
+    );
     await wrapper.get('input#item-file-link-email').setValue('reader@example.test');
     const emailForm = wrapper.get('input#item-file-link-email').element.closest('form')!;
     emailForm.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
@@ -444,10 +450,20 @@ describe('exact-scope sharing panel', () => {
     expect(wrapper.findAll('.existing-links .access-row')).toHaveLength(0);
     expect(document.activeElement?.textContent).toContain('Link ready');
     expect(wrapper.find('[aria-label="Open recipient view"]').exists()).toBe(false);
+    expect(wrapper.find('.link-email-form').exists()).toBe(false);
+    expect(wrapper.findAll('label').some((label) => label.text() === 'Link address')).toBe(false);
+    expect(wrapper.get('#item-file-url').attributes('aria-label')).toBe('Link address');
+    expect(wrapper.text()).not.toContain('Copy the link to share it yourself');
     await wrapper.get('.link-address button').trigger('click');
     await flushPromises();
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith(link.link_url);
     expect(wrapper.get('.copy-status').text()).toBe('Link copied.');
+    await wrapper.get('[aria-label="Email link"]').trigger('click');
+    expect(wrapper.find('.link-email-form').exists()).toBe(true);
+    await wrapper.get('[aria-label="Create another link"]').trigger('click');
+    await wrapper.get('.link-composer').trigger('submit');
+    await flushPromises();
+    expect(wrapper.find('.link-email-form').exists()).toBe(false);
     await wrapper.findAll('[role="tab"]')[1]!.trigger('click');
     expect(wrapper.findAll('.existing-links .access-row')).toHaveLength(1);
     expect(wrapper.find('.link-address').exists()).toBe(false);
