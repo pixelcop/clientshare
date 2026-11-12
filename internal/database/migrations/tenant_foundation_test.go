@@ -182,9 +182,10 @@ func openPostgresMigrationTestDB(t *testing.T) (*sql.DB, dbpkg.DatabaseConfig) {
 	// Cache only the downloaded binary archive between cases/runs. Runtime and
 	// database directories remain isolated. Re-downloading for every migration
 	// fixture makes a complete release check vulnerable to Maven throttling.
-	cacheBase, err := os.UserCacheDir()
-	require.NoError(t, err)
-	cacheDir := filepath.Join(cacheBase, "clientshare", "test-postgres")
+	// UserCacheDir can resolve to /.cache in containers running as an
+	// unprivileged user with HOME set to /. Keep the shared binary cache under
+	// the writable temp directory instead.
+	cacheDir := filepath.Join(os.TempDir(), "clientshare", "test-postgres")
 
 	postgres := embeddedpostgres.NewDatabase(
 		embeddedpostgres.DefaultConfig().
