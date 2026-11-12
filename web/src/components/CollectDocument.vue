@@ -80,7 +80,7 @@ const nextAction = computed(() => {
     return {
       targets: [`collect-links-${clientId}`, 'collect-workspace-actions'],
       title: 'Share the client workspace',
-      body: 'Select Share workspace, then Sharing links and Manage links. On mobile, Share workspace is in the menu beside Upload.',
+      body: 'Select Share workspace, then Sharing links. Open the Manage links tab, then select the Manage links link below the list to open Client-wide links. On mobile, Share workspace is in the menu beside Upload.',
     };
   }
   if (links && workflow.step === 1) {
@@ -416,9 +416,10 @@ onBeforeUnmount(() => {
                       upload link.</Message
                     >
                     <p>
-                      At the client workspace root, select Share workspace, then Sharing links,
-                      Manage links and New link. On mobile, find Share workspace in the menu beside
-                      Upload.
+                      In Clients, open the client’s menu and select Links, then New link. Or select
+                      Share workspace at the workspace root, then Sharing links. Open the Manage
+                      links tab and select the Manage links link below the list to reach Client-wide
+                      links. On mobile, Share workspace is in the menu beside Upload.
                     </p>
                     <div class="collection-permission">
                       <i class="oi oi-lock" aria-hidden="true" />
@@ -431,8 +432,9 @@ onBeforeUnmount(() => {
                       </div>
                     </div>
                     <p>
-                      You can also open Links from the client’s menu in Clients and copy an existing
-                      active upload link from Client-wide links.
+                      Choose Collect uploads, check Upload only and the expiry, then create the
+                      link. This checklist tracks client-wide links, not file or folder links. You
+                      can also copy an existing active upload link from Client-wide links.
                     </p>
                   </template>
                   <template v-else-if="index === 2">
@@ -447,7 +449,10 @@ onBeforeUnmount(() => {
                       >View, download & upload lets recipients view and download files in this
                       workspace.</Message
                     >
-                    <span class="collection-fine-print">Copying a link does not send it.</span>
+                    <span class="collection-fine-print"
+                      >Copying a link does not send it. Anyone with it can upload until it expires
+                      or you revoke it; no account or access-role assignment is needed.</span
+                    >
                   </template>
                   <template v-else>
                     <Message
@@ -468,6 +473,10 @@ onBeforeUnmount(() => {
                     <p>
                       To check for uploads, open Clients and select the client’s name. Reload their
                       workspace to see new files.
+                    </p>
+                    <p>
+                      When collection is finished, revoke the link in Client-wide links if access is
+                      no longer needed. Removing a person’s account access does not revoke links.
                     </p>
                   </template>
                 </div>
