@@ -73,3 +73,35 @@ func TestFileLinksRejectUploadModesAndBearerActorsCannotCreateLinks(t *testing.T
 	_, err = service.LinkForDelivery(t.Context(), f.req("admin", "file", AccessShare), link.ID)
 	require.ErrorIs(t, err, gorm.ErrRecordNotFound)
 }
+
+func TestScopedLinkListIncludesOnlyRecordedOpensForItsTenantAndLinks(t *testing.T) {
+	f, service := sharingFixture(t)
+	require.NoError(t, f.db.AutoMigrate(&models.FileActivity{}))
+	service.LinkSigningKey = "test-link-signing-key"
+	req := f.req("admin", "folder", AccessShare)
+	used, err := service.CreateLink(t.Context(), req, LinkInput{AccessType: "read", ExpiryDays: 7}, "used")
+	require.NoError(t, err)
+	unused, err := service.CreateLink(t.Context(), req, LinkInput{AccessType: "read", ExpiryDays: 7}, "unused")
+	require.NoError(t, err)
+	earlier := accessTestNow.Add(-2 * time.Hour)
+	latest := accessTestNow.Add(-time.Hour)
+	for _, activity := range []models.FileActivity{
+		{TenantID: "tenant", ClientID: used.ClientID, SecureLinkID: &used.ID, Action: "view_link", CreatedAt: earlier},
+		{TenantID: "tenant", ClientID: used.ClientID, SecureLinkID: &used.ID, Action: "view_link", CreatedAt: latest},
+		{TenantID: "other-tenant", ClientID: used.ClientID, SecureLinkID: &used.ID, Action: "view_link", CreatedAt: accessTestNow},
+		{TenantID: "tenant", ClientID: unused.ClientID, SecureLinkID: &unused.ID, Action: "email_link", CreatedAt: accessTestNow},
+	} {
+		require.NoError(t, f.db.Create(&activity).Error)
+	}
+	listed, err := service.LinksAtScope(t.Context(), req)
+	require.NoError(t, err)
+	require.Len(t, listed, 2)
+	for _, link := range listed {
+		if link.ID == used.ID {
+			require.NotNil(t, link.LastAccessed)
+			require.True(t, latest.Equal(*link.LastAccessed))
+		} else {
+			require.Nil(t, link.LastAccessed, "emailing a link is not opening it")
+		}
+	}
+}

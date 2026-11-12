@@ -14,6 +14,43 @@ import (
 var ErrLinkRequestConflict = errors.New("request key was already used with different link settings")
 var ErrScopedSharingUnavailable = errors.New("item sharing is not available until scoped enforcement is complete")
 
+// PopulateLinkOpens enriches management responses from recorded opens, including
+// older activity that predates usage display. A nil timestamp means no recorded
+// open, not proof that the link has never been used. No bearer response uses this.
+func PopulateLinkOpens(ctx context.Context, db *gorm.DB, tenantID string, links []models.SecureLink) error {
+	if len(links) == 0 {
+		return nil
+	}
+	byID := make(map[string]*models.SecureLink, len(links))
+	ids := make([]string, 0, len(links))
+	for i := range links {
+		byID[links[i].ID] = &links[i]
+		ids = append(ids, links[i].ID)
+	}
+	latest := db.WithContext(ctx).Model(&models.FileActivity{}).
+		Select("secure_link_id, MAX(created_at)").
+		Where("tenant_id = ? AND secure_link_id IN ? AND action = ?", tenantID, ids, "view_link").
+		Group("secure_link_id")
+	// Select the original timestamp column so database drivers retain its time type.
+	var activity []models.FileActivity
+	if err := db.WithContext(ctx).Select("secure_link_id, created_at").
+		Where("tenant_id = ? AND action = ? AND (secure_link_id, created_at) IN (?)", tenantID, "view_link", latest).
+		Find(&activity).Error; err != nil {
+		return err
+	}
+	for _, event := range activity {
+		if event.SecureLinkID == nil {
+			continue
+		}
+		link := byID[*event.SecureLinkID]
+		if link != nil && (link.LastAccessed == nil || event.CreatedAt.After(*link.LastAccessed)) {
+			opened := event.CreatedAt
+			link.LastAccessed = &opened
+		}
+	}
+	return nil
+}
+
 // PersistClientLinkForActor preserves legacy request keys/fingerprints while
 // applying the same transactional permission ceiling as scoped creation.
 func (s *SharingService) PersistClientLinkForActor(ctx context.Context, req AccessRequest, link *models.SecureLink) error {

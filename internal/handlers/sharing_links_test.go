@@ -41,6 +41,9 @@ func TestPublicScopedLinkLandingAndInspectionRedactPrivateContext(t *testing.T) 
 			}
 			require.Contains(t, string(body), redirect)
 			require.NotContains(t, string(body), env.rootFolder.ID)
+			var recorded []models.FileActivity
+			require.NoError(t, env.db.Where("secure_link_id = ? AND action = ?", link.ID, "view_link").Find(&recorded).Error)
+			require.Len(t, recorded, 1, "successful browser landings record an open without requiring API inspection")
 			cookie := ""
 			for _, item := range resp.Cookies() {
 				if item.Name == "clientshare_session" {

@@ -133,6 +133,7 @@ func (h *LinkHandler) BootstrapLinkSession(c fiber.Ctx) error {
 		return err
 	}
 
+	logFileActivity(c.Context(), h.db, tenantID, link.ClientID, link.FileID, nil, &link.ID, "view_link", "")
 	page := fmt.Sprintf(
 		"<!doctype html><html><head><meta charset=\"utf-8\"><meta http-equiv=\"cache-control\" content=\"no-store\"></head><body>"+
 			"<script>"+
@@ -407,6 +408,9 @@ func (h *LinkHandler) ListSecureLinks(c fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
 	baseURL := tenantBaseURLFromCtx(c, h.baseURL)
+	if err := services.PopulateLinkOpens(c.Context(), h.db, tenantID, linksList); err != nil {
+		return fiber.NewError(500, "Link activity could not be loaded")
+	}
 	for index := range linksList {
 		caps := models.AccessCapabilities{CanRead: linksList[index].AccessType == "read" || linksList[index].AccessType == "view" || linksList[index].AccessType == "readwrite", CanUpload: linksList[index].AccessType == "write" || linksList[index].AccessType == "readwrite"}
 		if (caps.CanRead || caps.CanUpload) && decision.CanGrant(caps) && linksList[index].FileID == nil && linksList[index].RevokedAt == nil && linksList[index].ExpiresAt.After(time.Now()) {

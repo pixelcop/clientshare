@@ -153,6 +153,9 @@ func (s *SharingService) LinksAtScope(ctx context.Context, req AccessRequest) ([
 		if err := invitationTargetQuery(tx, req).Order("created_at DESC, id DESC").Find(&result).Error; err != nil {
 			return err
 		}
+		if err := PopulateLinkOpens(ctx, tx, req.TenantID, result); err != nil {
+			return err
+		}
 		for i := range result {
 			link := &result[i]
 			caps, valid := linkCapabilities(link.AccessType)
