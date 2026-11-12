@@ -1,6 +1,6 @@
 # Request documents from a client
 
-**Who:** People with permission to upload and share in the client or folder.
+**Who:** People with upload and create-sharing-links permissions in the client or folder.
 
 Use an **Upload only** secure link when you want a recipient to send documents without downloading material from the workspace.
 
@@ -10,14 +10,16 @@ Use an **Upload only** secure link when you want a recipient to send documents w
 2. Organize any destination folders you need.
 3. List the documents you want in your message, using names the recipient will recognize.
 
-For example, ask for a project brief, an asset inventory, and supporting images. Explain your deadline and which folder to use if needed.
+For example, ask for a project brief, an asset inventory, and supporting images.
+Explain your deadline. Upload-only recipients cannot browse existing folders;
+create a link to the destination folder rather than asking them to find it.
 
 ## Send an upload link
 
 1. Open **Share workspace** at the client workspace root for the entire client,
    or **Share folder** in the destination folder. Select **Sharing links**.
    On mobile, use the **Upload** menu to find the sharing action.
-2. Select **Upload only**.
+2. In **Create a link**, select **Upload only**.
 3. Set the expiry to cover the requested submission period.
 4. Create the link, then use **Copy link** or **Email link** to send it. Check the email status if sending from the portal.
 

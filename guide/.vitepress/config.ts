@@ -83,6 +83,7 @@ export default defineConfig({
         items: [
           { text: 'Customize branding', link: '/administration/branding' },
           { text: 'Portal settings', link: '/administration/settings' },
+          { text: 'Manage access roles', link: '/administration/access-roles' },
         ],
       },
       {

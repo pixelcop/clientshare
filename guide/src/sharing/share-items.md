@@ -16,6 +16,7 @@
    exact date and time, or open the clock menu to see it at the top.
 5. Select **Send invitation** and check the email status. If sending fails, expand
    **Pending** beside the invitation and use **Email invitation** to try again.
+   On mobile, open **Manage access** and select the pending recipient for these options.
 
 The recipient signs in with the invited email address, or follows the email to
 set up an account. After accepting, they can find the file or folder in
@@ -27,8 +28,12 @@ People may already have access through the client or a containing folder.
 Removing them here will not remove that access. Open the client's **Share** dialog or
 the containing folder's **Share** dialog to change it, if you have permission.
 
-Select the role beside a person to change their role or expiry, or choose
-**Remove access** in that view to end access added here. Shares they created for
+Select the role beside a person to change their role, or use the clock to change
+an item assignment's expiry. Choose **Remove access** to end access added here
+and confirm the removal. On mobile, open **Manage access**, select the person,
+then choose their role, expiry or **Remove access**. Select **Save** in the sharing
+dialog to apply role changes, expiry changes and removals. Closing without saving
+lets you discard these edits. Shares they created for
 other people keep working. Past invitations and removed access are kept in a
 collapsed section below the current people, when there are past entries.
 
@@ -44,22 +49,23 @@ collapsed section below the current people, when there are past entries.
 | Workspace manager | Document and access management; Internal only by default. |
 
 These are tenant-editable starting templates. Their names do not grant organization
-administration. Administrators manage them under **Roles and groups**. Only roles
+administration. Administrators manage them under **Settings → Access roles**. Only roles
 applicable to the recipient type, target scope and your permission ceiling appear.
 Uploader, Contributor and Client contact are not offered for individual files by
 default. New invitations select a view-only or upload-only role when available;
-otherwise choose permissions explicitly. Select **Existing internal team member**
-when sharing with your team; create new internal identities in **Users** first.
+otherwise choose permissions explicitly. To share with an existing Internal team
+member, enter their account email address. Create new Internal identities in
+**Users** first; sharing with a new address creates an External contact without
+changing an existing account's identity type or organization role.
 
 Existing combinations are preserved as named legacy roles during upgrade. Changing
 expiry retains the role; selecting another role explicitly replaces its permissions.
 An archived role keeps existing access but cannot be assigned to new recipients.
 Access inherited from elsewhere is not reduced by a direct role change.
 
-Administrators can assign an existing group at this scope from **Group and
-additional access**. Review the affected members before confirming. Removing a
-group here leaves that group's assignments in other workspaces/folders untouched.
-Individual group membership is managed in **Roles and groups** or the user editor.
+Group-management screens are not available in this release. Existing group and
+additional assignments still contribute access. Removing a direct assignment
+does not remove those other sources. See [Manage access roles](../administration/access-roles.md).
 
 ## Share a link
 
@@ -68,14 +74,13 @@ expiry, then select **Create link**. Use **Back to sharing** to return to people
 Anyone with the link can use it. File links allow viewing and downloading;
 folder links can also allow uploads. **Upload only** hides existing files and folders.
 
-Use **Copy link** to paste it into your own message, or enter an address under
-**Email link to** and select **Email link**. A waiting email has not been sent yet.
+Use **Copy link** to paste it into your own message. To send from the portal,
+select **Email link** to reveal **Email link to**, enter an address and select
+**Email link** beside it. A waiting email has not been sent yet.
 
-**Open recipient view** shows what the link allows. It asks before switching away
-from your signed-in account.
-
-Reopen a link with **Use link**, or choose **Revoke** to stop it working, even if
-someone already has it open. Under **Existing links**, **Show inactive links**
+Select the **Manage links** tab to copy an existing link or choose **Revoke** to
+stop it working, even if someone already has it open. Revocation takes effect on
+confirmation; it does not wait for **Save**. Under **Existing links**, **Show inactive links**
 appears when there are expired or revoked links to include.
 
 Inside a folder, **Share folder** shares that folder. To invite someone to the

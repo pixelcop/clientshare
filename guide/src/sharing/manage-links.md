@@ -10,8 +10,9 @@ of the dialog. On mobile, workspace and folder sharing are in the **Upload** men
 when uploads are available. Staff can also open **Links** from the client directory
 for the separate **Client-wide links** list; that list does not include item-only links.
 
-Choose **Use link** or **Details & email** to copy or email an existing link.
-Check its permissions and expiry before sending it.
+In the sharing dialog, select the **Manage links** tab and use **Copy** beside an
+active link. In **Client-wide links**, choose **Details & email** to copy or email
+an existing link. Check its permissions and expiry before sending it.
 
 Under **Existing links**, select **Show inactive links** to include expired and
 revoked links. This option appears only when there are inactive links.
@@ -27,7 +28,9 @@ if recorded. It does not tell you who read or approved the documents.
 1. Identify the link by its creation time, permissions and expiry.
 2. Select **Revoke**.
 3. Confirm that you want to stop the link working.
-4. Check the link history to confirm it is revoked.
+4. Include inactive links or open the link history to confirm it is revoked.
+
+Revocation takes effect on confirmation; it does not wait for **Save** in the sharing dialog.
 
 Revoking a link blocks further access through it, including uploads and downloads
 from an already-open tab. Other links and account access are unchanged. Emails

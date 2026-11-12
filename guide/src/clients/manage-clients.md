@@ -1,6 +1,9 @@
 # Create and manage clients
 
-**Who:** Administrators and managers can create clients. The directory's **Edit**, **Delete**, and **Links** actions are shown to administrators.
+**Who:** Administrators and migrated Internal Members with legacy organization
+management can create clients. The directory's **Edit**, **Delete**, and **Links**
+actions are shown to administrators. Document access roles alone do not grant
+client creation or organization management.
 
 A client is the workspace that holds an organization's or person's documents. Create the workspace before assigning users to it.
 
@@ -20,8 +23,9 @@ The client appears in **Client Directory** with its own root folder. If link cre
 
 Use **Search clients...** to narrow the directory. Use the page controls when the list spans multiple pages. Select the client name or **View Files** to open its files.
 
-The dropdown beside **View Files** contains **Share**, **View Users**, **Add User**,
-and, for administrators, **Links**, **Edit**, and **Delete**. **Share** opens access
+The dropdown beside **View Files** offers **Share** when you can share the
+workspace, **View Users** and **Add User** when you can manage people, and, for
+administrators, **Links**, **Edit**, and **Delete**. **Share** opens access
 to the entire workspace. Select **Sharing links** there to create a link, or add
 email addresses to invite named accounts.
 

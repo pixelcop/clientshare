@@ -1,6 +1,6 @@
 # Use passkeys
 
-**Who:** Signed-in administrators, managers, and client users.
+**Who:** Signed-in people with an account, not secure-link sessions.
 
 A passkey lets you sign in using your device's screen lock, fingerprint, or a security key. Your browser and device handle the verification prompt.
 

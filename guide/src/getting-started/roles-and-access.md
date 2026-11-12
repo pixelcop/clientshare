@@ -15,7 +15,7 @@
 ## What people can do
 
 Access roles belong to your organization. Administrators can create, rename and
-customize them under **Roles and groups**. Roles are assigned to a person or group
+customize them under **Settings → Access roles**. Roles are assigned to a person
 at a workspace, folder or file. The starting templates are:
 
 | Access role | Starting permissions |
@@ -33,9 +33,9 @@ manage access and delete documents are independent rights. You can grant only
 permissions you currently hold. Upload applies to folder/workspace contents,
 never to a single-file assignment.
 
-Groups contain people, not other groups. Every member receives the group's
-existing assignments, including future changes. Access adds across sources:
-removing a direct role does not remove access inherited from a group or folder.
+Access adds across sources: removing a direct role does not remove access
+inherited from a workspace, folder or an existing group assignment. Group
+management is not available in this release; existing group access still applies.
 
 Sharing a client includes all its files and folders. Sharing a folder includes
 everything inside it, including files added later. Sharing one file with someone
@@ -46,8 +46,8 @@ does not hide it from people who already have access to the client or folder.
 | View/download | People or links with view permission for those files |
 | Upload/create folders | People or links with upload permission for that folder |
 | Delete | Signed-in users with delete permission; links never allow deletion |
-| Share files/folders | Signed-in users with permission to share them |
-| Invite to the whole client | People with permission to share that client workspace |
+| Invite external people | Signed-in users with invite-external permission at that scope |
+| Create sharing links | Signed-in users with create-sharing-links permission at that scope |
 | Remove direct access | People with manage-access permission, or the inviter for their own invitations |
 | Change account details, user type or organization role | Administrators |
 | Change portal settings | Administrators |
@@ -81,11 +81,16 @@ authority remains an explicit setting, separate from individual scoped roles.
 
 Removing someone from a file may leave access they have through the client or
 another folder. Removing them from a client also removes their file and folder
-shares in that client and cancels their pending invitations.
-Group access remains until the person leaves the relevant group or the group's
-scope assignment is removed. Review **Group and additional access** as well.
+shares in that client and cancels their pending invitations. Confirm the removal,
+then select **Save** in the sharing dialog to apply it. Role and expiry edits in
+that dialog also require **Save**; sending an invitation is a separate action.
+Existing group or additional access may remain. If access persists after removal,
+ask the administrator to review all access sources.
 
 Shares they created for other people keep working. Links they already have also
 keep working unless you revoke them. The removal dialog offers a separate option
 to turn off every sharing link for the client. Files already downloaded cannot
 be recalled.
+
+For role creation, permission changes and replacement, see
+[Manage access roles](../administration/access-roles.md).

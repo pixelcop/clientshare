@@ -1,6 +1,7 @@
 # Your first client exchange
 
-**Who:** Administrators and managers with permission to share the client workspace.
+**Who:** Administrators, and migrated Internal Members with legacy organization
+management and permission to create sharing links for the workspace.
 
 This walkthrough takes a fictional client, **Willow Creek Holdings**, from an empty workspace to a two-way document exchange.
 
@@ -28,7 +29,7 @@ Try [previewing the file](../files/preview-and-download.md) before sharing it.
 1. Return to **Clients**.
 2. Open the client workspace root and select **Share workspace → Sharing links**.
    On mobile, find **Share workspace** in the menu beside **Upload**.
-3. Choose **View, download & upload** and an expiry. Check that you want to share the entire client.
+3. In **Create a link**, choose **View, download & upload** and an expiry. Check that you want to share the entire client.
 4. Create the link, then use **Copy link** or **Email link** to send it. Check the email status if you send it from the portal.
 
 The recipient can view, download, and upload within this client's workspace. For ongoing access through a named account, [invite a client user](../clients/manage-users.md) instead.
@@ -49,3 +50,15 @@ an [Upload only link](../sharing/request-documents.md).
 ## 5. Finish the exchange
 
 Once the exchange is complete, [revoke the link](../sharing/manage-links.md) if access is no longer needed. Revoking a link stops that link's access; it does not remove copies someone has already downloaded or remove their separate user account.
+
+## Try the in-app checklist
+
+Administrators can open **Help → Getting started: Collect a document** for guided
+steps in the app. It collects uploads using **Client-wide links**; file and folder
+links and named-account invitations are separate workflows. The checklist marks
+receipt when a file is uploaded through the chosen link, not for an unrelated
+staff upload. Copying the link does not send it, and an email queued for sending
+does not confirm delivery.
+
+Minimize the checklist to keep working, or dismiss it and resume from **Help**.
+**Restart checklist** resets only tutorial progress, not clients, files or links.

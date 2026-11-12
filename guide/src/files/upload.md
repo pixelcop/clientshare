@@ -9,7 +9,10 @@ including recipients of **Upload only** or **View, download & upload** links.
 2. Select **Upload** to choose files from your device, or drag files onto the file area.
 3. If offered, open the mail button and set **Email notifications** before uploading.
 4. Wait for the upload progress to complete.
-5. Check the file list for the uploaded filenames. With read access, open a preview or download to confirm the expected document.
+5. With view access, check the file list for the uploaded filenames and open a
+   preview or download to confirm the expected document. Upload-only access keeps
+   existing documents private; rely on upload completion and ask the sender to
+   confirm receipt if needed.
 
 Keep the page open until the transfer finishes. Selecting files alone does not mean they have reached the portal.
 

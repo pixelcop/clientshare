@@ -32,6 +32,7 @@ Use it with the server operator when diagnosing a problem. It is not an email-no
 
 - [Branding](./branding.md): title, logo, invitation text, and preview.
 - [Email notifications](../activity/email-notifications.md): pending messages, refresh, and send-now controls.
+- [Access roles](./access-roles.md): reusable document permissions, impact reviews, archiving and replacement.
 
 Server storage, database, email credentials, and deployment configuration are managed outside this screen. See the [self-hosting documentation](https://github.com/pixelcop/clientshare#configuration) for those topics.
 

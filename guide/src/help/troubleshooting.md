@@ -24,6 +24,8 @@ If you opened a secure link while using a staff account, sign in again to return
 
 - Check the current client and breadcrumb.
 - Ask staff to verify your client assignments.
+- Ask them to check the role's actual permissions, expiry and inherited or
+  additional access. Role names are editable and do not guarantee permissions.
 - Confirm whether you are signed in as a user or using a link session.
 - Check the link's access label: Read-only cannot upload, and Upload-only cannot download.
 - Ask whether the item has been deleted.
@@ -38,6 +40,10 @@ not in the **Client workspace** selector.
 Read the upload error and check which files are already in the list. Retry only missing files. Try a smaller batch and keep the page open until completion.
 
 For duplicate names, use the rename prompt to choose distinct filenames. For unsupported folder dragging, create folders in the portal and upload files separately. Storage and file-size errors may require help from the portal operator.
+
+Upload-only access hides existing names and folders. You cannot use the file
+list to check which documents arrived; wait for upload completion and ask the
+sender to confirm receipt before retrying uncertain transfers.
 
 ## A document does not preview or download
 

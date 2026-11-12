@@ -20,7 +20,7 @@ New users should first follow their [invitation email](../for-clients/accept-inv
 | **Activity** | Review unread and read activity notifications. |
 | **Users** | Invite people and manage their roles and client assignments. |
 | **Shared with me** | Open files and folders shared directly with your account. |
-| **Settings** | Administrators customize branding and portal settings. |
+| **Settings** | Administrators customize branding, portal settings and access roles. |
 | **User Guide** | Open this documentation. |
 
 Use the dropdown next to a row's main action to see additional actions. On narrow screens, buttons may display icons rather than full labels.
@@ -36,6 +36,11 @@ Open the user menu to access **Security** for your passkeys or to sign out. Sign
 
 ## If your screen looks different
 
-Your role controls which menus appear. Branding can change the title, colors, and logo. If a client or document is missing, ask the portal administrator to check your assignment rather than creating a second account.
+Your organization role and scoped document permissions control which menus
+appear. Internal Members do not automatically have client or user management.
+Administrators can start or resume **Collect a document** from **Help**.
+Branding can change the title, colors, and logo. If a client or document is
+missing, ask the portal administrator to check your assignment rather than
+creating a second account.
 
 See [Troubleshooting](../help/troubleshooting.md) for sign-in and access problems.

@@ -1,6 +1,6 @@
 # Create and send a secure link
 
-**Who:** People with permission to share the client, folder or file.
+**Who:** People with create-sharing-links permission for the client, folder or file.
 
 A secure link lets someone view files or upload documents without an account.
 Anyone with the link can use it, so check what it includes before sending.
@@ -11,7 +11,7 @@ Anyone with the link can use it, so check what it includes before sending.
    **Share folder** inside a folder, or **Share** in a file or folder's row actions.
    On mobile, workspace and folder sharing are in the **Upload** menu when uploads are available.
 2. Select **Sharing links** at the bottom of the dialog.
-3. Under **Anyone with this link can**, choose **View & download**, **Upload only**, or **View, download & upload**.
+3. In the **Create a link** tab, under **Anyone with this link can**, choose **View & download**, **Upload only**, or **View, download & upload**.
    File links allow viewing and downloading only.
 4. Under **Link expiry**, choose **Expires in 7 days**, **Expires in 30 days**, or
    **Custom date…**. For a custom date, select the day and **Set expiry**; access
@@ -38,12 +38,14 @@ Select **Copy link**, then paste it into your message. Copying does not send an 
 
 Include the purpose of the exchange, the documents you need, and the deadline. For example: “Please upload your project brief and supporting images using this link by Friday.”
 
-If copying fails, select and copy the address yourself. To reopen a link, choose
-**Use link** in the sharing dialog or **Details & email** in the client's link list.
+If copying fails, select and copy the address yourself. To copy an existing link,
+open the **Manage links** tab. The separate **Client-wide links** list offers
+**Details & email** to reopen link details and send it by email.
 
 ## Send by email
 
-Enter an address under **Email link to**, then select **Email link**.
+After creating a link, select **Email link** to reveal **Email link to**. Enter an
+address, then select **Email link** beside the address.
 
 - **Waiting to send** means the email has not been sent yet.
 - **Sent** does not confirm that the email reached the recipient's inbox.
@@ -54,7 +56,9 @@ link can use it. Use an [email invitation](./share-items.md) when someone should
 
 ## Check what the recipient sees
 
-Select **Open recipient view** to check the link. You’ll be asked before switching
-away from your signed-in account.
+Open the copied link to check its name, permissions and expiry. If you are
+signed in, the portal asks before switching to the link session. Sign in again
+to return to your account. The separate **Client-wide links** detail view also
+offers **Open recipient view**.
 
 Next: [Choose permissions and expiry](./permissions-and-expiry.md), or [review and revoke links](./manage-links.md).

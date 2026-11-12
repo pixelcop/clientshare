@@ -1,6 +1,6 @@
 # Review activity
 
-**Who:** Administrators, managers, and client users with an Activity menu.
+**Who:** Signed-in people with an Activity menu.
 
 Activity helps you catch up on document events relevant to your account. It is organized as personal unread/read notifications rather than a document-approval checklist.
 

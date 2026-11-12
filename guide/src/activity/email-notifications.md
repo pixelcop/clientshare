@@ -14,7 +14,9 @@ A successful upload and delivery of its notification are separate events. Confir
 
 ## Review pending email for a client
 
-Administrators and authorized managers can open the mail button in the client workspace. Its badge shows the pending count when messages are queued.
+Administrators and authorized Internal Members can open the mail button in the
+client workspace. Its badge shows the pending count when messages are queued.
+An access role with upload or sharing permission does not by itself grant queue management.
 
 1. Select the mail button, then **Pending emails** at the top of the dropdown. This option also shows the pending count.
 2. Review the recipient, subject, message preview, and scheduled time.

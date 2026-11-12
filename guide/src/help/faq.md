@@ -8,9 +8,13 @@ Not for a valid secure link. The link grants access according to its permissions
 
 A client is a document workspace. A user is a person who signs in. One client can have multiple users, and a client user can be assigned to multiple clients.
 
-## Why does the role form say Customer?
+## How are Internal, External and access roles different?
 
-**Customer** is the client-user role in the user form. The user directory may display it as **client**. It gives access to assigned client workspaces rather than staff administration.
+**Internal** identifies team members; **External** identifies clients and advisers.
+Internal people have an organization role of **Member** or **Administrator**.
+Members and External people need document assignments; an account alone grants
+no document access. Editable access roles such as Viewer and Contributor control
+what they can do in a workspace, folder or file. See [Roles and access](../getting-started/roles-and-access.md).
 
 ## Can I share only one folder with a secure link?
 
@@ -29,7 +33,9 @@ Create a new link with the desired settings and send it to the recipient. Revoke
 
 ## How do I stop sharing?
 
-Revoke the relevant secure link and review any user-account access separately. Neither action removes copies already downloaded by the recipient.
+Remove the relevant account assignment and select **Save**, and revoke any secure
+links the person may hold. Check inherited and additional access too: permissions
+add across sources. Neither action removes copies already downloaded.
 
 ## Does uploading a file with the same name replace it?
 
