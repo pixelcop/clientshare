@@ -315,7 +315,7 @@ function openedAt(value: string) {
 }
 .link-settings {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(18rem, 1fr);
   gap: 12px;
 }
 .link-setting {
@@ -375,7 +375,7 @@ function openedAt(value: string) {
   color: var(--p-primary-color);
   text-decoration: underline;
 }
-@media (max-width: 480px) {
+@media (max-width: 639px) {
   .link-settings {
     grid-template-columns: minmax(0, 1fr);
   }

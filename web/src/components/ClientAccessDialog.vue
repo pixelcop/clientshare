@@ -29,7 +29,7 @@ function requestClose() {
     blockScroll
     :draggable="false"
     :pt="{ header: { style: { paddingBottom: '12px' } } }"
-    :style="{ width: '36rem', maxWidth: '95vw' }"
+    :style="{ width: '44rem', maxWidth: '95vw' }"
     @update:visible="(value) => !value && requestClose()"
   >
     <SharingPanel
