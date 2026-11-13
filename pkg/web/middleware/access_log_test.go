@@ -45,6 +45,7 @@ func TestAccessLoggerIncludesRequestContext(t *testing.T) {
 		c.Locals("tenant_id", "resolved-tenant")
 		if c.Path() == "/private" {
 			c.Locals("user_id", "verified-user")
+			c.Locals("auth_outcome", "authenticated")
 		}
 		return c.Next()
 	})
@@ -66,8 +67,10 @@ func TestAccessLoggerIncludesRequestContext(t *testing.T) {
 		require.Equal(t, "resolved-tenant", fields["tenant_id"])
 		if path == "/private" {
 			require.Equal(t, "verified-user", fields["user_id"])
+			require.Equal(t, "authenticated", fields["auth_outcome"])
 		} else {
 			require.NotContains(t, fields, "user_id")
+			require.NotContains(t, fields, "auth_outcome")
 		}
 		request := fields["req"].(map[string]any)
 		require.Equal(t, "portal.example", request["hostname"])

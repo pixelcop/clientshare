@@ -10,6 +10,30 @@ and timing. Additional context includes:
 - `tenant_id`: the resolved tenant, when available.
 - `user_id`: the verified user, when available, including successful user-session
   issuance on login routes.
+- `auth_outcome`: an authentication result, only when an auth check or supported
+  authentication operation ran. It is independent of the final HTTP status: a
+  valid session may still get a permission-denied or application-error response.
+
+## Authentication outcomes
+
+Protected portal requests report `authenticated`, `missing_cookie`,
+`invalid_session`, `validation_unavailable`, or `tenant_mismatch`.
+`invalid_session` intentionally groups unknown, expired, revoked, wrong-tenant,
+and otherwise invalid sessions: the existing validation query does not
+distinguish these causes, and logging adds no extra session lookups.
+
+Password login and passkey verification report `invalid_request`,
+`invalid_credentials`, or `validation_unavailable` on failure. Hosted handoff
+exchange also reports `invalid_handoff`. User-session issuance reports
+`session_issued` or `session_issue_failed`; auth-route rate limits report
+`rate_limited`. Logout reports `logout_completed` or `logout_failed`.
+`logout_completed` includes idempotent logout without an existing session.
+These outcomes do not expose submitted email addresses, tokens, or session IDs.
+
+Public requests and operations not instrumented for authentication outcomes omit
+the field; absence does not imply authentication success or failure.
+
+## Identity and sensitive data
 
 Identity fields are read after request handling. They are omitted when unknown;
 public/static routes do not perform extra authentication or database lookups just

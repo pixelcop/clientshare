@@ -162,6 +162,9 @@ func LogWebRequest(c fiber.Ctx, startTime *time.Time, elapsedTime *time.Duration
 			fields = append(fields, zap.String(key, id))
 		}
 	}
+	if outcome := fiber.Locals[string](c, "auth_outcome"); outcome != "" {
+		fields = append(fields, zap.String("auth_outcome", outcome))
+	}
 	if chainErr != nil {
 		fields = append(fields, zap.Error(chainErr))
 	}

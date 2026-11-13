@@ -248,6 +248,7 @@ func (h *AuthHandler) BeginPasskeyLoginHandler(c fiber.Ctx) error {
 }
 
 func (h *AuthHandler) FinishPasskeyLoginHandler(c fiber.Ctx) error {
+	c.Locals("auth_outcome", "invalid_request")
 	tenantID := tenantIDFromCtx(c)
 	var req struct {
 		Email       string          `json:"email"`
@@ -258,8 +259,12 @@ func (h *AuthHandler) FinishPasskeyLoginHandler(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid passkey response"})
 	}
 
+	c.Locals("auth_outcome", "invalid_credentials")
 	var user models.User
 	if err := h.db.WithContext(c.Context()).Where("tenant_id = ? AND email = ?", tenantID, strings.TrimSpace(req.Email)).First(&user).Error; err != nil {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			c.Locals("auth_outcome", "validation_unavailable")
+		}
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Passkey sign in failed"})
 	}
 	session, err := h.consumePasskeyChallenge(c, tenantID, user.ID, passkeyChallengeLogin, req.ChallengeID)
@@ -272,11 +277,13 @@ func (h *AuthHandler) FinishPasskeyLoginHandler(c fiber.Ctx) error {
 	}
 	passkeyUser, _, err := h.loadPasskeyUserForRPID(c, user, session.RelyingPartyID)
 	if err != nil {
+		c.Locals("auth_outcome", "validation_unavailable")
 		utils.Logger(c).Error("failed loading passkey credentials", zap.Error(err))
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Passkey sign in failed"})
 	}
 	webAuthn, err := h.webAuthnForRPID(c, tenantID, session.RelyingPartyID, []string{tenantWebAuthnOrigin(c, h.resetBaseURL)})
 	if err != nil {
+		c.Locals("auth_outcome", "validation_unavailable")
 		utils.Logger(c).Error("failed configuring WebAuthn", zap.Error(err))
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Passkeys are not configured"})
 	}
@@ -287,6 +294,7 @@ func (h *AuthHandler) FinishPasskeyLoginHandler(c fiber.Ctx) error {
 	}
 	encodedCredential, err := json.Marshal(credential)
 	if err != nil {
+		c.Locals("auth_outcome", "validation_unavailable")
 		utils.Logger(c).Error("failed serializing passkey", zap.Error(err))
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Passkey sign in failed"})
 	}
@@ -296,6 +304,7 @@ func (h *AuthHandler) FinishPasskeyLoginHandler(c fiber.Ctx) error {
 		Where("tenant_id = ? AND user_id = ? AND credential_id_hash = ? AND (rp_id = ? OR rp_id = '')", tenantID, user.ID, credentialIDHash, session.RelyingPartyID).
 		Updates(map[string]interface{}{"credential_data": encodedCredential, "last_used_at": now, "rp_id": session.RelyingPartyID})
 	if update.Error != nil || update.RowsAffected != 1 {
+		c.Locals("auth_outcome", "validation_unavailable")
 		utils.Logger(c).Error("failed updating passkey after sign-in", zap.Error(update.Error))
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Passkey sign in failed"})
 	}

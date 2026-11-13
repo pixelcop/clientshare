@@ -46,11 +46,16 @@ func TestNewWebApp_AccessLogIdentityAndBuild(t *testing.T) {
 		name, method, path, body string
 		status                   int
 		authenticated            bool
+		outcome                  string
 	}{
-		{"anonymous", "GET", "/api/auth/me", "", 401, false},
-		{"bad credentials", "POST", "/api/auth/login", `{"email":"log-test@example.com","password":"incorrect"}`, 401, false},
-		{"login", "POST", "/api/auth/login", `{"email":"log-test@example.com","password":"test-password"}`, 200, true},
-		{"authenticated", "GET", "/api/auth/me", "", 200, true},
+		{"anonymous", "GET", "/api/auth/me", "", 401, false, "missing_cookie"},
+		{"bad request", "POST", "/api/auth/login", `{`, 400, false, "invalid_request"},
+		{"bad credentials", "POST", "/api/auth/login", `{"email":"log-test@example.com","password":"incorrect"}`, 401, false, "invalid_credentials"},
+		{"unknown user", "POST", "/api/auth/login", `{"email":"unknown@example.com","password":"incorrect"}`, 401, false, "invalid_credentials"},
+		{"login", "POST", "/api/auth/login", `{"email":"log-test@example.com","password":"test-password"}`, 200, true, "session_issued"},
+		{"authenticated", "GET", "/api/auth/me", "", 200, true, "authenticated"},
+		{"fifth attempt", "POST", "/api/auth/login", `{"email":"log-test@example.com","password":"incorrect"}`, 401, false, "invalid_credentials"},
+		{"rate limited", "POST", "/api/auth/login", `{"email":"log-test@example.com","password":"incorrect"}`, 429, false, "rate_limited"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			req := httptest.NewRequest(tc.method, "https://frontend.local"+tc.path, strings.NewReader(tc.body))
@@ -75,6 +80,7 @@ func TestNewWebApp_AccessLogIdentityAndBuild(t *testing.T) {
 			fields := entries[len(entries)-1].ContextMap()
 			require.Equal(t, "build-abc123", fields["commit_hash"])
 			require.Equal(t, user.TenantID, fields["tenant_id"])
+			require.Equal(t, tc.outcome, fields["auth_outcome"])
 			require.Equal(t, resp.Header.Get("X-Request-ID"), fields["requestId"])
 			if tc.authenticated {
 				require.Equal(t, user.ID, fields["user_id"])
