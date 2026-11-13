@@ -20,6 +20,11 @@ func (h *AuthHandler) createUserSession(c fiber.Ctx, tenantID, userID, groupID s
 		}
 		return nil
 	})
+	if err == nil {
+		// Session issuance has verified the identity even though login routes do
+		// not run AuthRequired. Expose it to the completion access log only now.
+		c.Locals("user_id", userID)
+	}
 	return raw, err
 }
 

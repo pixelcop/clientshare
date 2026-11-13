@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -17,12 +18,75 @@ import (
 	"github.com/pixelcop/clientshare/internal/services/storage"
 	tenantctx "github.com/pixelcop/clientshare/internal/tenant"
 	"github.com/pixelcop/clientshare/pkg/web"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
 const cacheControlFallbackDocuments = "no-cache, must-revalidate"
+
+func TestNewWebApp_AccessLogIdentityAndBuild(t *testing.T) {
+	root := t.TempDir()
+	cfg := newTestConfig(root)
+	cfg.CommitHash = "build-abc123"
+	db := newTestDB(t)
+	require.NoError(t, db.AutoMigrate(&models.User{}, &models.UserClient{}, &models.PasskeyCredential{}, &models.AccessProfile{}))
+	passwordHash, err := auth.HashPassword("test-password")
+	require.NoError(t, err)
+	user := models.User{TenantID: tenantctx.DefaultTenantID, Email: "log-test@example.com", Role: "admin", PasswordHash: passwordHash}
+	require.NoError(t, db.Create(&user).Error)
+	core, logs := observer.New(zap.InfoLevel)
+	app, err := NewWebApp(cfg, db, zap.New(core), nil, storage.NewLocalStorage(root))
+	require.NoError(t, err)
+
+	var session *http.Cookie
+	for _, tc := range []struct {
+		name, method, path, body string
+		status                   int
+		authenticated            bool
+	}{
+		{"anonymous", "GET", "/api/auth/me", "", 401, false},
+		{"bad credentials", "POST", "/api/auth/login", `{"email":"log-test@example.com","password":"incorrect"}`, 401, false},
+		{"login", "POST", "/api/auth/login", `{"email":"log-test@example.com","password":"test-password"}`, 200, true},
+		{"authenticated", "GET", "/api/auth/me", "", 200, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(tc.method, "https://frontend.local"+tc.path, strings.NewReader(tc.body))
+			req.Header.Set("User-Agent", "access-log-test")
+			if tc.body != "" {
+				req.Header.Set("Content-Type", "application/json")
+			}
+			if session != nil {
+				req.AddCookie(session)
+			}
+			resp, err := app.Test(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+			require.Equal(t, tc.status, resp.StatusCode)
+			for _, cookie := range resp.Cookies() {
+				if cookie.Name == auth.SessionCookie {
+					session = cookie
+				}
+			}
+			entries := logs.FilterMessage(tc.method + " request completed").All()
+			require.NotEmpty(t, entries)
+			fields := entries[len(entries)-1].ContextMap()
+			require.Equal(t, "build-abc123", fields["commit_hash"])
+			require.Equal(t, user.TenantID, fields["tenant_id"])
+			require.Equal(t, resp.Header.Get("X-Request-ID"), fields["requestId"])
+			if tc.authenticated {
+				require.Equal(t, user.ID, fields["user_id"])
+			} else {
+				require.NotContains(t, fields, "user_id")
+			}
+			request := fields["req"].(map[string]any)
+			require.Equal(t, "frontend.local", request["hostname"])
+			require.Equal(t, "access-log-test", request["userAgent"])
+		})
+	}
+}
 
 func TestNewWebApp_SensitiveResponsesAreNotStored(t *testing.T) {
 	for _, mode := range []string{"single", "hosted"} {
