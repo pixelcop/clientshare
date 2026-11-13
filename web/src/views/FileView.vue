@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useEventListener } from '@vueuse/core';
+
 import FilePreview from '@/components/FilePreview.vue';
 import SharingDialog from '@/components/SharingDialog.vue';
 import { useAuthStore } from '@/stores/auth';
@@ -32,6 +34,8 @@ const downloading = ref(false);
 const copied = ref(false);
 let copyTimer: ReturnType<typeof setTimeout> | undefined;
 let requestVersion = 0;
+let returning = false;
+let returnWhenLoaded = false;
 
 const downloadUrl = computed(() => (file.value ? getFileURL(file.value, true) : ''));
 const previewUrl = computed(() => (file.value ? getFileViewURL(file.value) : ''));
@@ -49,20 +53,37 @@ const homeRoute = computed(() => {
 });
 
 function goBack() {
+  if (returning) {return;}
   const previous = router.options.history.state.back;
-  // Only return to an in-app listing; direct links have a deterministic fallback.
+  // Restore real in-app navigation, but never send a fresh file link back to sign-in.
   if (typeof previous === 'string' && previous.startsWith('/') && !previous.startsWith('//')) {
-    const name = router.resolve(previous).name;
-    if (['FolderView', 'FolderRootView', 'SharedWithMe', 'Clients'].includes(String(name))) {
+    const destination = router.resolve(previous);
+    if (destination.matched.length && destination.meta.public === false) {
+      returning = true;
       router.back();
       return;
     }
   }
-  void router.push(homeRoute.value);
+  if (loading.value) {
+    returnWhenLoaded = true;
+    return;
+  }
+  returning = true;
+  void router.replace(homeRoute.value);
 }
+
+useEventListener(window, 'keydown', (event: KeyboardEvent) => {
+  if (event.key !== 'Escape' || event.defaultPrevented || event.repeat || event.isComposing) {return;}
+  // Dialogs (including sharing's nested confirmations) own Escape until dismissed.
+  if (showShare.value || document.querySelector('[role="dialog"], [role="alertdialog"]')) {return;}
+  event.preventDefault();
+  goBack();
+});
 
 async function loadFile() {
   const version = ++requestVersion;
+  returning = false;
+  returnWhenLoaded = false;
   file.value = null;
   showShare.value = false;
   error.value = '';
@@ -82,6 +103,10 @@ async function loadFile() {
   } finally {
     if (version === requestVersion) {
       loading.value = false;
+      if (returnWhenLoaded) {
+        returnWhenLoaded = false;
+        goBack();
+      }
     }
   }
 }
@@ -129,7 +154,8 @@ onBeforeUnmount(() => {
       <Button
         icon="oi oi-arrow-left"
         aria-label="Back to files"
-        title="Back to files"
+        title="Back to files (Esc)"
+        aria-keyshortcuts="Escape"
         severity="secondary"
         variant="text"
         class="file-back"
@@ -248,9 +274,9 @@ onBeforeUnmount(() => {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 16px;
-  min-height: 88px;
-  padding: 16px 24px 16px 16px;
+  gap: 12px;
+  min-height: 64px;
+  padding: 8px 16px 8px 8px;
   border-bottom: 1px solid var(--p-content-border-color);
 }
 .file-back {
@@ -362,8 +388,8 @@ h1 {
 @media (max-width: 640px) {
   .file-header {
     flex-wrap: wrap;
-    gap: 12px;
-    padding: 12px 16px;
+    gap: 8px;
+    padding: 8px 12px;
   }
   .file-header-icon {
     display: none;
