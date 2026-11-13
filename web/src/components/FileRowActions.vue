@@ -6,7 +6,6 @@ import { useAuthStore } from '@/stores/auth';
 import { useFileManagerStore } from '@/stores/fileManager';
 import type { FileItem } from '@/types/models';
 import type { SharingScope } from '@/types/sharing';
-import { canPreviewFile } from '@/types/util';
 
 import ConfirmDeleteModal from './ConfirmDeleteModal.vue';
 import SharingDialog from './SharingDialog.vue';
@@ -21,7 +20,6 @@ const showDelete = ref(false);
 const showShare = ref(false);
 const menuId = `item-actions-${item.id}`;
 const isFolder = computed(() => item.type === 'folder');
-const previewable = computed(() => canPreviewFile(item));
 const canDelete = computed(() => !!item.capabilities?.can_delete);
 const canRead = computed(() => !!item.capabilities?.can_read);
 const canShare = computed(
@@ -33,9 +31,7 @@ const sharingScope = computed<SharingScope>(() => ({
   name: item.filename,
   itemType: item.type,
 }));
-const primaryLabel = computed(() =>
-  isFolder.value ? 'Open' : previewable.value ? 'Preview' : 'Download',
-);
+const primaryLabel = 'Open';
 
 function download() {
   if (isFolder.value) {
@@ -45,22 +41,16 @@ function download() {
   }
 }
 function open() {
-  if (isFolder.value || previewable.value) {
-    emit('open', item);
-  } else {
-    download();
-  }
+  emit('open', item);
 }
 const actions = computed<MenuItem[]>(() => {
   const result: MenuItem[] = [];
   if (canRead.value) {
-    if (isFolder.value || previewable.value) {
-      result.push({
-        label: primaryLabel.value,
-        icon: isFolder.value ? 'oi oi-folder-open' : 'oi oi-eye',
-        command: open,
-      });
-    }
+    result.push({
+      label: primaryLabel,
+      icon: isFolder.value ? 'oi oi-folder-open' : 'oi oi-eye',
+      command: open,
+    });
     result.push({
       label: isFolder.value ? 'Download ZIP' : 'Download',
       icon: 'oi oi-download',
@@ -107,7 +97,7 @@ watch(
     <div class="row-quick-actions">
       <Button
         v-if="canRead"
-        :icon="isFolder ? 'oi oi-folder-open' : previewable ? 'oi oi-eye' : 'oi oi-download'"
+        :icon="isFolder ? 'oi oi-folder-open' : 'oi oi-eye'"
         :aria-label="`${primaryLabel} ${item.filename}`"
         :title="primaryLabel"
         severity="secondary"
@@ -115,7 +105,7 @@ watch(
         @click.stop="open"
       />
       <Button
-        v-if="canRead && (isFolder || previewable)"
+        v-if="canRead"
         icon="oi oi-download"
         :aria-label="`Download ${item.filename}${isFolder ? ' as ZIP' : ''}`"
         :title="isFolder ? 'Download ZIP' : 'Download'"

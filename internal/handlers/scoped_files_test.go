@@ -234,6 +234,7 @@ func TestScopedBearerSessionsCannotEscapeItemOrAcquireSharingAuthority(t *testin
 				require.NotContains(t, string(body), file.Filename)
 			}
 			get("/api/files/"+file.ID+"/download", status)
+			get("/api/files/"+file.ID+"/view", status)
 			get("/api/folders/"+folder.ID+"/download-zip", status)
 			require.NoError(t, env.db.Model(&models.File{}).Where("id = ?", env.rootFolder.ID).Update("deleted_at", time.Now()).Error)
 			get("/api/folders/"+folder.ID, 401)

@@ -1,124 +1,409 @@
 <script setup lang="ts">
+import { useEventListener } from '@vueuse/core';
+
 import FilePreview from '@/components/FilePreview.vue';
 import SharingDialog from '@/components/SharingDialog.vue';
 import { useAuthStore } from '@/stores/auth';
+import { useBrandingStore } from '@/stores/branding';
 import { useFileManagerStore } from '@/stores/fileManager';
 import type { FileItem } from '@/types/models';
-import { getFileType, getFileURL } from '@/types/util';
+import {
+  canPreviewFile,
+  formatDate,
+  formatSize,
+  getFileIcon,
+  getFileType,
+  getFileURL,
+  getFileViewURL,
+} from '@/types/util';
 
 const { fileId } = defineProps<{
   fileId: string;
 }>();
 
 const auth = useAuthStore();
+const router = useRouter();
 const fileManager = useFileManagerStore();
+const brandingStore = useBrandingStore();
 const file = ref<FileItem | null>(null);
 const loading = ref(false);
 const showShare = ref(false);
 const error = ref('');
+const downloadError = ref('');
+const downloading = ref(false);
+const copied = ref(false);
+let copyTimer: ReturnType<typeof setTimeout> | undefined;
 let requestVersion = 0;
+let returning = false;
+let returnWhenLoaded = false;
 
-const downloadUrl = computed(() => {
-  if (!file.value) {
-    return '';
-  }
-  return getFileURL(file.value, true);
-});
+const downloadUrl = computed(() => (file.value ? getFileURL(file.value, true) : ''));
+const previewUrl = computed(() => (file.value ? getFileViewURL(file.value) : ''));
+const folderName = computed(() =>
+  file.value?.folder_id === fileManager.context?.folder.id
+    ? fileManager.context?.folder.filename
+    : '',
+);
 
 const homeRoute = computed(() => {
   if (file.value?.folder_id) {
     return { name: 'FolderView', params: { folderId: file.value.folder_id } };
   }
-  return auth.user?.role === 'link' ? null : { name: 'SharedWithMe' };
+  return { name: auth.user?.role === 'link' ? 'FolderRootView' : 'SharedWithMe' };
 });
 
-watch(
-  [() => fileId, () => auth.user?.session_id] as const,
-  async ([id]) => {
-    const version = ++requestVersion;
-    file.value = null;
-    showShare.value = false;
-    error.value = '';
-    loading.value = true;
-    try {
-      const current = await fileManager.fetchFile(id);
-      if (version === requestVersion) {
-        file.value = current;
-      }
-    } catch {
-      if (version === requestVersion) {
-        error.value = 'This file is unavailable. Access may have expired or been removed.';
-      }
-    } finally {
-      if (version === requestVersion) {
-        loading.value = false;
+function goBack() {
+  if (returning) {return;}
+  const previous = router.options.history.state.back;
+  // Restore real in-app navigation, but never send a fresh file link back to sign-in.
+  if (typeof previous === 'string' && previous.startsWith('/') && !previous.startsWith('//')) {
+    const destination = router.resolve(previous);
+    if (destination.matched.length && destination.meta.public === false) {
+      returning = true;
+      router.back();
+      return;
+    }
+  }
+  if (loading.value) {
+    returnWhenLoaded = true;
+    return;
+  }
+  returning = true;
+  void router.replace(homeRoute.value);
+}
+
+useEventListener(window, 'keydown', (event: KeyboardEvent) => {
+  if (event.key !== 'Escape' || event.defaultPrevented || event.repeat || event.isComposing) {return;}
+  // Dialogs (including sharing's nested confirmations) own Escape until dismissed.
+  if (showShare.value || document.querySelector('[role="dialog"], [role="alertdialog"]')) {return;}
+  event.preventDefault();
+  goBack();
+});
+
+async function loadFile() {
+  const version = ++requestVersion;
+  returning = false;
+  returnWhenLoaded = false;
+  file.value = null;
+  showShare.value = false;
+  error.value = '';
+  downloadError.value = '';
+  copied.value = false;
+  clearTimeout(copyTimer);
+  loading.value = true;
+  try {
+    const current = await fileManager.fetchFile(fileId);
+    if (version === requestVersion) {
+      file.value = current;
+    }
+  } catch {
+    if (version === requestVersion) {
+      error.value = 'This file is unavailable. Access may have expired or been removed.';
+    }
+  } finally {
+    if (version === requestVersion) {
+      loading.value = false;
+      if (returnWhenLoaded) {
+        returnWhenLoaded = false;
+        goBack();
       }
     }
-  },
-  { immediate: true },
-);
+  }
+}
+
+async function download() {
+  if (!file.value || downloading.value) {return;}
+  const id = file.value.id;
+  downloading.value = true;
+  downloadError.value = '';
+  fileManager.error = '';
+  try {
+    await fileManager.downloadFile(file.value);
+    if (file.value?.id === id && fileManager.error) {
+      downloadError.value = 'The file couldn’t be downloaded. Please try again.';
+    }
+  } finally {
+    fileManager.error = '';
+    downloading.value = false;
+  }
+}
+
+async function copyLink() {
+  if (!file.value) {return;}
+  const base = brandingStore.branding.effectivePublicBaseURL.trim() || window.location.origin;
+  try {
+    await navigator.clipboard.writeText(`${base.replace(/\/+$/, '')}/files/${file.value.id}`);
+    copied.value = true;
+    clearTimeout(copyTimer);
+    copyTimer = setTimeout(() => { copied.value = false; }, 2000);
+  } catch {
+    downloadError.value = 'The file address couldn’t be copied. Copy it from your browser’s address bar.';
+  }
+}
+
+watch([() => fileId, () => auth.user?.session_id] as const, loadFile, { immediate: true });
 onBeforeUnmount(() => {
   requestVersion += 1;
+  clearTimeout(copyTimer);
 });
 </script>
 
 <template>
-  <p v-if="loading" role="status">Loading file…</p>
-  <p v-else-if="error" role="alert">{{ error }}</p>
-  <section v-else-if="file" class="file-detail">
-    <header class="flex flex-wrap items-center justify-between gap-3 mb-4">
-      <h1 class="text-2xl font-semibold break-words min-w-0">{{ file.filename }}</h1>
-      <div class="flex flex-wrap items-center gap-2">
-        <Button
-          v-if="file.capabilities?.can_share && auth.user?.role !== 'link'"
-          label="Share"
-          icon="oi oi-users"
-          aria-haspopup="dialog"
-          :aria-expanded="showShare"
-          :aria-controls="`sharing-item-${file.id}`"
-          @click="showShare = true"
-        />
-        <Button
-          v-if="homeRoute"
-          as="router-link"
-          :to="homeRoute"
-          icon="oi oi-arrow-left"
-          label="Back"
-          severity="secondary"
-          outlined
-          size="small"
-        />
-        <Button
-          v-if="file.capabilities?.can_read"
-          as="a"
-          :href="downloadUrl"
-          :download="file?.filename"
-          icon="oi oi-download"
-          label="Download"
-          severity="info"
-          size="small"
-        />
-      </div>
+  <main class="file-detail" aria-label="File viewer">
+    <header class="file-header">
+      <Button
+        icon="oi oi-arrow-left"
+        aria-label="Back to files"
+        title="Back to files (Esc)"
+        aria-keyshortcuts="Escape"
+        severity="secondary"
+        variant="text"
+        class="file-back"
+        @click="goBack"
+      />
+      <template v-if="file">
+        <i :class="getFileIcon(file)" class="file-header-icon" aria-hidden="true" />
+        <div class="file-heading">
+          <h1 :title="file.filename">{{ file.filename }}</h1>
+          <div class="file-metadata">
+            <router-link v-if="file.folder_id && folderName" :to="homeRoute" class="file-folder">
+              <i class="oi oi-folder" aria-hidden="true" />
+              <span>{{ folderName }}</span>
+            </router-link>
+            <span>{{ formatSize(file.size) }}</span>
+            <span :title="formatDate(file.uploaded_at)">
+              Added
+              {{
+                new Date(file.uploaded_at).toLocaleDateString(undefined, { dateStyle: 'medium' })
+              }}
+            </span>
+          </div>
+        </div>
+        <div class="file-header-actions">
+          <Button
+            :icon="copied ? 'oi oi-check' : 'oi oi-link'"
+            aria-label="Copy file address — access is still required"
+            :title="copied ? 'Copied' : 'Copy file address — access is still required'"
+            severity="secondary"
+            variant="text"
+            class="file-copy"
+            @click="copyLink"
+          />
+          <span class="sr-only" role="status">{{ copied ? 'File address copied' : '' }}</span>
+          <Button
+            v-if="file.capabilities?.can_read"
+            icon="oi oi-download"
+            label="Download"
+            severity="secondary"
+            variant="text"
+            :loading="downloading"
+            @click="download"
+          />
+          <Button
+            v-if="file.capabilities?.can_share && auth.user?.role !== 'link'"
+            label="Share"
+            icon="oi oi-share-alt"
+            class="file-share"
+            aria-haspopup="dialog"
+            :aria-expanded="showShare"
+            :aria-controls="`sharing-item-${file.id}`"
+            @click="showShare = true"
+          />
+        </div>
+      </template>
+      <h1 v-else>File viewer</h1>
     </header>
-    <FilePreview
-      v-if="file.capabilities?.can_read"
-      :file-type="getFileType(file)"
-      :file-url="downloadUrl"
-      maximized
-      class="pt-2"
-    />
+    <p v-if="downloadError" role="alert" class="file-download-error">{{ downloadError }}</p>
+    <div class="file-canvas">
+      <p v-if="loading" role="status" class="file-state">Loading file…</p>
+      <div v-else-if="error" class="file-state" role="alert">
+        <i class="oi oi-file" aria-hidden="true" />
+        <h2>File unavailable</h2>
+        <p>{{ error }}</p>
+        <Button label="Try again" severity="secondary" @click="loadFile" />
+      </div>
+      <template v-else-if="file">
+        <FilePreview
+          v-if="file.capabilities?.can_read && canPreviewFile(file)"
+          :key="file.id"
+          :file-type="getFileType(file)"
+          :file-url="previewUrl"
+          :download-url="downloadUrl"
+          :file-name="file.filename"
+          maximized
+        />
+        <div v-else class="file-state">
+          <i :class="getFileIcon(file)" aria-hidden="true" />
+          <h2>
+            {{ file.capabilities?.can_read ? 'No preview available' : 'Preview unavailable' }}
+          </h2>
+          <p v-if="file.capabilities?.can_read">
+            This file type can’t be previewed. Download the file to open it on your device.
+          </p>
+          <p v-else>You don’t have permission to view or download this file.</p>
+          <Button
+            v-if="file.capabilities?.can_read"
+            label="Download"
+            icon="oi oi-download"
+            :loading="downloading"
+            @click="download"
+          />
+        </div>
+      </template>
+    </div>
     <SharingDialog
-      v-if="showShare"
+      v-if="showShare && file"
       :visible="showShare"
       :scope="{ kind: 'item', id: file.id, name: file.filename, itemType: file.type }"
       @close="showShare = false"
     />
-  </section>
+  </main>
 </template>
 
 <style scoped>
 .file-detail {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  width: 100%;
   min-width: 0;
   color: var(--p-text-color);
+  background: var(--p-content-background);
+}
+.file-header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 8px 16px 8px 8px;
+  border-bottom: 1px solid var(--p-content-border-color);
+}
+.file-back {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+}
+.file-header-icon {
+  font-size: 40px;
+  color: var(--p-text-muted-color);
+}
+.file-heading {
+  flex: 1;
+  min-width: 0;
+}
+h1 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-metadata {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--p-text-muted-color);
+}
+.file-folder {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.file-folder span {
+  overflow-wrap: anywhere;
+}
+.file-folder:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.file-header-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 12px;
+}
+.file-header-actions :deep(.p-button) {
+  min-height: 44px;
+}
+.file-share {
+  min-width: 100px;
+}
+.file-copy {
+  width: 44px;
+}
+.file-download-error {
+  margin: 0;
+  padding: 12px 24px;
+  color: var(--p-red-700);
+  background: var(--p-red-50);
+}
+.file-canvas {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--p-surface-100);
+}
+.file-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  width: 100%;
+  min-height: 320px;
+  padding: 40px 24px;
+  text-align: center;
+}
+.file-state > i {
+  margin-bottom: 8px;
+  font-size: 96px;
+  color: var(--p-surface-400);
+}
+.file-state h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  text-wrap: balance;
+}
+.file-state p {
+  margin: 0;
+  max-width: 48ch;
+  color: var(--p-text-muted-color);
+  line-height: 1.6;
+}
+.file-state :deep(.p-button) {
+  min-height: 44px;
+}
+.file-detail :deep(:focus-visible) {
+  outline: 2px solid var(--p-primary-color);
+  outline-offset: 3px;
+}
+@media (max-width: 640px) {
+  .file-header {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 8px 12px;
+  }
+  .file-header-icon {
+    display: none;
+  }
+  .file-heading {
+    flex-basis: calc(100% - 56px);
+  }
+  .file-header-actions {
+    justify-content: flex-end;
+    width: 100%;
+  }
+  .file-metadata {
+    font-size: 12px;
+    gap: 4px 12px;
+  }
 }
 </style>

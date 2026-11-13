@@ -50,7 +50,6 @@ it('shows and opens authorized own items inside an upload-only destination', asy
       stubs: {
         Dropzone: { template: '<div><slot /></div>' },
         FileListItem: true,
-        FilePreviewModal: true,
         Paginator: true,
       },
     },
@@ -61,3 +60,45 @@ it('shows and opens authorized own items inside an upload-only destination', asy
   await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/folder/own-folder'));
   wrapper.unmount();
 });
+
+it.each(['report.pdf', 'archive.zip'])(
+  'opens %s at its own URL without downloading',
+  async (filename) => {
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/folder/:folderId', component: { template: '<div />' } },
+        { path: '/files/:fileId', name: 'FileView', component: { template: '<div />' } },
+      ],
+    });
+    await router.push('/folder/root');
+    const store = useFileManagerStore();
+    const download = vi.spyOn(store, 'downloadFile').mockResolvedValue();
+    const item = {
+      id: 'file',
+      filename,
+      type: 'file',
+      capabilities: { can_read: true },
+    } as FileItem;
+    store.context = {
+      folder: { id: 'root', type: 'folder' } as FileItem,
+      capabilities: { can_read: true },
+    } as typeof store.context;
+    store.items = [item];
+    store.loaded = true;
+    const wrapper = mount(FileList, {
+      global: {
+        plugins: [router],
+        stubs: {
+          Dropzone: { template: '<div><slot /></div>' },
+          FileListItem: true,
+          Paginator: true,
+        },
+      },
+    });
+    wrapper.findComponent(FileListItem).vm.$emit('open', item);
+    await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/files/file'));
+    expect(download).not.toHaveBeenCalled();
+    wrapper.unmount();
+  },
+);

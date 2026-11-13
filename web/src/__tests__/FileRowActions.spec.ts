@@ -29,13 +29,13 @@ describe('file row actions', () => {
     useAuthStore().user = { id: 'admin', role: 'admin' } as User;
   });
 
-  it('activates preview exactly once and keeps Delete separate in More', async () => {
+  it('opens a file exactly once and keeps Delete separate in More', async () => {
     const wrapper = mount(FileListItem, { props: { item }, global: { plugins: [OpenVue] } });
-    await wrapper.get('button[aria-label="Preview report.txt"]').trigger('click');
+    await wrapper.get('button[aria-label="Open report.txt"]').trigger('click');
     expect(wrapper.emitted('open')).toEqual([[item]]);
     const actions = wrapper.findComponent(Menu).props('model')!;
     expect(actions.map((action) => action.label || 'separator')).toEqual([
-      'Preview',
+      'Open',
       'Download',
       'separator',
       'Delete',
@@ -44,7 +44,7 @@ describe('file row actions', () => {
     wrapper.unmount();
   });
 
-  it('downloads unsupported preview types instead of promising a preview', async () => {
+  it('opens unsupported file types and only downloads on an explicit download action', async () => {
     const store = useFileManagerStore();
     const download = vi.spyOn(store, 'downloadFile').mockResolvedValue();
     const document = { ...item, filename: 'archive.zip' };
@@ -53,9 +53,11 @@ describe('file row actions', () => {
       global: { plugins: [OpenVue] },
     });
     expect(wrapper.find('button[aria-label^="Preview"]').exists()).toBe(false);
+    await wrapper.get('button[aria-label="Open archive.zip"]').trigger('click');
+    expect(wrapper.emitted('open')).toEqual([[document]]);
+    expect(download).not.toHaveBeenCalled();
     await wrapper.get('button[aria-label="Download archive.zip"]').trigger('click');
     expect(download).toHaveBeenCalledExactlyOnceWith(document);
-    expect(wrapper.emitted('open')).toBeUndefined();
     wrapper.unmount();
   });
 

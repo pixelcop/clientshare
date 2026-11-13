@@ -11,12 +11,15 @@ import AppTopbar from './AppTopbar.vue';
 
 const { user } = storeToRefs(useAuthStore());
 const { isPublicLayout } = useLayout();
+const route = useRoute();
+const isFilePage = computed(() => route.name === 'FileView');
 </script>
 
 <template>
-  <AppTopbar v-if="!!user" />
+  <AppTopbar v-if="!!user && !isFilePage" />
 
-  <div class="layout-main-container">
+  <router-view v-if="isFilePage" />
+  <div v-else class="layout-main-container">
     <div v-if="isPublicLayout" class="layout-main flex-1 w-full max-w-6xl mx-auto p-4 md:p-8">
       <router-view />
     </div>

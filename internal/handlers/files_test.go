@@ -713,6 +713,69 @@ func TestDownloadFileByPublicIDSuccess(t *testing.T) {
 	}
 }
 
+func TestFileViewDispositionAndSafety(t *testing.T) {
+	env := setupFileTestEnv(t)
+	for _, tc := range []struct {
+		name, contentType, disposition string
+	}{
+		{"photo.PNG", "image/png", "inline"},
+		{"photo.jpeg", "image/jpeg", "inline"},
+		{"drawing.svg", "image/svg+xml", "inline"},
+		{"document.pdf", "application/pdf", "inline"},
+		{"recording.m4a", "audio/mp4", "inline"},
+		{"recording.opus", "audio/ogg", "inline"},
+		{"readme.txt", "text/plain", "inline"},
+		{"data.json", "text/plain", "inline"},
+		{"data.xml", "text/plain", "inline"},
+		{"data.csv", "text/plain", "inline"},
+		{"page.html", "text/html", "attachment"},
+		{"archive.zip", "application/zip", "attachment"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			file := createFileRecord(t, env, env.rootFolder, tc.name, "file content")
+			for _, route := range []string{"view", "download"} {
+				resp, err := env.app.Test(newAuthRequest(http.MethodGet, "/api/files/"+file.ID+"/"+route, env.adminToken, nil))
+				require.NoError(t, err)
+				defer resp.Body.Close()
+				require.Equal(t, http.StatusOK, resp.StatusCode)
+				disposition := "attachment"
+				if route == "view" {
+					disposition = tc.disposition
+					require.Contains(t, resp.Header.Get("Content-Type"), tc.contentType)
+					require.Contains(t, resp.Header.Get("Content-Security-Policy"), "sandbox")
+				}
+				require.True(t, strings.HasPrefix(resp.Header.Get("Content-Disposition"), disposition+";"))
+				require.Contains(t, resp.Header.Get("Content-Disposition"), tc.name)
+				require.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
+				body, err := io.ReadAll(resp.Body)
+				require.NoError(t, err)
+				require.Equal(t, "file content", string(body))
+			}
+		})
+	}
+}
+
+func TestFileViewEnforcesDownloadAccess(t *testing.T) {
+	env := setupFileTestEnv(t)
+	file := createFileRecord(t, env, env.rootFolder, "photo.png", "content")
+	for _, tc := range []struct {
+		id, token string
+		status    int
+	}{
+		{file.ID, env.adminToken, http.StatusOK},
+		{file.ID, env.linkToken, http.StatusOK},
+		{file.ID, env.otherToken, http.StatusNotFound},
+		{file.ID, "", http.StatusUnauthorized},
+		{"missing", env.adminToken, http.StatusNotFound},
+		{env.rootFolder.ID, env.adminToken, http.StatusBadRequest},
+	} {
+		resp, err := env.app.Test(newAuthRequest(http.MethodGet, "/api/files/"+tc.id+"/view", tc.token, nil))
+		require.NoError(t, err)
+		require.Equal(t, tc.status, resp.StatusCode)
+		resp.Body.Close()
+	}
+}
+
 func TestDownloadFileByPublicIDSuccessForSecureLink(t *testing.T) {
 	env := setupFileTestEnv(t)
 	file := createFileRecord(t, env, env.rootFolder, "readme.txt", "hello")
