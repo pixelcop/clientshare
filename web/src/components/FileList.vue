@@ -9,12 +9,10 @@ import { useWorkspacePresentation } from '@/composables/useWorkspacePresentation
 import type { FileSortField } from '@/stores/fileManager';
 import { useFileManagerStore } from '@/stores/fileManager';
 import type { FileItem } from '@/types/models';
-import { canPreviewFile, getFileType, getFileURL } from '@/types/util';
 import { fileListingQuery, filePageSizes, parseFileListingQuery } from '@/utils/fileListingQuery';
 
 import Dropzone from './Dropzone.vue';
 import FileListItem from './FileListItem.vue';
-import FilePreviewModal from './FilePreviewModal.vue';
 
 withDefaults(defineProps<{ canNotify?: boolean; compactActions?: MenuItem[] }>(), {
   canNotify: true,
@@ -33,8 +31,6 @@ const canWrite = computed(() => presentation.value.canWrite);
 const canRead = computed(() => presentation.value.canRead);
 const context = computed(() => presentation.value.context);
 const isEmpty = computed(() => presentation.value.isEmpty);
-const showPreview = ref(false);
-const previewItem = ref<FileItem | null>(null);
 const pageSizeOptions = filePageSizes;
 const first = computed(() => Math.max(0, (pagination.value.page - 1) * pagination.value.page_size));
 const emptyHeading = computed(() => {
@@ -94,12 +90,6 @@ const handlePageChange = (event: PageState) => {
   });
 };
 
-function handleDownload() {
-  if (previewItem.value) {
-    fileManager.downloadFile(previewItem.value);
-  }
-}
-
 function openItem(item: FileItem) {
   if (!item.capabilities?.can_read) {
     return;
@@ -108,19 +98,8 @@ function openItem(item: FileItem) {
     void router.push(`/folder/${item.id}`);
     return;
   }
-  if (!canPreviewFile(item)) {
-    void fileManager.downloadFile(item);
-    return;
-  }
-  previewItem.value = item;
-  showPreview.value = true;
+  void router.push({ name: 'FileView', params: { fileId: item.id } });
 }
-
-function closePreview() {
-  showPreview.value = false;
-  previewItem.value = null;
-}
-watch(() => fileManager.currentFolder, closePreview);
 </script>
 
 <template>
@@ -242,18 +221,6 @@ watch(() => fileManager.currentFolder, closePreview);
       </div>
     </template>
   </Dropzone>
-
-  <!-- Preview Modal (simple text/image/pdf) -->
-  <FilePreviewModal
-    v-if="showPreview && previewItem"
-    :visible="showPreview"
-    :file="previewItem"
-    :fileUrl="getFileURL(previewItem, true)"
-    :fileName="previewItem.filename"
-    :fileType="getFileType(previewItem)"
-    @close="closePreview"
-    @download="handleDownload"
-  />
 </template>
 
 <style scoped>

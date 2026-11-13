@@ -114,11 +114,7 @@ const router = createRouter({
       name: 'FileView',
       component: FileView,
       meta: { public: false },
-      props: (route) => ({
-        fileId: String(route.params.fileId ?? ''),
-        fileName: typeof route.query.name === 'string' ? route.query.name : '',
-        fileType: typeof route.query.type === 'string' ? route.query.type : '',
-      }),
+      props: true,
     },
     {
       path: '/clients/:id/links',
