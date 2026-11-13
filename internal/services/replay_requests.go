@@ -12,6 +12,7 @@ import (
 
 	"github.com/pixelcop/clientshare/internal/models"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 const replayCacheTTL = 5 * time.Second
@@ -40,7 +41,12 @@ func NewReplayRequestService(db *gorm.DB) *ReplayRequestService { return &Replay
 
 func (s *ReplayRequestService) List(ctx context.Context) ([]models.ReplayRequest, error) {
 	rules := []models.ReplayRequest{}
-	err := s.db.WithContext(ctx).Order("created_at DESC").Limit(100).Find(&rules).Error
+	// Active requests must remain visible/revocable even when newer requests
+	// have already expired. Fill the remaining space with recent history.
+	err := s.db.WithContext(ctx).Clauses(clause.OrderBy{Expression: clause.Expr{
+		SQL:  "CASE WHEN revoked_at IS NULL AND expires_at > ? THEN 0 ELSE 1 END, created_at DESC",
+		Vars: []any{time.Now().UTC()},
+	}}).Limit(100).Find(&rules).Error
 	return rules, err
 }
 

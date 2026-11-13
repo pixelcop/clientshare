@@ -80,3 +80,21 @@ func TestReplayValidationAndCache(t *testing.T) {
 	require.Error(t, err)
 	require.Nil(t, active, "database failure never returns cached eligibility")
 }
+
+func TestReplayListKeepsOlderActiveRequestsVisible(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(t.TempDir()+"/history.db"), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&models.ReplayRequest{}))
+	now := time.Now().UTC()
+	active := models.ReplayRequest{Label: "Still investigating", CreatedAt: now.Add(-time.Hour), ExpiresAt: now.Add(time.Hour), Targets: []models.ReplayTarget{{TenantID: "tenant"}}}
+	require.NoError(t, db.Create(&active).Error)
+	history := make([]models.ReplayRequest, 100)
+	for i := range history {
+		history[i] = models.ReplayRequest{Label: "Finished", CreatedAt: now, ExpiresAt: now.Add(-time.Minute), Targets: []models.ReplayTarget{{TenantID: "tenant"}}}
+	}
+	require.NoError(t, db.Create(&history).Error)
+	listed, err := NewReplayRequestService(db).List(t.Context())
+	require.NoError(t, err)
+	require.Len(t, listed, 100)
+	require.Equal(t, active.ID, listed[0].ID)
+}
