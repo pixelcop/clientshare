@@ -49,8 +49,8 @@ export function getFileType(item: FileItem) {
   return '';
 }
 
-export function getFileContentURL(item: FileItem) {
-  return `/api/files/${item.id}/content`;
+export function getFileViewURL(item: FileItem) {
+  return `/api/files/${item.id}/view`;
 }
 
 export function canPreviewFile(item: FileItem) {

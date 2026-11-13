@@ -69,7 +69,7 @@ func RegisterFileRoutes(api fiber.Router, db *gorm.DB, store storage.Storage, em
 	secureFile.Get("", middleware.FileAccess(db, services.AccessRead), handler.GetFileOrFolder)
 	secureFile.Delete("", middleware.FileAccess(db, services.AccessDelete), handler.DeleteFileByPublicID)
 	secureFile.Get("/download", middleware.FileAccess(db, services.AccessDownload), handler.DownloadFileByPublicID)
-	secureFile.Get("/content", middleware.FileAccess(db, services.AccessDownload), handler.GetFileContent)
+	secureFile.Get("/view", middleware.FileAccess(db, services.AccessDownload), handler.ViewFileByPublicID)
 }
 
 // Enforce the same access and lifetime advertised by secure-link controls, including
@@ -763,8 +763,8 @@ func (h *FileHandler) DownloadFileByPublicID(c fiber.Ctx) error {
 	return h.sendFileContent(c, false)
 }
 
-// GetFileContent serves previewable content inline without changing explicit downloads.
-func (h *FileHandler) GetFileContent(c fiber.Ctx) error {
+// ViewFileByPublicID serves previewable content inline without changing explicit downloads.
+func (h *FileHandler) ViewFileByPublicID(c fiber.Ctx) error {
 	return h.sendFileContent(c, true)
 }
 

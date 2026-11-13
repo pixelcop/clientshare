@@ -9,10 +9,10 @@ import {
   canPreviewFile,
   formatDate,
   formatSize,
-  getFileContentURL,
   getFileIcon,
   getFileType,
   getFileURL,
+  getFileViewURL,
 } from '@/types/util';
 
 const { fileId } = defineProps<{
@@ -34,7 +34,7 @@ let copyTimer: ReturnType<typeof setTimeout> | undefined;
 let requestVersion = 0;
 
 const downloadUrl = computed(() => (file.value ? getFileURL(file.value, true) : ''));
-const previewUrl = computed(() => (file.value ? getFileContentURL(file.value) : ''));
+const previewUrl = computed(() => (file.value ? getFileViewURL(file.value) : ''));
 const folderName = computed(() =>
   file.value?.folder_id === fileManager.context?.folder.id
     ? fileManager.context?.folder.filename

@@ -713,7 +713,7 @@ func TestDownloadFileByPublicIDSuccess(t *testing.T) {
 	}
 }
 
-func TestFileContentDispositionAndSafety(t *testing.T) {
+func TestFileViewDispositionAndSafety(t *testing.T) {
 	env := setupFileTestEnv(t)
 	for _, tc := range []struct {
 		name, contentType, disposition string
@@ -733,13 +733,13 @@ func TestFileContentDispositionAndSafety(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			file := createFileRecord(t, env, env.rootFolder, tc.name, "file content")
-			for _, route := range []string{"content", "download"} {
+			for _, route := range []string{"view", "download"} {
 				resp, err := env.app.Test(newAuthRequest(http.MethodGet, "/api/files/"+file.ID+"/"+route, env.adminToken, nil))
 				require.NoError(t, err)
 				defer resp.Body.Close()
 				require.Equal(t, http.StatusOK, resp.StatusCode)
 				disposition := "attachment"
-				if route == "content" {
+				if route == "view" {
 					disposition = tc.disposition
 					require.Contains(t, resp.Header.Get("Content-Type"), tc.contentType)
 					require.Contains(t, resp.Header.Get("Content-Security-Policy"), "sandbox")
@@ -755,7 +755,7 @@ func TestFileContentDispositionAndSafety(t *testing.T) {
 	}
 }
 
-func TestFileContentEnforcesDownloadAccess(t *testing.T) {
+func TestFileViewEnforcesDownloadAccess(t *testing.T) {
 	env := setupFileTestEnv(t)
 	file := createFileRecord(t, env, env.rootFolder, "photo.png", "content")
 	for _, tc := range []struct {
@@ -769,7 +769,7 @@ func TestFileContentEnforcesDownloadAccess(t *testing.T) {
 		{"missing", env.adminToken, http.StatusNotFound},
 		{env.rootFolder.ID, env.adminToken, http.StatusBadRequest},
 	} {
-		resp, err := env.app.Test(newAuthRequest(http.MethodGet, "/api/files/"+tc.id+"/content", tc.token, nil))
+		resp, err := env.app.Test(newAuthRequest(http.MethodGet, "/api/files/"+tc.id+"/view", tc.token, nil))
 		require.NoError(t, err)
 		require.Equal(t, tc.status, resp.StatusCode)
 		resp.Body.Close()
