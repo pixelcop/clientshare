@@ -2,6 +2,7 @@ package handlers_test
 
 import (
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -17,6 +18,55 @@ import (
 	tenantctx "github.com/pixelcop/clientshare/internal/tenant"
 	"github.com/stretchr/testify/require"
 )
+
+func TestReplayConfigClientIP(t *testing.T) {
+	for _, tt := range []struct {
+		name      string
+		forwarded string
+		cachedIP  string
+		target    string
+		enabled   bool
+	}{
+		{name: "single IP", forwarded: "192.0.2.10", target: "192.0.2.10", enabled: true},
+		{name: "first forwarded IP", forwarded: "192.0.2.10, 198.51.100.20", target: "192.0.2.10", enabled: true},
+		{name: "first non-empty forwarded IP", forwarded: ", 192.0.2.10, 198.51.100.20", target: "192.0.2.0/24", enabled: true},
+		{name: "later forwarded IP does not match", forwarded: "192.0.2.10, 198.51.100.20", target: "198.51.100.20"},
+		{name: "cached request IP", forwarded: "198.51.100.20", cachedIP: "192.0.2.10", target: "192.0.2.10", enabled: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			env := setupSharedHandlersEnv(t)
+			require.NoError(t, env.db.AutoMigrate(&models.ReplayRequest{}))
+			rule := models.ReplayRequest{Label: "IP match", Targets: []models.ReplayTarget{{IP: tt.target}}, ExpiresAt: time.Now().UTC().Add(time.Hour)}
+			require.NoError(t, env.db.Create(&rule).Error)
+			app := fiber.New(fiber.Config{
+				ProxyHeader:      fiber.HeaderXForwardedFor,
+				TrustProxy:       true,
+				TrustProxyConfig: fiber.TrustProxyConfig{Loopback: true},
+			})
+			app.Use(func(c fiber.Ctx) error {
+				c.RequestCtx().SetRemoteAddr(&net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 12345})
+				if tt.cachedIP != "" {
+					c.Locals("ip", tt.cachedIP)
+				}
+				return c.Next()
+			})
+			handlers.NewReplayRequestHandler(env.db).RegisterPublic(app.Group("/api"))
+			req := httptest.NewRequest("GET", "/api/config", nil)
+			req.Header.Set(fiber.HeaderXForwardedFor, tt.forwarded)
+			response, err := app.Test(req)
+			require.NoError(t, err)
+			defer response.Body.Close()
+			require.Equal(t, http.StatusOK, response.StatusCode)
+			var body struct {
+				Debug struct {
+					Replay services.ReplayPolicy `json:"replay"`
+				} `json:"debug"`
+			}
+			require.NoError(t, json.NewDecoder(response.Body).Decode(&body))
+			require.Equal(t, tt.enabled, body.Debug.Replay.Enabled)
+		})
+	}
+}
 
 func TestReplayConfigAnonymousIdentityAndInternalAuthorization(t *testing.T) {
 	env := setupSharedHandlersEnv(t)

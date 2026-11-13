@@ -11,6 +11,7 @@ import (
 	"github.com/pixelcop/clientshare/internal/models"
 	"github.com/pixelcop/clientshare/internal/services"
 	tenantctx "github.com/pixelcop/clientshare/internal/tenant"
+	"github.com/pixelcop/clientshare/pkg/utils"
 	"gorm.io/gorm"
 )
 
@@ -45,7 +46,7 @@ func (h *ReplayRequestHandler) Config(c fiber.Ctx) error {
 	policy := services.ReplayPolicy{}
 	rules, err := h.svc.Active(c.Context())
 	if err == nil && len(rules) > 0 {
-		request := services.ReplayContext{IP: c.IP(), Hostname: c.Hostname(), TenantID: tenantctx.IDFromFiber(c)}
+		request := services.ReplayContext{IP: utils.GetIP(c), Hostname: c.Hostname(), TenantID: tenantctx.IDFromFiber(c)}
 		// Resolve identity only when a rule can need it. Anonymous clients never
 		// supply identity selectors, and invalid sessions remain anonymous.
 		needsIdentity := false

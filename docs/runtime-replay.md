@@ -29,7 +29,9 @@ groups are rejected. IP addresses and CIDRs are supported, hostnames are exact
 case-insensitive DNS names, and identity IDs are exact. Email matching is
 case-insensitive and requires a verified, tenant-local portal session. Submitted
 emails, query parameters and identity headers never establish identity. IP
-matching uses Fiber's client IP and the application's trusted-proxy policy;
+matching uses the same `utils.GetIP(c)` helper as access logs, including a cached
+request IP, the first non-empty IP in Fiber's client IP list, and a remote-IP
+fallback. Fiber's client IP follows the application's trusted-proxy policy;
 ensure the origin is restricted to trusted ingress in your deployment.
 
 The authenticated internal `GET /internal/replay-targets` directory supports
