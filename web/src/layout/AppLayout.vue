@@ -2,6 +2,7 @@
 import { storeToRefs } from 'pinia';
 
 import CollectDocument from '@/components/CollectDocument.vue';
+import HelpLauncher from '@/components/HelpLauncher.vue';
 import PasskeyEnrollmentDialog from '@/components/PasskeyEnrollmentDialog.vue';
 import { useLayout } from '@/composables/useLayout';
 import { useAuthStore } from '@/stores/auth';
@@ -26,6 +27,7 @@ const { isPublicLayout } = useLayout();
   </div>
 
   <PasskeyEnrollmentDialog />
+  <HelpLauncher :key="user?.id || 'login'" />
   <ConfirmDialog dismissableMask />
   <Toast />
 </template>

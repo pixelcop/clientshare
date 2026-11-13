@@ -25,7 +25,7 @@ func TestHelpAuthorizationAndReceipt(t *testing.T) {
 			return c.Next()
 		})
 		api := app.Group("/api", middleware.AuthRequired)
-		handlers.RegisterHelpRoutes(api, env.db, handlers.HelpOptions{Hosted: hosted, Provider: provider, GuideURL: "/custom-guide/", Recipient: "support@example.invalid", OperatorURL: "https://operator.invalid", OperatorLabel: "Contact portal operator", Version: "test-version"})
+		handlers.RegisterHelpRoutes(api, env.db, handlers.HelpOptions{Hosted: hosted, Provider: provider, GuideURL: "/custom-guide/", Recipient: "support@example.invalid", OperatorURL: "https://operator.invalid", OperatorLabel: "Contact portal operator", BookingURL: "https://booking.example.invalid/setup", Version: "test-version"})
 		return app
 	}
 	for _, tc := range []struct {
@@ -36,6 +36,7 @@ func TestHelpAuthorizationAndReceipt(t *testing.T) {
 		{"administrator", env.adminToken, "clientshare", "clientshare", true, 202},
 		{"manager", env.managerToken, "clientshare", "clientshare", true, 202},
 		{"client", env.clientToken, "clientshare", "none", true, 403},
+		{"share link", env.linkToken, "clientshare", "none", true, 403},
 		{"anonymous", "", "clientshare", "", true, 401},
 		{"self-hosted", env.adminToken, "none", "none", false, 403},
 		{"operator", env.adminToken, "operator", "operator", false, 403},
@@ -55,6 +56,13 @@ func TestHelpAuthorizationAndReceipt(t *testing.T) {
 				}
 				if _, ok := config["recipient"]; ok {
 					t.Fatal("destination leaked")
+				}
+				if tc.want == "clientshare" {
+					if config["booking_url"] != "https://booking.example.invalid/setup" {
+						t.Fatal("internal user missing booking link", config)
+					}
+				} else if _, ok := config["booking_url"]; ok {
+					t.Fatal("booking link leaked", config)
 				}
 			}
 			res.Body.Close()

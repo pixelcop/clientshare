@@ -4,6 +4,7 @@ Run against a local Vite server with the Python Playwright package installed:
     python web/src/__tests__/help_browser.py http://127.0.0.1:5199
 """
 import json
+import os
 import sys
 from playwright.sync_api import sync_playwright, expect
 
@@ -11,8 +12,10 @@ base = sys.argv[1]
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=True)
     for width in [1280, 390]:
-        page = browser.new_page(viewport={"width": width, "height": 844})
-        state = {"provider": "none", "posts": [], "fail": True}
+        page = browser.new_page(viewport={"width": width, "height": 844}, has_touch=width == 390)
+        if os.environ.get("HELP_COLOR_MODE") == "dark":
+            page.add_init_script("localStorage.setItem('color-mode', 'dark')")
+        state = {"provider": "none", "posts": [], "fail": True, "role": "admin", "booking": False, "user_id": "test-user"}
         external = []
         page.on("request", lambda req: external.append(req.url) if not req.url.startswith(base) else None)
 
@@ -21,14 +24,21 @@ with sync_playwright() as p:
             data = {}
             status = 200
             if path.endswith("/auth/me"):
-                data = {"id": "test-user", "role": "admin", "email": "admin@example.invalid", "name": "Test Admin"}
+                if state["role"] is None:
+                    status = 401
+                else:
+                    data = {"id": state["user_id"], "role": state["role"], "email": "admin@example.invalid", "name": "Test Admin"}
+            elif path.endswith("/auth/passkeys/login/options"):
+                data = {"passkey": False, "password": True}
             elif path.endswith("/settings/branding"):
                 data = {"site_title": "Test Portal", "docs_url": "/configured-guide/"}
-            elif path.endswith("/help"):
+            elif path.endswith("/help") or path.endswith("/help/login"):
                 data = {"provider": state["provider"], "guide_url": "/configured-guide/", "support_label": "Contact ClientShare support", "reply_email": "admin@example.invalid", "requester_name": "Test Admin"}
+                if state["booking"]:
+                    data["booking_url"] = "https://booking.example.invalid/setup"
                 if state["provider"] == "operator":
                     data.update(support_label="Contact your portal operator", support_url="https://operator.example.invalid/contact")
-            elif path.endswith("/help/messages"):
+            elif path.endswith("/help/messages") or path.endswith("/help/login/messages"):
                 state["posts"].append(route.request.post_data_json)
                 status = 503 if state["fail"] else 202
                 data = {"received": True, "id": "test-receipt"} if status == 202 else {"error": "offline"}
@@ -39,21 +49,23 @@ with sync_playwright() as p:
         page.route("**/api/**", api)
         # Existing app-wide external font styles are unrelated to Help. Block them
         # in this local check and track only requests made after initial rendering.
-        page.route("https://**/*", lambda route: route.abort())
+        page.route("https://**/*", lambda route: route.fallback() if route.request.url.startswith(base) else route.abort())
         page.goto(base + "/clients")
         page.wait_for_load_state("networkidle")
         external.clear()
         page.get_by_role("button", name="Help", exact=True).click()
-        guide_link = page.get_by_role("link", name="User guide", exact=True)
+        menu = page.get_by_role("menu", name="Help and resources", exact=True)
+        guide_link = menu.get_by_role("menuitem", name="User guide", exact=True).locator("a")
         expect(guide_link).to_be_visible()
         expect(guide_link).to_have_attribute("href", "/configured-guide/")
         guide_link.focus()
         expect(guide_link).to_be_focused()
         dialog = page.get_by_role("dialog")
-        expect(dialog.get_by_role("button", name="Getting started: Collect a document")).to_be_visible()
-        expect(dialog.get_by_role("button", name="Contact ClientShare support")).to_have_count(0)
-        page.keyboard.press("Escape")
+        expect(menu.get_by_role("menuitem", name="Getting started: Collect a document")).to_be_visible()
+        expect(menu.get_by_role("menuitem", name="Contact ClientShare support")).to_have_count(0)
         expect(dialog).not_to_be_visible()
+        page.keyboard.press("Escape")
+        expect(menu).not_to_be_visible()
         assert not external, external
 
         state["provider"] = "operator"
@@ -62,18 +74,50 @@ with sync_playwright() as p:
         help_button = page.get_by_role("button", name="Help", exact=True)
         help_button.focus()
         page.keyboard.press("Enter")
-        expect(dialog).to_be_visible()
-        expect(dialog.get_by_role("link", name="User guide")).to_have_attribute("href", "/configured-guide/")
-        expect(dialog.get_by_role("link", name="Contact your portal operator")).to_have_attribute("href", "https://operator.example.invalid/contact")
+        expect(menu).to_be_visible()
+        expect(menu.get_by_role("menuitem", name="User guide").locator("a")).to_have_attribute("href", "/configured-guide/")
+        expect(menu.get_by_role("menuitem", name="Contact your portal operator").locator("a")).to_have_attribute("href", "https://operator.example.invalid/contact")
         page.keyboard.press("Escape")
-        expect(dialog).not_to_be_visible()
+        expect(menu).not_to_be_visible()
         expect(help_button).to_be_focused()
         state["provider"] = "clientshare"
         page.reload()
         page.wait_for_load_state("networkidle")
+        widget = page.get_by_role("button", name="Need help?", exact=True)
+        dismiss_widget = page.get_by_role("button", name="Dismiss help widget", exact=True)
+        if width == 1280:
+            page.mouse.move(0, 844)
+            expect(dismiss_widget).not_to_be_visible()
+            before = widget.bounding_box()
+            if os.environ.get("HELP_SCREENSHOT_DIR"):
+                page.screenshot(path=f"{os.environ['HELP_SCREENSHOT_DIR']}/help-widget-collapsed.png", animations="disabled")
+            widget.hover()
+            expect(dismiss_widget).to_be_visible()
+            page.locator(".support-widget-dismiss-slot").evaluate("el => Promise.all(el.getAnimations().map(animation => animation.finished))")
+            after = widget.bounding_box()
+            assert abs(before["x"] - after["x"]) < 1
+            assert abs(before["width"] - after["width"]) < 1
+            if os.environ.get("HELP_SCREENSHOT_DIR"):
+                page.screenshot(path=f"{os.environ['HELP_SCREENSHOT_DIR']}/help-widget-expanded.png", animations="disabled")
+            page.mouse.move(0, 844)
+            expect(dismiss_widget).not_to_be_visible()
+            widget.focus()
+            expect(dismiss_widget).to_be_visible()
+            help_button.focus()
+        else:
+            expect(dismiss_widget).to_be_visible()
+            assert dismiss_widget.bounding_box()["width"] >= 44
         external.clear()
         help_button.click()
-        dialog.get_by_role("button", name="Contact ClientShare support").click()
+        expect(dialog).not_to_be_visible()
+        popup = page.locator("#help-menu")
+        expect(popup).to_have_css("margin-top", "7px")
+        expect(popup).to_have_css("max-width", f"{width - 28}px")
+        menu_bounds = menu.bounding_box()
+        assert menu_bounds["x"] >= 0 and menu_bounds["x"] + menu_bounds["width"] <= width
+        if os.environ.get("HELP_SCREENSHOT_DIR"):
+            page.screenshot(path=f"{os.environ['HELP_SCREENSHOT_DIR']}/help-menu-{width}.png", full_page=True, animations="disabled")
+        menu.get_by_role("menuitem", name="Contact ClientShare support").click()
         expect(dialog.get_by_text("Tell us what you need a hand with. Your message goes straight to the ClientShare support team.")).to_be_visible()
         expect(dialog.get_by_text("admin@example.invalid", exact=False)).to_have_count(0)
         expect(dialog.get_by_text("Test Admin", exact=False)).to_have_count(0)
@@ -82,13 +126,15 @@ with sync_playwright() as p:
         # An untouched form returns to the main Help menu when reopened.
         page.keyboard.press("Escape")
         help_button.click()
-        expect(dialog.get_by_role("link", name="User guide")).to_be_visible()
+        expect(menu.get_by_role("menuitem", name="User guide")).to_be_visible()
         expect(field).to_have_count(0)
-        dialog.get_by_role("button", name="Contact ClientShare support").click()
+        menu.get_by_role("menuitem", name="Contact ClientShare support").click()
         field.fill("Help me configure this portal")
-        # A started draft reopens directly in the form with its content intact.
+        # The menu remains a menu even with a draft; support reopens that draft.
         page.keyboard.press("Escape")
         help_button.click()
+        expect(menu).to_be_visible()
+        menu.get_by_role("menuitem", name="Contact ClientShare support").click()
         expect(field).to_have_value("Help me configure this portal")
         dialog.get_by_role("button", name="Send message").click()
         expect(dialog.get_by_role("alert")).to_be_visible()
@@ -103,6 +149,80 @@ with sync_playwright() as p:
         bounds = dialog.bounding_box()
         assert bounds["x"] >= 0 and bounds["x"] + bounds["width"] <= width
         assert not external, external
+        # The floating launcher opens the same form directly; only internal
+        # users may render a booking link, even if capabilities are stale.
+        dialog.get_by_role("status").get_by_role("button", name="Close", exact=True).click()
+        state["booking"] = True
+        page.get_by_role("button", name="Need help?", exact=True).click()
+        expect(dialog.get_by_role("link", name="Book a 20-minute setup session")).to_have_attribute("href", "https://booking.example.invalid/setup")
+        page.keyboard.press("Escape")
+        # Dismissal persists for this signed-in user, but Help still opens support.
+        page.get_by_role("button", name="Dismiss help widget", exact=True).click()
+        expect(page.get_by_role("button", name="Need help?", exact=True)).to_have_count(0)
+        expect(help_button).to_be_focused()
+        page.reload()
+        page.wait_for_load_state("networkidle")
+        expect(page.get_by_role("button", name="Need help?", exact=True)).to_have_count(0)
+        assert page.evaluate("localStorage.getItem('clientshare-support-widget-dismissed:test-user')") == "true"
+        help_button.focus()
+        page.keyboard.press("Enter")
+        expect(menu.get_by_role("menuitem", name="Contact ClientShare support")).to_be_visible()
+        page.keyboard.press("End")
+        page.keyboard.press("Enter")
+        expect(dialog.get_by_label("How can we help?")).to_be_visible()
+        page.keyboard.press("Escape")
+        # A shared browser's other account keeps its own widget preference.
+        state["user_id"] = "another-user"
+        page.reload()
+        page.wait_for_load_state("networkidle")
+        expect(page.get_by_role("button", name="Need help?", exact=True)).to_be_visible()
+        state["user_id"] = "test-user"
+        for role in ["client", "customer", "link"]:
+            state["role"] = role
+            page.goto(base + "/files")
+            page.reload()
+            page.wait_for_load_state("networkidle")
+            expect(page.get_by_role("button", name="Need help?", exact=True)).to_have_count(0)
+
+        state["role"] = None
+        page.goto(base + "/login")
+        page.reload()
+        page.wait_for_load_state("networkidle")
+        widget = page.get_by_role("button", name="Need help?", exact=True)
+        expect(widget).to_be_visible()
+        expect(page.get_by_role("button", name="Dismiss help widget", exact=True)).to_have_count(0)
+        # Existing signed-in dismissal never hides help on a logged-out page.
+        page.reload()
+        page.wait_for_load_state("networkidle")
+        expect(widget).to_be_visible()
+        widget.focus()
+        page.keyboard.press("Enter")
+        expect(dialog).to_be_visible()
+        expect(dialog.get_by_role("link", name="Book a 20-minute setup session")).to_have_count(0)
+        dialog.get_by_label("How can we help?").fill("I cannot sign in")
+        dialog.get_by_label("Where should we reply?").fill("visitor@example.invalid")
+        bounds = dialog.bounding_box()
+        assert bounds["x"] >= 0 and bounds["x"] + bounds["width"] <= width
+        assert bounds["y"] >= 0 and bounds["y"] + bounds["height"] <= 844
+        assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+        if os.environ.get("HELP_SCREENSHOT_DIR"):
+            expect(dialog).to_have_css("opacity", "1")
+            page.screenshot(path=f"{os.environ['HELP_SCREENSHOT_DIR']}/help-login-{width}.png", full_page=True, animations="disabled")
+        dialog.get_by_role("button", name="Send message").click()
+        expect(dialog.get_by_role("status")).to_be_visible()
+        assert state["posts"][-1]["email"] == "visitor@example.invalid"
+        assert set(state["posts"][-1]) == {"id", "message", "email"}
+        page.keyboard.press("Escape")
+        expect(widget).to_be_focused()
+        # Email-first sign-in moves focus to the password when revealed,
+        # including after returning to choose a different email.
+        login_email = page.get_by_label("Email", exact=True)
+        login_email.fill("visitor@example.invalid")
+        login_email.press("Enter")
+        expect(page.get_by_label("Password", exact=True)).to_be_focused()
+        page.get_by_role("button", name="Use a different email", exact=True).click()
+        page.get_by_label("Email", exact=True).press("Enter")
+        expect(page.get_by_label("Password", exact=True)).to_be_focused()
         page.close()
     browser.close()
 print("Help browser checks passed (desktop and mobile)")
