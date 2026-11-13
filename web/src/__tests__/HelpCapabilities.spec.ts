@@ -9,6 +9,15 @@ describe('shared help capabilities', () => {
     invalidateHelpCapabilities();
   });
 
+  it('keeps public login help separate from authenticated capabilities', async () => {
+    const get = vi.spyOn(axios, 'get').mockResolvedValueOnce({ data: { provider: 'clientshare', booking_url: 'https://example.invalid/book' } }).mockResolvedValueOnce({ data: { provider: 'clientshare' } });
+    await fetchHelpCapabilities();
+    await expect(fetchHelpCapabilities(false)).resolves.toEqual({ provider: 'clientshare' });
+    await fetchHelpCapabilities(false);
+    expect(get).toHaveBeenCalledTimes(2);
+    expect(get).toHaveBeenNthCalledWith(2, '/api/help/login');
+  });
+
   it('shares concurrent consumers and caches later Help opens', async () => {
     const get = vi.spyOn(axios, 'get').mockResolvedValue({ data: { provider: 'clientshare' } });
     const first = fetchHelpCapabilities();

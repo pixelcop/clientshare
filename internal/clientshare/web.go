@@ -56,6 +56,8 @@ func NewWebApp(cfg *Config, db *gorm.DB, logger *zap.Logger, emailQueue emailpkg
 
 	insecure := fiber.New()
 	app.Use("/api", insecure)
+	helpOptions := handlers.HelpOptions{Hosted: cfg.Tenancy.Mode == "hosted", Provider: cfg.Help.Provider, GuideURL: cfg.DocsURL(), OperatorURL: cfg.Help.OperatorURL, OperatorLabel: cfg.Help.OperatorLabel, Recipient: cfg.Help.Recipient, BookingURL: cfg.Help.BookingURL, Version: cfg.CommitHash}
+	handlers.RegisterLoginHelpRoutes(insecure, db, helpOptions)
 
 	// Health check endpoint
 	insecure.Get("/healthz", func(c fiber.Ctx) error {
@@ -104,7 +106,7 @@ func NewWebApp(cfg *Config, db *gorm.DB, logger *zap.Logger, emailQueue emailpkg
 	api := fiber.New()
 	app.Use("/api", api)
 	api.Use("/", middleware.AuthRequired)
-	handlers.RegisterHelpRoutes(api, db, handlers.HelpOptions{Hosted: cfg.Tenancy.Mode == "hosted", Provider: cfg.Help.Provider, GuideURL: cfg.DocsURL(), OperatorURL: cfg.Help.OperatorURL, OperatorLabel: cfg.Help.OperatorLabel, Recipient: cfg.Help.Recipient, BookingURL: cfg.Help.BookingURL, Version: cfg.CommitHash})
+	handlers.RegisterHelpRoutes(api, db, helpOptions)
 
 	// User management endpoints (admin/manager)
 	handlers.RegisterUserRoutes(api, db, emailQueue, cfg.Server.BaseURL, inviteTokenSecret, jwtSecret, inviteTTL, resetTTL, tenantSettingsService)

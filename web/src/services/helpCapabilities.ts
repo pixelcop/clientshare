@@ -10,20 +10,23 @@ export interface HelpCapabilities {
   booking_url?: string;
 }
 
-let cached: Promise<HelpCapabilities> | undefined;
+const cache = new Map<string, Promise<HelpCapabilities>>();
 
 export function invalidateHelpCapabilities() {
-  cached = undefined;
+  cache.clear();
 }
 
 // Share both pending requests and successful results for the current session.
 // Failed requests are retryable; an old failure cannot evict a new session.
-export function fetchHelpCapabilities() {
+export function fetchHelpCapabilities(authenticated = true) {
+  const endpoint = authenticated ? '/api/help' : '/api/help/login';
+  let cached = cache.get(endpoint);
   if (!cached) {
-    const request = axios.get<HelpCapabilities>('/api/help').then(({ data }) => data);
+    const request = axios.get<HelpCapabilities>(endpoint).then(({ data }) => data);
     cached = request;
+    cache.set(endpoint, request);
     void request.catch(() => {
-      if (cached === request) {cached = undefined;}
+      if (cache.get(endpoint) === request) {cache.delete(endpoint);}
     });
   }
   return cached;

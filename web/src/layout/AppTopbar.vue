@@ -2,7 +2,6 @@
 import type { MenuItem } from 'openvue/menuitem';
 import { storeToRefs } from 'pinia';
 
-import HelpLauncher from '@/components/HelpLauncher.vue';
 import Logo from '@/components/Logo.vue';
 import UserMenu from '@/components/UserMenu.vue';
 import { useAuthStore } from '@/stores/auth';
@@ -120,7 +119,7 @@ const menuItems = computed<MenuItem[]>(() => {
 
     <template #end>
       <div class="layout-topbar-actions">
-        <HelpLauncher v-if="user" :key="user.id" />
+        <div id="help-launcher" />
         <div class="layout-config-menu">
           <UserMenu v-if="user" />
         </div>
