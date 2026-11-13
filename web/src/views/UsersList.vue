@@ -256,7 +256,7 @@ function clearClientScope() {
     <div class="flex items-center justify-between mb-4">
       <div>
         <h1 class="text-2xl font-bold">
-          {{ scopedClient ? `Users for ${scopedClient.name}` : 'Users' }}
+          Users<span v-if="scopedClient"> for <span data-sentry-mask>{{ scopedClient.name }}</span></span>
         </h1>
         <p class="text-sm text-muted-color">
           {{
@@ -329,8 +329,8 @@ function clearClientScope() {
           />
         </div>
       </div>
-      <div v-if="usersStore.error" class="text-red-600">{{ usersStore.error }}</div>
-      <div v-if="clientsStore.error" class="text-red-600">{{ clientsStore.error }}</div>
+      <div v-if="usersStore.error" data-sentry-mask class="text-red-600">{{ usersStore.error }}</div>
+      <div v-if="clientsStore.error" data-sentry-mask class="text-red-600">{{ clientsStore.error }}</div>
     </div>
 
     <Card class="mt-4 shadow">

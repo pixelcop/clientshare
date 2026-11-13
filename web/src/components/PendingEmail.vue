@@ -214,12 +214,14 @@ defineExpose({ fetchPendingEmails });
     </template>
     <div
       v-if="pendingError"
+      data-sentry-mask
       class="mt-3 rounded border border-red-200 bg-red-50 text-red-700 px-3 py-2 text-sm"
     >
       {{ pendingError }}
     </div>
     <div
       v-if="pendingSuccess"
+      data-sentry-mask
       class="mt-3 rounded border border-green-200 bg-green-50 text-green-700 px-3 py-2 text-sm"
     >
       {{ pendingSuccess }}

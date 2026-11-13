@@ -85,6 +85,7 @@ describe('exact-scope sharing panel', () => {
     await flushPromises();
     await wrapper.get('#item-file-email').setValue('teammate@example.test');
     await wrapper.get('.add-person').trigger('submit');
+    expect(wrapper.get('.recipient-identity').attributes()).toHaveProperty('data-sentry-mask');
     await wrapper.get('[aria-label="Send invitation"]').trigger('click');
     await flushPromises();
     expect(post.mock.calls[0][0]).toBe('/api/files/file/invitations');

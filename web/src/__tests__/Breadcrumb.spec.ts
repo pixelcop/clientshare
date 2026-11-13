@@ -57,6 +57,7 @@ describe('breadcrumb client location', () => {
   it('identifies the client at its workspace root', async () => {
     const { wrapper } = await render();
     expect(wrapper.get('h1').text()).toBe('Acme');
+    expect(wrapper.get('h1').element.closest('[data-sentry-mask]')).not.toBeNull();
     wrapper.unmount();
   });
 

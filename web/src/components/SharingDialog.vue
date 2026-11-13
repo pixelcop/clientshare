@@ -29,7 +29,7 @@ function requestClose() {
     dismissableMask
     blockScroll
     :draggable="false"
-    :pt="{ header: { style: { paddingBottom: '12px' } } }"
+    :pt="{ title: { 'data-sentry-mask': true }, header: { style: { paddingBottom: '12px' } } }"
     :style="{ width: '44rem', maxWidth: '95vw' }"
     @update:visible="(value) => !value && requestClose()"
   >

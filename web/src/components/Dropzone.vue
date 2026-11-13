@@ -174,7 +174,7 @@ function setDirectoryInput(element: Element | ComponentPublicInstance | null) {
       <slot />
       <div v-if="dragging" class="upload-highlight" aria-live="polite">
         <i class="oi oi-upload" aria-hidden="true" />
-        <span>Drop files to upload to {{ destination }}</span>
+        <span>Drop files to upload to <span data-sentry-mask>{{ destination }}</span></span>
       </div>
     </div>
     <Dialog
@@ -190,7 +190,7 @@ function setDirectoryInput(element: Element | ComponentPublicInstance | null) {
       <form class="space-y-4" @submit.prevent="submitRename">
         <p>These files already exist in the upload destination. Rename them to continue.</p>
         <div v-for="item in renameItems" :key="item.id" class="space-y-1">
-          <label :for="item.id" class="text-sm">{{ item.originalName }}</label>
+          <label data-sentry-mask :for="item.id" class="text-sm">{{ item.originalName }}</label>
           <InputText
             :id="item.id"
             v-model="item.name"

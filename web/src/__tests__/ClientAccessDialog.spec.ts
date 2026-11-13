@@ -66,6 +66,7 @@ describe('client access entry', () => {
       },
     });
     await flushPromises();
+    expect(wrapper.get('.p-dialog-title').attributes()).toHaveProperty('data-sentry-mask');
     expect(wrapper.text()).toContain('Entire client workspace');
     expect(wrapper.text()).not.toContain('Manage people');
     expect(

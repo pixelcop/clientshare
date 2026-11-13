@@ -79,15 +79,15 @@ watch(
     <Button as="a" :href="downloadUrl" :download="fileName" label="Download" icon="oi oi-download" />
   </div>
   <ImagePreview v-else-if="isImage" :file-url="fileUrl" :file-name="fileName" @error="failed = true" />
-  <div v-else-if="isAudio" class="audio-preview">
+  <div v-else-if="isAudio" data-sentry-block class="audio-preview">
     <audio :src="fileUrl" controls class="w-full max-w-lg" @error="failed = true">
       Your browser does not support the audio element.
     </audio>
   </div>
-  <div v-else-if="isPdf" class="pdf-preview">
+  <div v-else-if="isPdf" data-sentry-block class="pdf-preview">
     <PDFViewer class="pdf" :config="pdfConfig" :style="pdfSize" />
   </div>
-  <div v-else-if="isText" class="text-preview" :class="{ maximized }">
+  <div v-else-if="isText" data-sentry-block class="text-preview" :class="{ maximized }">
     <p v-if="loading" role="status">Loading preview…</p>
     <pre v-else><code>{{ textContent }}</code></pre>
   </div>

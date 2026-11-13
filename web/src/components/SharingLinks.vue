@@ -84,7 +84,7 @@ function openedAt(value: string) {
             class="access-form link-composer"
             @submit.prevent="createLink"
           >
-            <h4>Create a link for {{ scope.name }}</h4>
+            <h4>Create a link for <span data-sentry-mask>{{ scope.name }}</span></h4>
             <div class="link-settings">
               <div class="link-setting">
                 <label :id="`${key}-mode-label`" :for="`${key}-mode`"
@@ -131,7 +131,7 @@ function openedAt(value: string) {
             aria-label="Created link"
           >
             <h4 :ref="(element) => (resultHeading = element as HTMLElement | null)" tabindex="-1">
-              Link ready: {{ scope.name }}
+              Link ready: <span data-sentry-mask>{{ scope.name }}</span>
             </h4>
             <p class="muted">
               {{ modes.find((mode) => mode.value === result?.access_type)?.label }} ·

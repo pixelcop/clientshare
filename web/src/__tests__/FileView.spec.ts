@@ -61,6 +61,9 @@ describe('file page', () => {
     const download = vi.spyOn(useFileManagerStore(), 'downloadFile').mockResolvedValue();
     const { wrapper } = await render();
     expect(wrapper.get('h1').text()).toBe('archive.zip');
+    expect(wrapper.get('h1').element.closest('[data-sentry-mask]')).not.toBeNull();
+    expect(wrapper.get('.file-metadata').element.closest('[data-sentry-mask]')).not.toBeNull();
+    expect(wrapper.get('.file-header-actions').element.closest('[data-sentry-mask]')).toBeNull();
     expect(wrapper.find('.file-folder').exists()).toBe(false);
     expect(wrapper.text()).not.toContain('Containing folder');
     expect(wrapper.text()).toContain('4.0 KB');

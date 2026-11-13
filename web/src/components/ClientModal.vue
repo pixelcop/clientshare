@@ -170,8 +170,8 @@ function onSubmit() {
         </Button>
       </div>
     </form>
-    <div v-if="error" class="mt-2 text-red-600">{{ error }}</div>
-    <div v-if="linkError" class="mt-2 text-red-600">{{ linkError }}</div>
+    <div v-if="error" data-sentry-mask class="mt-2 text-red-600">{{ error }}</div>
+    <div v-if="linkError" data-sentry-mask class="mt-2 text-red-600">{{ linkError }}</div>
   </Dialog>
 </template>
 

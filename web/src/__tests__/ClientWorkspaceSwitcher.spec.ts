@@ -75,6 +75,18 @@ describe('authorized client workspace switching', () => {
     wrapper.unmount();
   });
 
+  it('masks workspace names in both the field and its teleported options', async () => {
+    const { wrapper } = await setup();
+    const select = wrapper.findComponent(Select);
+    expect(select.attributes()).toHaveProperty('data-sentry-mask');
+    await select.trigger('click');
+    await flushPromises();
+    const options = document.querySelector('[role="listbox"]');
+    expect(options?.textContent).toContain('Second workspace');
+    expect(options?.closest('[data-sentry-mask]')).not.toBeNull();
+    wrapper.unmount();
+  });
+
   it('hides the switcher for a named item-only account without memberships', async () => {
     vi.mocked(axios.get).mockResolvedValue({ data: [] });
     const { wrapper } = await setup('item-only-client');

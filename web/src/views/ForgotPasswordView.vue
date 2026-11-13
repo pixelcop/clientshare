@@ -59,8 +59,8 @@ async function onSubmit() {
           <span v-if="loading">Sending...</span>
           <span v-else>Send reset link</span>
         </Button>
-        <div v-if="message" class="mt-4 text-green-700 text-center">{{ message }}</div>
-        <div v-if="error" class="mt-4 text-red-600 text-center">{{ error }}</div>
+        <div v-if="message" data-sentry-mask class="mt-4 text-green-700 text-center">{{ message }}</div>
+        <div v-if="error" data-sentry-mask class="mt-4 text-red-600 text-center">{{ error }}</div>
       </form>
       <div class="mt-6 text-center">
         <router-link class="text-sm text-blue-600 hover:underline" to="/login"

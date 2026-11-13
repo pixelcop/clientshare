@@ -128,7 +128,7 @@ onMounted(() => {
         <p v-if="!supported" class="mb-4 text-sm text-orange-700">
           Passkeys require a secure connection and a compatible browser.
         </p>
-        <p v-if="error" class="mb-4 text-sm text-red-600">{{ error }}</p>
+        <p v-if="error" data-sentry-mask class="mb-4 text-sm text-red-600">{{ error }}</p>
         <div v-if="loading" class="text-sm text-muted-color">Loading passkeys...</div>
         <div
           v-else-if="passkeys.length === 0"
@@ -144,7 +144,7 @@ onMounted(() => {
           >
             <i class="oi oi-key text-primary" />
             <div class="min-w-40 flex-1">
-              <p class="font-medium">{{ passkey.name }}</p>
+              <p data-sentry-mask class="font-medium">{{ passkey.name }}</p>
               <p class="text-sm text-muted-color">
                 Added {{ formatDate(passkey.created_at) }}. Last used
                 {{ formatDate(passkey.last_used_at) }}.

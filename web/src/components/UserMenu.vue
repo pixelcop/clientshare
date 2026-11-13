@@ -79,6 +79,7 @@ const menuItems = computed(() => {
   <template v-if="user">
     <Avatar
       v-if="userInitials"
+      data-sentry-mask
       shape="circle"
       size="large"
       :label="userInitials"

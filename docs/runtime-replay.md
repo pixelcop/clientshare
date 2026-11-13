@@ -66,13 +66,26 @@ the earliest matching expiry forces a fresh evaluation.
 
 Replays require a portal build with `VITE_SENTRY_DSN` set, a reachable Sentry
 ingestion endpoint and a compatible CSP (including Replay's worker). With no
-DSN, config is still fetched but nothing is uploaded. Text/input masking and
-media blocking stay enabled; iframes and canvases are blocked. Additional
+DSN, config is still fetched but nothing is uploaded. Static UI text (navigation,
+buttons, labels and instructions) stays readable. Client/workspace names, user
+names/emails/initials, file and folder names/paths, file sizes/timestamps, activity
+details, email subjects/recipients, tenant branding text and data-bearing
+notifications are masked on their shared UI surfaces. All form values remain
+masked. Media, iframes and canvases are blocked; PDF and plain-text document
+contents are explicitly blocked as well. Additional
 recording events (console/network payloads) are dropped and network body capture
-is disabled. Link/source attributes are masked, replay event URLs omit query
+is disabled. Identifying text attributes (including titles and accessibility
+labels) are masked. Links with query strings, fragments, secure-link paths or
+contact destinations are blocked because URL attributes are normalized by the
+recorder before attribute masking. Ordinary route links remain visible; replay event URLs omit query
 strings/fragments, and recording is deferred on credential-bearing bootstrap
 URLs (such as an invitation token or hosted-login handoff) until consumed.
+When adding UI that renders identities, document metadata or other private
+values, mark the containing DOM element with `data-sentry-mask`. Use
+`data-sentry-block` for document content. Teleported dropdowns/dialogs need
+masking on the overlay/title itself, not just on a parent outside the teleport.
 Review your Sentry data-processing/consent requirements and DOM
-attributes before enabling recordings for real users; masking is not a substitute
+attributes before enabling recordings for real users; selective masking requires
+reviewing new data-bearing UI and is not a substitute
 for a privacy review. Verified user IDs and tenant IDs identify Sentry events;
 email is not explicitly added to Sentry user metadata.

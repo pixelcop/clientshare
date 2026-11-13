@@ -2,6 +2,7 @@
 import { Button, Dialog, Select } from 'openvue';
 
 import AccessSelect from '@/components/AccessSelect.vue';
+import { replaySensitiveTitlePT } from '@/services/replayPrivacy';
 import { useCollectionStore } from '@/stores/collection';
 import type { LinkAccessMode } from '@/types/linkAccess';
 import {
@@ -128,6 +129,7 @@ const formComponent = computed(() => (props.embedded ? 'div' : 'form'));
     :dismissableMask="!loading"
     blockScroll
     :header="`Share client workspace: ${targetName}`"
+    :pt="replaySensitiveTitlePT"
     :aria-label="`Share client workspace: ${targetName}`"
     :closable="!loading"
     :closeOnEscape="!loading"
@@ -142,7 +144,7 @@ const formComponent = computed(() => (props.embedded ? 'div' : 'form'));
       class="link-settings"
       @submit.prevent="expiryValid && emit('submit', getSettings())"
     >
-      <p class="link-scope">Sharing: entire client workspace · {{ targetName }}</p>
+      <p class="link-scope">Sharing: entire client workspace · <span data-sentry-mask>{{ targetName }}</span></p>
       <fieldset class="link-purpose" :disabled="loading">
         <legend>What would you like to do?</legend>
         <label
@@ -198,7 +200,7 @@ const formComponent = computed(() => (props.embedded ? 'div' : 'form'));
       <section class="link-confirmation" aria-label="Access summary">
         <p>
           <strong>Anyone with this link</strong> can use
-          <strong>{{ linkAccessLabel(accessType) }}</strong> in <strong>{{ targetName }}</strong
+          <strong>{{ linkAccessLabel(accessType) }}</strong> in <strong data-sentry-mask>{{ targetName }}</strong
           >.
         </p>
         <p>Includes all files and folders in this client.</p>

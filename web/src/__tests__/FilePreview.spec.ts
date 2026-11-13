@@ -24,6 +24,7 @@ describe('file preview', () => {
     const wrapper = mount(FilePreview, { props: { fileUrl: '/view', downloadUrl: '/download', fileType: 'text/plain', maximized: true } });
     await flushPromises();
     expect(wrapper.get('code').text()).toBe('<script>alert(1)</script>');
+    expect(wrapper.get('code').element.closest('[data-sentry-block]')).not.toBeNull();
     expect(wrapper.find('script').exists()).toBe(false);
     wrapper.unmount();
   });

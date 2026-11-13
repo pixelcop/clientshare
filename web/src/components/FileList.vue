@@ -110,7 +110,7 @@ function openItem(item: FileItem) {
       Loading files…
     </p>
     <div v-else-if="fileManager.error" role="alert" class="py-8 space-y-3">
-      <p>{{ fileManager.error }}</p>
+      <p data-sentry-mask>{{ fileManager.error }}</p>
       <Button label="Try again" severity="secondary" @click="fileManager.fetchFiles()" />
     </div>
     <div v-else-if="isEmpty" class="workspace-empty">

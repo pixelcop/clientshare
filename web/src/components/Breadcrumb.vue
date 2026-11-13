@@ -82,6 +82,7 @@ onMounted(measure);
 
 <template>
   <nav
+    data-sentry-mask
     ref="container"
     class="file-breadcrumb"
     aria-label="Folder path"
@@ -136,7 +137,7 @@ onMounted(measure);
         }}</router-link>
       </li>
     </ol>
-    <Menu :id="menuId" ref="menu" :model="hiddenItems" popup aria-label="Parent folders" />
+    <Menu data-sentry-mask :id="menuId" ref="menu" :model="hiddenItems" popup aria-label="Parent folders" />
     <!-- Intrinsic widths stay independent of the collapsed path, including after font loading. -->
     <div class="breadcrumb-measure" aria-hidden="true" inert>
       <div ref="measurements" class="breadcrumb-list">

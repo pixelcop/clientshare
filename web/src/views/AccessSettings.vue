@@ -3,6 +3,7 @@ import axios from 'axios';
 
 import AccessSelect from '@/components/AccessSelect.vue';
 import { GROUPS_UI_ENABLED } from '@/features';
+import { replaySensitiveSelectPT } from '@/services/replayPrivacy';
 import type { GroupDetails, TenantAccessRole } from '@/types/accessRoles';
 import { roleSummary, tenantRoleLabel } from '@/types/accessRoles';
 import type { Client, RolePermissions, User } from '@/types/models';
@@ -388,14 +389,14 @@ async function confirm() {
         class="py-4 border-b border-surface flex justify-between gap-4"
       >
         <div>
-          <h3 class="text-base font-semibold">{{ group.name }}</h3>
+          <h3 data-sentry-mask class="text-base font-semibold">{{ group.name }}</h3>
           <p class="text-sm text-muted-color">
             {{ group.member_ids.length }} members · {{ group.assignments.length }} access
             assignments
           </p>
           <ul class="text-sm mt-2">
             <li v-for="a in group.assignments" :key="a.id">
-              {{ a.scope_name }} · {{ tenantRoleLabel(roles, a.role_id) }}
+              <span data-sentry-mask>{{ a.scope_name }}</span> · {{ tenantRoleLabel(roles, a.role_id) }}
             </li>
           </ul>
         </div>
@@ -507,7 +508,8 @@ async function confirm() {
         <label class="grid gap-2"
           >Members<MultiSelect
             v-model="groupEditor.member_ids"
-            :options="users"
+              :options="users"
+              :pt="replaySensitiveSelectPT"
             :optionLabel="
               (u: User) => `${u.name || u.email} · ${u.access_profile?.user_type || u.role}`
             "
@@ -526,13 +528,14 @@ async function confirm() {
               :ariaLabel="`Client workspace for assignment ${index + 1}`"
               v-model="a.client_id"
               :options="clients"
+              :pt="replaySensitiveSelectPT"
               optionLabel="name"
               optionValue="id"
               filter
               required
               :disabled="!!a.file_id"
           /></label>
-          <p v-if="a.file_id" class="text-sm text-muted-color">
+          <p v-if="a.file_id" data-sentry-mask class="text-sm text-muted-color">
             Scoped item:
             {{
               groups
@@ -636,7 +639,7 @@ async function confirm() {
       "
     >
       <div class="grid gap-5">
-        <p>{{ review?.message }}</p>
+        <p data-sentry-mask>{{ review?.message }}</p>
         <div class="flex justify-end gap-2">
           <Button
             label="Back"

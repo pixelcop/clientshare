@@ -94,12 +94,12 @@ const clientActions = computed<MenuItem[]>(() => [
         v-if="client.root_folder_id"
         :id="`collect-client-${client.id}`"
         :to="`/folder/${client.root_folder_id}`"
-        >{{ client.name }}</router-link
+        data-sentry-mask>{{ client.name }}</router-link
       >
-      <span v-else>{{ client.name }}</span>
+      <span v-else data-sentry-mask>{{ client.name }}</span>
     </td>
     <!--
-    <td class="px-4 py-2 hidden sm:table-cell">{{ client.folder_path }}</td>
+    <td data-sentry-mask class="px-4 py-2 hidden sm:table-cell">{{ client.folder_path }}</td>
     <td class="px-4 py-2 hidden sm:table-cell">{{ formatDate(client.created_at) }}</td>
     -->
     <td class="px-0 sm:px-4 py-2">

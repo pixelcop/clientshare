@@ -44,7 +44,7 @@ async function accept() {
     </p>
     <template v-else-if="auth.user && auth.user.role !== 'link'">
       <p>
-        Signed in as <strong>{{ auth.user.email }}</strong>
+        Signed in as <strong data-sentry-mask>{{ auth.user.email }}</strong>
       </p>
       <div class="flex flex-wrap gap-2">
         <Button label="Accept invitation" :loading="busy" @click="accept" /><Button

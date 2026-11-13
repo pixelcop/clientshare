@@ -79,7 +79,7 @@ async function skipAndDismiss() {
         Passkeys need a secure connection and a compatible browser. You can add one later from
         Security.
       </p>
-      <p v-if="error" class="text-sm text-red-600">{{ error }}</p>
+      <p v-if="error" data-sentry-mask class="text-sm text-red-600">{{ error }}</p>
     </div>
 
     <template #footer>

@@ -9,7 +9,7 @@ defineEmits(['delete', 'close']);
       <h2 class="mb-0!">Delete Client</h2>
     </template>
     <p>
-      Are you sure you want to delete <span class="font-semibold">{{ clientName }}</span
+      Are you sure you want to delete <span data-sentry-mask class="font-semibold">{{ clientName }}</span
       >?
     </p>
     <div class="flex justify-end gap-2 mt-4">
@@ -24,6 +24,6 @@ defineEmits(['delete', 'close']);
         Delete
       </button>
     </div>
-    <div v-if="error" class="mt-2 text-red-600">{{ error }}</div>
+    <div v-if="error" data-sentry-mask class="mt-2 text-red-600">{{ error }}</div>
   </Dialog>
 </template>

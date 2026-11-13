@@ -87,7 +87,7 @@ const menuItems = computed<MenuItem[]>(() => {
             alt="Logo"
             class="h-8 w-8 object-contain"
           />
-          <span v-if="branding.title !== defaultBrandingTitle">{{ branding.title }}</span>
+          <span v-if="branding.title !== defaultBrandingTitle" data-sentry-mask>{{ branding.title }}</span>
           <Logo v-else />
         </router-link>
       </div>

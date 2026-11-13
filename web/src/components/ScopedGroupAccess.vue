@@ -3,6 +3,7 @@ import axios from 'axios';
 
 import AccessSelect from '@/components/AccessSelect.vue';
 import { GROUPS_UI_ENABLED } from '@/features';
+import { replaySensitiveSelectPT } from '@/services/replayPrivacy';
 import { useAuthStore } from '@/stores/auth';
 import type { GroupDetails, TenantAccessRole } from '@/types/accessRoles';
 import { applicableRole, roleSummary, tenantRoleLabel } from '@/types/accessRoles';
@@ -207,7 +208,7 @@ async function confirm() {
       :key="a.id"
       class="grid gap-2 border-b border-surface pb-3"
     >
-      <strong>{{ a.group_name || a.recipient_name || a.recipient_email }}</strong>
+      <strong data-sentry-mask>{{ a.group_name || a.recipient_name || a.recipient_email }}</strong>
       <p class="text-sm text-muted-color">
         {{ a.group_id ? 'Group access' : 'Additional invitation assignment' }} ·
         {{ tenantRoleLabel(roles, a.role_id) }}
@@ -253,6 +254,7 @@ async function confirm() {
     >
       <label class="grid gap-2"
         >Group<Select
+          :pt="replaySensitiveSelectPT"
           ariaLabel="Group"
           v-model="groupId"
           :options="groups"
@@ -292,7 +294,7 @@ async function confirm() {
       class="grid gap-3 border border-surface p-4"
       aria-label="Review scoped access"
     >
-      <p>{{ review.text }}</p>
+      <p data-sentry-mask>{{ review.text }}</p>
       <div class="flex gap-2">
         <Button
           label="Cancel"

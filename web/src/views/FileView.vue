@@ -163,7 +163,7 @@ onBeforeUnmount(() => {
       />
       <template v-if="file">
         <i :class="getFileIcon(file)" class="file-header-icon" aria-hidden="true" />
-        <div class="file-heading">
+        <div data-sentry-mask class="file-heading">
           <h1 :title="file.filename">{{ file.filename }}</h1>
           <div class="file-metadata">
             <router-link v-if="file.folder_id && folderName" :to="homeRoute" class="file-folder">

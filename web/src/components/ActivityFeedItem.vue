@@ -105,7 +105,7 @@ const actionLabel = computed(() => {
   >
     <div class="flex flex-row">
       <i class="pt-1 text-muted-color" :class="iconClass(item)" />
-      <div class="ml-2 flex flex-col gap-1">
+      <div data-sentry-mask class="ml-2 flex flex-col gap-1">
         <div v-if="isFileUploaded" class="flex flex-wrap gap-2">
           <span v-if="item.client_name">{{ item.client_name }}</span>
           <span v-if="folderPath" class="text-sm text-muted-color">

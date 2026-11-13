@@ -11,7 +11,7 @@ defineEmits(['delete', 'close']);
     <div class="bg-white p-6 rounded shadow w-full max-w-sm">
       <h2 class="text-lg font-bold mb-4">Delete User</h2>
       <p>
-        Are you sure you want to delete <span class="font-semibold">{{ userName }}</span
+        Are you sure you want to delete <span data-sentry-mask class="font-semibold">{{ userName }}</span
         >?
       </p>
       <div class="flex justify-end gap-2 mt-4">
@@ -26,7 +26,7 @@ defineEmits(['delete', 'close']);
           Delete
         </button>
       </div>
-      <div v-if="error" class="mt-2 text-red-600">{{ error }}</div>
+      <div v-if="error" data-sentry-mask class="mt-2 text-red-600">{{ error }}</div>
     </div>
   </div>
 </template>

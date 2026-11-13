@@ -169,7 +169,7 @@ onMounted(async () => {
           <span v-if="loading">Checking sign-in options...</span>
           <span v-else>Continue</span>
         </Button>
-        <div v-if="error" class="mt-4 text-red-600 text-center">{{ error }}</div>
+        <div v-if="error" data-sentry-mask class="mt-4 text-red-600 text-center">{{ error }}</div>
       </form>
 
       <form v-else @submit.prevent="onPasswordSubmit">
@@ -203,7 +203,7 @@ onMounted(async () => {
             Use a different email
           </button>
         </div>
-        <div v-if="error" class="mt-4 text-red-600 text-center">{{ error }}</div>
+        <div v-if="error" data-sentry-mask class="mt-4 text-red-600 text-center">{{ error }}</div>
       </form>
     </div>
   </div>

@@ -70,6 +70,13 @@ async function mountComponent() {
 }
 
 describe('ClientListItem', () => {
+  it('masks client identity without masking row actions', async () => {
+    const { wrapper } = await mountComponent();
+    expect(wrapper.get('[data-sentry-mask]').text()).toBe('Acme');
+    expect(wrapper.get('.split-button-stub').element.closest('[data-sentry-mask]')).toBeNull();
+    wrapper.unmount();
+  });
+
   it('emits add-user from the Add User action', async () => {
     const { wrapper, router } = await mountComponent();
 

@@ -4,6 +4,7 @@ import { Button, Dialog, InputText } from 'openvue';
 import AccessSelect from '@/components/AccessSelect.vue';
 import type { SharingPanelSession } from '@/composables/useSharingPanel';
 import { GROUPS_UI_ENABLED } from '@/features';
+import { replaySensitiveTitlePT } from '@/services/replayPrivacy';
 import { useAuthStore } from '@/stores/auth';
 import { defaultAccessRole, roleCapabilities } from '@/types/accessRoles';
 import { describeCapabilities } from '@/types/sharing';
@@ -70,7 +71,7 @@ const {
     <div v-if="drafts.length" class="draft-people" aria-label="People to invite">
       <div v-for="person in drafts" :key="person.id" class="draft-person">
         <div class="recipient-settings">
-          <div class="recipient-identity">
+          <div data-sentry-mask class="recipient-identity">
             <span class="person-avatar" aria-hidden="true">{{
               person.email[0]?.toUpperCase()
             }}</span>
@@ -202,7 +203,7 @@ const {
         "
         @click="isMobile && person.can_remove && (mobilePerson = { kind: 'member', item: person })"
       >
-        <div class="person-identity">
+        <div data-sentry-mask class="person-identity">
           <span class="person-avatar" aria-hidden="true">{{
             (person.name || person.email)[0]?.toUpperCase()
           }}</span>
@@ -254,7 +255,7 @@ const {
         "
         @click="isMobile && canEdit(grant) && (mobilePerson = { kind: 'grant', item: grant })"
       >
-        <div class="person-identity">
+        <div data-sentry-mask class="person-identity">
           <span class="person-avatar" aria-hidden="true">{{
             (grant.recipient_name || grant.recipient_email)[0]?.toUpperCase()
           }}</span>
@@ -315,11 +316,11 @@ const {
           (mobilePerson = { kind: 'invitation', item: invitation })
         "
       >
-        <span v-if="isMobile" class="person-avatar" aria-hidden="true">{{
+        <span v-if="isMobile" data-sentry-mask class="person-avatar" aria-hidden="true">{{
           invitation.email[0]?.toUpperCase()
         }}</span>
         <div class="mobile-invitation-identity">
-          <strong>{{ invitation.email }}</strong>
+          <strong data-sentry-mask>{{ invitation.email }}</strong>
           <small
             >{{
               invitation.accepted_at
@@ -361,7 +362,7 @@ const {
         <summary>Past invitations & access ({{ pastPeople.length }})</summary>
         <div v-for="person in pastPeople" :key="person.id" class="access-row">
           <div>
-            <strong>{{ person.email }}</strong
+            <strong data-sentry-mask>{{ person.email }}</strong
             ><small>{{ person.state }}</small>
           </div>
         </div>
@@ -375,6 +376,7 @@ const {
         ><span class="mobile-avatar-stack" aria-hidden="true"
           ><span
             v-for="person in previewPeople.slice(0, 5)"
+            data-sentry-mask
             :key="person.email"
             class="person-avatar"
             >{{ person.name[0]?.toUpperCase() }}</span
@@ -392,11 +394,12 @@ const {
     dismissableMask
     :draggable="false"
     :header="mobilePersonDetails?.name || 'Person access'"
+    :pt="replaySensitiveTitlePT"
     :style="{ width: '100vw', maxWidth: '100vw' }"
     @update:visible="(value) => !value && (mobilePerson = null)"
   >
     <template v-if="mobilePersonDetails">
-      <p class="muted sheet-email">{{ mobilePersonDetails.email }}</p>
+      <p data-sentry-mask class="muted sheet-email">{{ mobilePersonDetails.email }}</p>
       <div class="mobile-role-options" aria-label="Access role">
         <button
           v-for="role in mobilePersonDetails.roles"

@@ -76,7 +76,7 @@ async function submitRegistration(e: Event) {
         </div>
       </form>
       <p v-if="publicLink.registerError" class="mt-2 text-sm text-red-600">
-        {{ publicLink.registerError }}
+        <span data-sentry-mask>{{ publicLink.registerError }}</span>
       </p>
       <p v-if="publicLink.registerSuccess" class="mt-2 text-sm text-emerald-600">
         Account created. You can now sign in from the login page.

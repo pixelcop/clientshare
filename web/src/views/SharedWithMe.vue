@@ -68,7 +68,7 @@ function rights(item: FileItem) {
         <router-link :to="item.type === 'folder' ? `/folder/${item.id}` : `/files/${item.id}`">
           <i :class="item.type === 'folder' ? 'oi oi-folder' : 'oi oi-file'" aria-hidden="true" />
           <span
-            ><strong>{{ item.filename }}</strong
+            ><strong data-sentry-mask>{{ item.filename }}</strong
             ><small>{{ rights(item) }}</small></span
           >
           <i class="oi oi-angle-right" aria-hidden="true" />

@@ -361,6 +361,7 @@ onMounted(() => {
                       </label>
                     </div>
                     <FileUpload
+                      :pt="{ file: { 'data-sentry-mask': true } }"
                       class="p-button-outlined"
                       ref="fileupload"
                       mode="advanced"
@@ -410,7 +411,7 @@ onMounted(() => {
                   <p class="text-xs text-muted-color">
                     Used for invite, reset-password, and secure-link URLs for this tenant.
                   </p>
-                  <p v-if="effectivePublicBaseURL" class="text-xs text-muted-color">
+                  <p v-if="effectivePublicBaseURL" data-sentry-mask class="text-xs text-muted-color">
                     Current effective URL: {{ effectivePublicBaseURL }}
                   </p>
                 </div>
@@ -472,14 +473,14 @@ onMounted(() => {
                         alt="Logo preview"
                         class="h-10 w-10 object-contain rounded"
                       />
-                      <span v-if="form.siteTitle && form.siteTitle !== defaultBrandingTitle">{{
+                      <span v-if="form.siteTitle && form.siteTitle !== defaultBrandingTitle" data-sentry-mask>{{
                         form.siteTitle
                       }}</span>
                       <Logo v-else />
                     </div>
                   </div>
                 </div>
-                <div class="rounded border p-3 space-y-1 text-sm text-slate-600">
+                <div data-sentry-mask class="rounded border p-3 space-y-1 text-sm text-slate-600">
                   <p>
                     <span class="font-medium text-slate-900">Invite copy:</span>
                     {{ form.inviteWelcomeText.trim() || defaultInviteWelcomeText }}
@@ -527,12 +528,14 @@ onMounted(() => {
             </div>
             <div
               v-if="emailQueueError"
+              data-sentry-mask
               class="rounded border border-red-200 bg-red-50 text-red-700 px-4 py-2"
             >
               {{ emailQueueError }}
             </div>
             <div
               v-if="emailQueueSuccess"
+              data-sentry-mask
               class="rounded border border-green-200 bg-green-50 text-green-700 px-4 py-2"
             >
               {{ emailQueueSuccess }}
@@ -555,8 +558,8 @@ onMounted(() => {
                   </thead>
                   <tbody class="text-sm">
                     <tr v-for="email in pendingEmails" :key="email.id" class="border-t">
-                      <td class="px-4 py-2">{{ email.recipient }}</td>
-                      <td class="px-4 py-2">{{ email.subject }}</td>
+                      <td data-sentry-mask class="px-4 py-2">{{ email.recipient }}</td>
+                      <td data-sentry-mask class="px-4 py-2">{{ email.subject }}</td>
                       <td class="px-4 py-2">{{ formatDate(email.scheduled_for) }}</td>
                       <td class="px-4 py-2">{{ formatDate(email.created_at) }}</td>
                     </tr>

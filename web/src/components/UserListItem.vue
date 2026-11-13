@@ -131,8 +131,8 @@ const userActions = computed<MenuItem[]>(() => {
 
 <template>
   <tr>
-    <td class="px-4 py-2">{{ user.name || '-' }}</td>
-    <td class="px-4 py-2">{{ user.email }}</td>
+    <td data-sentry-mask class="px-4 py-2">{{ user.name || '-' }}</td>
+    <td data-sentry-mask class="px-4 py-2">{{ user.email }}</td>
     <td class="px-4 py-2">
       <span class="inline-flex rounded border border-surface px-2 py-1 text-xs">{{
         internal ? 'Internal' : 'External'
@@ -161,7 +161,7 @@ const userActions = computed<MenuItem[]>(() => {
         "
         >All current and future clients</span
       >
-      <span v-else-if="['manager', 'customer', 'client'].includes(user.role)">{{
+      <span v-else-if="['manager', 'customer', 'client'].includes(user.role)" data-sentry-mask>{{
         clientNames(user)
       }}</span>
       <span v-else class="text-gray-400">—</span>

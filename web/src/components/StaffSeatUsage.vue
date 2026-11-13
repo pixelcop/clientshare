@@ -10,7 +10,7 @@ const accountDashboardURL = useAccountDashboard();
   <div class="mb-4 text-sm text-muted-color" role="status">
     <p v-if="quota.loading">Checking staff seats…</p>
     <template v-else-if="quota.error">
-      <p>{{ quota.error }}</p>
+      <p data-sentry-mask>{{ quota.error }}</p>
       <Button type="button" severity="secondary" variant="text" @click="quota.refresh()">
         Retry
       </Button>

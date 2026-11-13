@@ -93,7 +93,7 @@ watch(recipient, () => {
     <dl class="link-summary">
       <div>
         <dt>Sharing</dt>
-        <dd>Entire client workspace · {{ targetName }}</dd>
+        <dd>Entire client workspace · <span data-sentry-mask>{{ targetName }}</span></dd>
       </div>
       <div>
         <dt>Audience</dt>
@@ -116,7 +116,7 @@ watch(recipient, () => {
         Last accessed:
         {{ link.last_accessed ? formatLinkExpiry(link.last_accessed) : 'Not recorded' }}.
       </p>
-      <p v-if="link.email">
+      <p v-if="link.email" data-sentry-mask>
         Contact email: {{ link.email }}. This does not restrict who can use the link.
       </p>
       <p>Link activity does not tell you who read the documents.</p>
@@ -139,6 +139,7 @@ watch(recipient, () => {
         />
         <Button asChild v-slot="slotProps" severity="secondary">
           <a
+            data-sentry-block
             :class="slotProps.class"
             :href="link.link_url"
             target="_blank"
@@ -147,7 +148,7 @@ watch(recipient, () => {
           >
         </Button>
       </div>
-      <p v-if="copyMessage" role="status">{{ copyMessage }}</p>
+      <p v-if="copyMessage" data-sentry-mask role="status">{{ copyMessage }}</p>
       <p class="link-note">
         Recipient view asks before switching away from your signed-in account.
       </p>

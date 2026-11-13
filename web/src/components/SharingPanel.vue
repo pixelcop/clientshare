@@ -60,7 +60,7 @@ defineExpose({ requestClose });
       />
       <div>
         <h2 aria-live="polite">{{ mobileTitle }}</h2>
-        <small>{{ scope.name }}</small>
+        <small data-sentry-mask>{{ scope.name }}</small>
       </div>
     </header>
     <p v-if="scope.kind === 'client' && !isMobile" class="scope-label muted">
@@ -71,7 +71,7 @@ defineExpose({ requestClose });
       <p>{{ error }}</p>
       <Button label="Refresh access" severity="secondary" :disabled="busy" @click="load" />
     </div>
-    <p v-if="status" role="status" class="delivery-status">{{ status }}</p>
+    <p v-if="status" data-sentry-mask role="status" class="delivery-status">{{ status }}</p>
     <template v-if="view && !loading">
       <p
         v-if="view.inherits_folder_access && (!isMobile || mobileScreen === 'manage')"

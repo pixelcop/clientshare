@@ -343,7 +343,7 @@ onBeforeUnmount(() => {
         /></template>
         <div class="collection-body">
           <div v-if="workflow.client" class="collection-client-context">
-            <i class="oi oi-folder" aria-hidden="true" /><span>{{ workflow.client.name }}</span>
+            <i class="oi oi-folder" aria-hidden="true" /><span data-sentry-mask>{{ workflow.client.name }}</span>
           </div>
           <Message v-if="workflow.error" severity="error" :closable="false">{{
             workflow.error

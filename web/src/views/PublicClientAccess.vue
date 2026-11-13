@@ -4,6 +4,7 @@ import { storeToRefs } from 'pinia';
 
 import Breadcrumb from '@/components/Breadcrumb.vue';
 import FileList from '@/components/FileList.vue';
+import { replaySensitiveSelectPT } from '@/services/replayPrivacy';
 import { useClientsStore } from '@/stores/clients';
 import { useFileManagerStore } from '@/stores/fileManager';
 
@@ -73,6 +74,7 @@ watch(
         <div v-if="clients.length > 1" class="shrink-0 md:ml-auto md:text-right">
           <FloatLabel>
             <Select
+              :pt="replaySensitiveSelectPT"
               id="client-select"
               v-model="clientId"
               :options="clients"

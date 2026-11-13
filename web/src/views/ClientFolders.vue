@@ -21,8 +21,8 @@ onMounted(() => {
       </thead>
       <tbody>
         <tr v-for="client in clientsStore.clients" :key="client.id">
-          <td class="px-4 py-2">{{ client.name }}</td>
-          <td class="px-4 py-2">{{ client.folder_path }}</td>
+          <td data-sentry-mask class="px-4 py-2">{{ client.name }}</td>
+          <td data-sentry-mask class="px-4 py-2">{{ client.folder_path }}</td>
           <td class="px-4 py-2">
             <router-link :to="`/clients/${client.id}/files`" class="text-blue-600 hover:underline"
               >Open</router-link

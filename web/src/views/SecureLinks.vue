@@ -174,7 +174,7 @@ async function revokeLink(link: SecureLink) {
     <header class="links-header">
       <div>
         <h1>Client-wide links</h1>
-        <p v-if="client">{{ client.name }} · Entire client workspace</p>
+        <p v-if="client"><span data-sentry-mask>{{ client.name }}</span> · Entire client workspace</p>
       </div>
       <Button
         id="collect-new-link"

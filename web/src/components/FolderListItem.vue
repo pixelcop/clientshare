@@ -18,10 +18,10 @@ const emit = defineEmits<{ open: [item: FileItem] }>();
         @click.stop="emit('open', item)"
       >
         <i class="oi oi-folder" aria-hidden="true" />
-        <span>{{ item.filename }}</span>
+        <span data-sentry-mask>{{ item.filename }}</span>
       </button>
     </td>
-    <td class="file-metadata hidden sm:table-cell" :title="formatDate(item.uploaded_at)">
+    <td data-sentry-mask class="file-metadata hidden sm:table-cell" :title="formatDate(item.uploaded_at)">
       {{ formatDateNatural(item.uploaded_at) }}
     </td>
     <td class="file-actions-cell"><FileRowActions :item @open="emit('open', item)" /></td>

@@ -11,6 +11,7 @@ import { createPinia } from 'pinia';
 
 import App from './App.vue';
 import router from './router';
+import { replayPrivacyOptions } from './services/replayPrivacy';
 import {
   isReplayURLSafe,
   startRuntimeReplay,
@@ -28,19 +29,7 @@ if (sentryDSN) {
     replaysSessionSampleRate: 0,
     replaysOnErrorSampleRate: 0,
     integrations: [
-      Sentry.replayIntegration({
-        stickySession: false,
-        maskAllText: true,
-        maskAllInputs: true,
-        maskAttributes: ['title', 'placeholder', 'aria-label', 'href', 'src', 'srcset', 'action'],
-        blockAllMedia: true,
-        block: ['iframe', 'canvas'],
-        networkCaptureBodies: false,
-        networkDetailAllowUrls: [],
-        // Console payloads and URLs may contain document names or invite tokens.
-        // Keep the replay visual-only rather than opt into unsafe recording data.
-        beforeAddRecordingEvent: () => null,
-      }),
+      Sentry.replayIntegration(replayPrivacyOptions),
     ],
   });
   pinia.use(Sentry.createSentryPiniaPlugin());

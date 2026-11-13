@@ -4,6 +4,7 @@ import axios from 'axios';
 import AccessSelect from '@/components/AccessSelect.vue';
 import StaffSeatUsage from '@/components/StaffSeatUsage.vue';
 import { GROUPS_UI_ENABLED } from '@/features';
+import { replaySensitiveSelectPT } from '@/services/replayPrivacy';
 import { useAuthStore } from '@/stores/auth';
 import { useStaffQuotaStore } from '@/stores/staffQuota';
 import type { UserCreatePayload } from '@/stores/users';
@@ -389,6 +390,7 @@ function onSubmit() {
           :inputId="`${fieldPrefix}-clients`"
           v-model="clientIds"
           :options="assignableClients"
+          :pt="replaySensitiveSelectPT"
           optionLabel="name"
           optionValue="id"
           filter
@@ -424,7 +426,7 @@ function onSubmit() {
           :key="clientId"
           class="grid gap-2 border-b border-surface pb-3 sm:grid-cols-2 items-center"
         >
-          <label :id="`${fieldPrefix}-${clientId}-label`" :for="`${fieldPrefix}-${clientId}`">{{
+          <label data-sentry-mask :id="`${fieldPrefix}-${clientId}-label`" :for="`${fieldPrefix}-${clientId}`">{{
             clients.find((c) => c.id === clientId)?.name || clientId
           }}</label>
           <AccessSelect
@@ -457,6 +459,7 @@ function onSubmit() {
           :inputId="`${fieldPrefix}-groups`"
           v-model="groupIds"
           :options="groups"
+          :pt="replaySensitiveSelectPT"
           optionLabel="name"
           optionValue="id"
           filter
@@ -471,10 +474,11 @@ function onSubmit() {
         </p>
         <ul v-if="selectedGroups.length" class="grid gap-3 text-sm">
           <li v-for="group in selectedGroups" :key="group.id">
-            <strong>{{ group.name }}</strong>
+            <strong data-sentry-mask>{{ group.name }}</strong>
             <ul>
               <li
                 v-for="assignment in group.assignments"
+                data-sentry-mask
                 :key="assignment.id"
                 class="mt-1 text-muted-color"
               >

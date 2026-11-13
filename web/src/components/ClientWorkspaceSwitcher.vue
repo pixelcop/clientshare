@@ -2,6 +2,7 @@
 import axios from 'axios';
 import { Button, Select } from 'openvue';
 
+import { replaySensitiveSelectPT } from '@/services/replayPrivacy';
 import { useAuthStore } from '@/stores/auth';
 import type { Client } from '@/types/models';
 
@@ -82,6 +83,7 @@ onBeforeUnmount(() => {
   <div v-if="isClientAccount && (loading || error || workspaces.length)" class="workspace-switcher">
     <label :id="`${id}-label`" :for="id">Client workspace</label>
     <Select
+      :pt="replaySensitiveSelectPT"
       :inputId="id"
       :ariaLabelledby="`${id}-label`"
       :modelValue="selected"

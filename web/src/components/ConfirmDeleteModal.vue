@@ -40,13 +40,13 @@ function remove() {
   >
     <p>
       Are you sure you want to delete
-      <span class="font-semibold">{{ item?.filename }}</span
+      <span data-sentry-mask class="font-semibold">{{ item?.filename }}</span
       >?
     </p>
     <div class="flex justify-end gap-2 mt-4">
       <Button type="button" @click="$emit('close')" severity="secondary"> Cancel </Button>
       <Button type="button" @click="remove" severity="danger"> Delete </Button>
     </div>
-    <div v-if="fileManager.error" class="mt-2 text-red-600">{{ fileManager.error }}</div>
+    <div v-if="fileManager.error" data-sentry-mask class="mt-2 text-red-600">{{ fileManager.error }}</div>
   </Dialog>
 </template>

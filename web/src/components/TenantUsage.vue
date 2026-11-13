@@ -23,7 +23,7 @@ onMounted(async () => {
 <template>
   <section class="grid gap-4" aria-label="Workspace usage">
     <h2 class="text-lg font-semibold">Workspace usage</h2>
-    <p v-if="error" role="status">{{ error }}</p>
+    <p v-if="error" data-sentry-mask role="status">{{ error }}</p>
     <template v-else-if="usage">
       <p>
         Staff: {{ usage.staff_users }} of {{ usage.max_users || 'unlimited' }} (including pending

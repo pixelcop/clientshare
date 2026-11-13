@@ -118,7 +118,7 @@ watch(
     </section>
 
     <section v-if="publicLink.error" class="bg-red-50 border border-red-200 rounded-xl p-4">
-      <p class="text-sm text-red-700">{{ publicLink.error }}</p>
+      <p data-sentry-mask class="text-sm text-red-700">{{ publicLink.error }}</p>
     </section>
 
     <section v-else class="space-y-4">

@@ -21,13 +21,13 @@ const emit = defineEmits<{ open: [item: FileItem] }>();
           :class="item.type === 'folder' ? 'oi oi-folder' : getFileIcon(item)"
           aria-hidden="true"
         />
-        <span>{{ item.filename }}</span>
+        <span data-sentry-mask>{{ item.filename }}</span>
       </button>
     </td>
-    <td class="file-metadata hidden sm:table-cell">
+    <td data-sentry-mask class="file-metadata hidden sm:table-cell">
       {{ item.type === 'folder' ? '—' : formatSize(item.size) }}
     </td>
-    <td class="file-metadata hidden sm:table-cell" :title="formatDate(item.uploaded_at)">
+    <td data-sentry-mask class="file-metadata hidden sm:table-cell" :title="formatDate(item.uploaded_at)">
       {{ formatDateNatural(item.uploaded_at) }}
     </td>
     <td class="file-actions-cell"><FileRowActions :item @open="emit('open', item)" /></td>
