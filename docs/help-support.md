@@ -8,9 +8,8 @@ from tenant-editable email queues. No SaaS control-plane service connection is r
 
 The default `help.provider: none` exposes only the configured `server.docs.url`
 (bundled `/docs/` when blank). Loading/opening Help makes no commercial support
-requests. No getting-started action is shown because no separate destination exists.
-When the guide is the only available action, the header links directly to it.
-The Help panel appears only when a support form or operator contact is available.
+requests. The Help dropdown keeps the guide available even without a contact
+provider, alongside any getting-started actions available to the user.
 
 Self-hosted operators may set `help.provider: operator`, `help.operator_url` to an
 HTTP(S) URL or root-relative path, and `help.operator_label` to an explicit label
@@ -52,7 +51,10 @@ not attached. Ten requests per account/tenant per hour are allowed per server
 process; use shared edge limits for additional multi-replica abuse protection.
 
 The bottom-right **Need help?** widget opens the same form directly for internal
-users, while the Help menu remains available. Login and password-recovery screens
+users, while the Help menu remains available as an anchored dropdown. Signed-in
+users can dismiss the widget; the preference is stored per user in this browser's
+local storage. Support remains available from Help. Dismissal never applies to
+logged-out screens, which do not offer a dismiss control. Login and password-recovery screens
 also show the widget when a support provider is configured. Self-hosted operator
 configuration opens the operator contact link rather than the ClientShare form.
 

@@ -19,7 +19,26 @@ const internal = computed(() => ['admin', 'manager'].includes(auth.user?.role ||
 const email = ref('');
 const floating = ref(false);
 const visible = ref(false);
-const contact = ref(false);
+const dismissalKey = `clientshare-support-widget-dismissed:${auth.user?.id || 'guest'}`;
+const dismissed = ref(false);
+try {
+  dismissed.value = localStorage.getItem(dismissalKey) === 'true';
+} catch {
+  // Restricted storage must not prevent access to support.
+}
+
+function dismissWidget() {
+  if (!auth.user) {
+    return;
+  }
+  dismissed.value = true;
+  try {
+    localStorage.setItem(dismissalKey, 'true');
+  } catch {
+    // The widget still stays hidden for the current page session.
+  }
+  document.getElementById('help-menu-trigger')?.focus();
+}
 const loading = ref(false);
 const sending = ref(false);
 const message = ref('');
@@ -44,29 +63,18 @@ async function loadCapabilities() {
   } catch {
     capabilities.value = { provider: 'none' };
   } finally {
-    if (capabilities.value.provider !== 'clientshare') {
-      contact.value = false;
-    }
     loading.value = false;
   }
 }
 
 onMounted(loadCapabilities);
 
-function open() {
-  floating.value = false;
-  contact.value = Boolean(message.value.trim()) || sending.value;
-  if (!contact.value) {
+function openSupport(fromWidget = false) {
+  floating.value = fromWidget;
+  if (!message.value.trim() && !sending.value) {
     error.value = '';
     receipt.value = '';
   }
-  visible.value = true;
-  void loadCapabilities();
-}
-
-function openWidget() {
-  floating.value = true;
-  contact.value = true;
   visible.value = true;
   void loadCapabilities();
 }
@@ -116,23 +124,40 @@ async function send() {
 </script>
 
 <template>
-  <Button
+  <div
     v-if="
       (internal || loginHelp) &&
+      (!auth.user || !dismissed) &&
       (capabilities.provider === 'clientshare' || capabilities.support_url)
     "
     class="support-widget-launcher"
-    label="Need help?"
-    icon="oi oi-comments"
-    rounded
-    raised
-    aria-haspopup="dialog"
-    :aria-expanded="visible && floating"
-    @click="capabilities.provider === 'clientshare' ? openWidget() : open()"
-  />
+  >
+    <Button
+      label="Need help?"
+      icon="oi oi-comments"
+      rounded
+      :as="capabilities.provider === 'clientshare' ? 'button' : 'a'"
+      :href="capabilities.support_url"
+      :target="capabilities.support_url ? '_blank' : undefined"
+      :rel="capabilities.support_url ? 'noopener noreferrer' : undefined"
+      :aria-haspopup="capabilities.provider === 'clientshare' ? 'dialog' : undefined"
+      :aria-expanded="visible && floating"
+      @click="capabilities.provider === 'clientshare' && openSupport(true)"
+    />
+    <Button
+      v-if="auth.user"
+      icon="oi oi-times"
+      aria-label="Dismiss help widget"
+      title="Hide this widget. You can still contact support from Help."
+      severity="secondary"
+      text
+      rounded
+      class="support-widget-dismiss"
+      @click="dismissWidget"
+    />
+  </div>
   <HelpPanel
     v-model:visible="visible"
-    v-model:contact="contact"
     :guideURL="guideURL"
     :supportLabel="capabilities.support_label"
     :supportURL="capabilities.support_url"
@@ -142,7 +167,8 @@ async function send() {
     :floating="floating"
     :gettingStarted="Boolean(auth.user) && collection.allowed"
     @start="collection.start()"
-    @open="open"
+    @open="loadCapabilities"
+    @contact="openSupport()"
   >
     <div v-if="receipt" class="flex flex-col gap-4" role="status">
       <p>Thanks for reaching out! We’ve received your message and will reply by email.</p>
@@ -150,7 +176,6 @@ async function send() {
         label="Close"
         @click="
           visible = false;
-          contact = false;
           receipt = '';
         "
       />
@@ -204,14 +229,6 @@ async function send() {
         class="underline"
         >Book a 20-minute setup session</a
       >
-      <Button
-        v-if="!floating"
-        label="Back to Help"
-        severity="secondary"
-        text
-        :disabled="sending"
-        @click="contact = false"
-      />
     </form>
   </HelpPanel>
 </template>
@@ -222,5 +239,17 @@ async function send() {
   right: max(1rem, env(safe-area-inset-right));
   bottom: max(1rem, env(safe-area-inset-bottom));
   z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+  padding: 0.25rem;
+  border-radius: 9999px;
+  background: var(--p-content-background);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.14);
+}
+
+.support-widget-dismiss {
+  width: 2.25rem;
+  height: 2.25rem;
 }
 </style>
