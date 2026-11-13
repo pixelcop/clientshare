@@ -124,7 +124,9 @@ const items = computed<MenuItem[]>(() => {
 </template>
 
 <style scoped>
-.help-menu {
+/* OpenVue teleports this root without the parent's scope attribute. */
+:global(.p-menu.help-menu) {
+  margin-top: 0.5rem;
   width: 23rem;
   max-width: calc(100vw - 2rem);
 }

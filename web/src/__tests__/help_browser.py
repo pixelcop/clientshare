@@ -12,7 +12,7 @@ base = sys.argv[1]
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=True)
     for width in [1280, 390]:
-        page = browser.new_page(viewport={"width": width, "height": 844})
+        page = browser.new_page(viewport={"width": width, "height": 844}, has_touch=width == 390)
         if os.environ.get("HELP_COLOR_MODE") == "dark":
             page.add_init_script("localStorage.setItem('color-mode', 'dark')")
         state = {"provider": "none", "posts": [], "fail": True, "role": "admin", "booking": False, "user_id": "test-user"}
@@ -83,9 +83,36 @@ with sync_playwright() as p:
         state["provider"] = "clientshare"
         page.reload()
         page.wait_for_load_state("networkidle")
+        widget = page.get_by_role("button", name="Need help?", exact=True)
+        dismiss_widget = page.get_by_role("button", name="Dismiss help widget", exact=True)
+        if width == 1280:
+            page.mouse.move(0, 844)
+            expect(dismiss_widget).not_to_be_visible()
+            before = widget.bounding_box()
+            if os.environ.get("HELP_SCREENSHOT_DIR"):
+                page.screenshot(path=f"{os.environ['HELP_SCREENSHOT_DIR']}/help-widget-collapsed.png", animations="disabled")
+            widget.hover()
+            expect(dismiss_widget).to_be_visible()
+            page.locator(".support-widget-dismiss-slot").evaluate("el => Promise.all(el.getAnimations().map(animation => animation.finished))")
+            after = widget.bounding_box()
+            assert abs(before["x"] - after["x"]) < 1
+            assert abs(before["width"] - after["width"]) < 1
+            if os.environ.get("HELP_SCREENSHOT_DIR"):
+                page.screenshot(path=f"{os.environ['HELP_SCREENSHOT_DIR']}/help-widget-expanded.png", animations="disabled")
+            page.mouse.move(0, 844)
+            expect(dismiss_widget).not_to_be_visible()
+            widget.focus()
+            expect(dismiss_widget).to_be_visible()
+            help_button.focus()
+        else:
+            expect(dismiss_widget).to_be_visible()
+            assert dismiss_widget.bounding_box()["width"] >= 44
         external.clear()
         help_button.click()
         expect(dialog).not_to_be_visible()
+        popup = page.locator("#help-menu")
+        expect(popup).to_have_css("margin-top", "7px")
+        expect(popup).to_have_css("max-width", f"{width - 28}px")
         menu_bounds = menu.bounding_box()
         assert menu_bounds["x"] >= 0 and menu_bounds["x"] + menu_bounds["width"] <= width
         if os.environ.get("HELP_SCREENSHOT_DIR"):

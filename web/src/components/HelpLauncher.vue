@@ -132,6 +132,19 @@ async function send() {
     "
     class="support-widget-launcher"
   >
+    <div v-if="auth.user" class="support-widget-dismiss-slot">
+      <Button
+        icon="oi oi-times"
+        iconClass="text-xs"
+        aria-label="Dismiss help widget"
+        title="Hide this widget. You can still contact support from Help."
+        severity="secondary"
+        text
+        rounded
+        class="support-widget-dismiss"
+        @click="dismissWidget"
+      />
+    </div>
     <Button
       label="Need help?"
       icon="oi oi-comments"
@@ -143,17 +156,6 @@ async function send() {
       :aria-haspopup="capabilities.provider === 'clientshare' ? 'dialog' : undefined"
       :aria-expanded="visible && floating"
       @click="capabilities.provider === 'clientshare' && openSupport(true)"
-    />
-    <Button
-      v-if="auth.user"
-      icon="oi oi-times"
-      aria-label="Dismiss help widget"
-      title="Hide this widget. You can still contact support from Help."
-      severity="secondary"
-      text
-      rounded
-      class="support-widget-dismiss"
-      @click="dismissWidget"
     />
   </div>
   <HelpPanel
@@ -241,15 +243,56 @@ async function send() {
   z-index: 100;
   display: flex;
   align-items: center;
-  gap: 0.125rem;
   padding: 0.25rem;
   border-radius: 9999px;
   background: var(--p-content-background);
   box-shadow: 0 4px 16px rgb(0 0 0 / 0.14);
 }
 
-.support-widget-dismiss {
+.support-widget-dismiss-slot {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-start;
+  width: 0;
+  overflow: hidden;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    width 180ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 120ms ease-out,
+    visibility 0s 180ms;
+}
+
+.support-widget-launcher:is(:hover, :focus-within) .support-widget-dismiss-slot {
   width: 2.25rem;
-  height: 2.25rem;
+  opacity: 1;
+  visibility: visible;
+  transition-delay: 0s;
+}
+
+.support-widget-dismiss {
+  flex: 0 0 auto;
+  width: 2rem;
+  height: 2rem;
+}
+
+@media (hover: none) {
+  .support-widget-launcher .support-widget-dismiss-slot {
+    width: 44px;
+    opacity: 1;
+    visibility: visible;
+  }
+
+  .support-widget-dismiss {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .support-widget-dismiss-slot {
+    transition: none;
+  }
 }
 </style>
