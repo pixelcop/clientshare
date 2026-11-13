@@ -2,6 +2,8 @@ import axios from 'axios';
 import { createPinia, disposePinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import * as help from '../services/helpCapabilities';
+import * as replay from '../services/runtimeReplay';
 import { useAuthStore } from '../stores/auth';
 
 describe('auth store', () => {
@@ -55,6 +57,23 @@ describe('auth store', () => {
     expect(get).not.toHaveBeenCalled();
     await auth.fetchMe(true);
     expect(get).toHaveBeenCalledExactlyOnceWith('/api/auth/me');
+  });
+
+  it('refreshes diagnostics only after actual session changes, not startup or repeated 401s', async () => {
+    const refresh = vi.spyOn(replay, 'refreshRuntimeReplay');
+    const invalidate = vi.spyOn(help, 'invalidateHelpCapabilities');
+    const { auth } = await signedIn();
+    await auth.fetchMe(true);
+    expect(refresh).not.toHaveBeenCalled();
+    expect(invalidate).not.toHaveBeenCalled();
+    vi.mocked(axios.get).mockRejectedValue(new Error('Unauthorized'));
+    await auth.fetchMe(true);
+    await auth.fetchMe(true);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(invalidate).toHaveBeenCalledTimes(1);
+    vi.mocked(axios.get).mockResolvedValue({ data: identity });
+    await auth.fetchMe(true);
+    expect(refresh).toHaveBeenCalledTimes(2);
   });
 
   it('clears auth on an API 401 without sending a logout request', async () => {

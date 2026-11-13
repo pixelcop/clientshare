@@ -2,10 +2,10 @@
 import '@/assets/collection.css';
 
 import { useMediaQuery } from '@vueuse/core';
-import axios from 'axios';
 import { Button, Message, Panel, Step, StepItem, StepPanel, Stepper } from 'openvue';
 
 import CollectionSpotlight from '@/components/CollectionSpotlight.vue';
+import { fetchHelpCapabilities } from '@/services/helpCapabilities';
 import { useBrandingStore } from '@/stores/branding';
 import { useClientsStore } from '@/stores/clients';
 import { guideTopic, useCollectionStore } from '@/stores/collection';
@@ -274,9 +274,8 @@ const stopLinks = useSecureLinksStore().$onAction(({ name, args, after }) => {
 });
 onMounted(() => {
   window.addEventListener('focus', refreshChecklist);
-  void axios
-    .get('/api/help')
-    .then(({ data }) => {
+  void fetchHelpCapabilities()
+    .then((data) => {
       workflow.guideBase = data.guide_url || '';
     })
     .catch(() => undefined);

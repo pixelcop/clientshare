@@ -115,6 +115,7 @@ export class RuntimeReplay {
 }
 
 let controller: RuntimeReplay | undefined;
+let refreshing: Promise<void> | undefined;
 
 // DOM snapshots include the current URL. Do not start on credential-bearing
 // bootstrap pages; recording can resume after the application consumes the URL.
@@ -143,10 +144,18 @@ export function identifyReplayUser(user: { id: string; tenant_id?: string } | nu
 }
 
 export function refreshRuntimeReplay() {
-  return controller?.refresh();
+  if (!refreshing && controller) {
+    const request = controller.refresh();
+    refreshing = request;
+    void request.finally(() => {
+      if (refreshing === request) {refreshing = undefined;}
+    });
+  }
+  return refreshing;
 }
 
 export function suspendRuntimeReplay() {
+  refreshing = undefined;
   return controller?.suspend();
 }
 
@@ -226,11 +235,11 @@ export function startRuntimeReplay() {
     }
     return response;
   };
-  void controller.refresh();
+  void refreshRuntimeReplay();
   setInterval(() => {
-    void controller?.refresh();
+    void refreshRuntimeReplay();
   }, 30_000);
-  window.addEventListener('pageshow', () => {
-    void controller?.refresh();
+  window.addEventListener('pageshow', (event) => {
+    if (event.persisted) {void refreshRuntimeReplay();}
   });
 }

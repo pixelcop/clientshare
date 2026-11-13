@@ -38,8 +38,10 @@ management invalidates the cache immediately; other API replicas refresh within
 five seconds. Expiry is also checked on every match. Database failures disable
 collection rather than returning stale eligibility.
 
-The portal checks config at startup, after authentication checks/changes, every
-30 seconds, and on page restoration. Eligible sessions start Sentry Replay
+The portal checks config once at startup, after subsequent session/identity
+changes, every 30 seconds, and on back/forward-cache page restoration. Concurrent
+refreshes share one request; the initial authentication check does not repeat
+the startup config request. Eligible sessions start Sentry Replay
 manually; general replay sampling remains off. Revocation normally propagates
 within approximately 35 seconds in active tabs. Background tab throttling or
 offline clients may delay polling, so requests always have an explicit expiry.

@@ -4,6 +4,7 @@ import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 
 import HelpPanel from '@/components/HelpPanel.vue';
+import { fetchHelpCapabilities, type HelpCapabilities } from '@/services/helpCapabilities';
 import { useBrandingStore } from '@/stores/branding';
 import { useCollectionStore } from '@/stores/collection';
 
@@ -18,21 +19,13 @@ const message = ref('');
 const error = ref('');
 const receipt = ref('');
 const retry = ref<{ id: string; message: string; screen: string }>();
-const capabilities = ref<{
-  provider: string;
-  guide_url?: string;
-  support_url?: string;
-  support_label?: string;
-  reply_email?: string;
-  requester_name?: string;
-  booking_url?: string;
-}>({ provider: 'none' });
+const capabilities = ref<HelpCapabilities>({ provider: 'none' });
 const guideURL = computed(() => capabilities.value.guide_url || branding.branding.docsURL);
 
 async function loadCapabilities() {
   loading.value = true;
   try {
-    capabilities.value = (await axios.get('/api/help')).data;
+    capabilities.value = await fetchHelpCapabilities();
   } catch {
     capabilities.value = { provider: 'none' };
   } finally {
