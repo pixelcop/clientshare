@@ -1,6 +1,11 @@
 import axios from 'axios';
 import { defineStore } from 'pinia';
 
+import {
+  identifyReplayUser,
+  refreshRuntimeReplay,
+  suspendRuntimeReplay,
+} from '@/services/runtimeReplay';
 import type { User } from '@/types/models';
 
 // Global session expiry handler
@@ -77,6 +82,8 @@ export const useAuthStore = defineStore('auth', () => {
   clearLegacyToken();
 
   function clear() {
+    identifyReplayUser(null);
+    void refreshRuntimeReplay();
     user.value = null;
     clearLegacyToken();
     clearPasskeyEnrollmentPrompt();
@@ -105,6 +112,8 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const res = await axios.get('/api/auth/me');
       user.value = res.data;
+      identifyReplayUser(res.data);
+      void refreshRuntimeReplay();
       if (token.value) {
         clearLegacyToken();
       }
@@ -115,6 +124,8 @@ export const useAuthStore = defineStore('auth', () => {
       }
       user.value = null;
       clearLegacyToken();
+      identifyReplayUser(null);
+      void refreshRuntimeReplay();
       return null;
     }
   }
@@ -205,6 +216,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function logout() {
     await axios.post('/api/auth/logout');
+    await suspendRuntimeReplay();
     clear();
   }
 
