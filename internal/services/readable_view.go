@@ -15,6 +15,7 @@ import (
 
 	"github.com/pixelcop/clientshare/internal/models"
 	"github.com/pixelcop/clientshare/internal/services/storage"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
@@ -584,7 +585,10 @@ func (v *ReadableViews) Run(ctx context.Context, output io.Writer) {
 		next  time.Time
 	}
 	retries := map[string]retryState{}
+	logger := zap.L().With(zap.String("job", "readable_views"))
 	for {
+		started := time.Now()
+		logger.Debug("Background job run started")
 		var states []models.ReadableView
 		if err := v.DB.WithContext(ctx).Where("desired_revision <> applied_revision").Order("tenant_id, client_id").Find(&states).Error; err != nil {
 			fmt.Fprintln(output, err)
@@ -612,6 +616,7 @@ func (v *ReadableViews) Run(ctx context.Context, output io.Writer) {
 				}
 			}
 		}
+		logger.Debug("Background job run finished", zap.Duration("elapsed", time.Since(started)))
 		select {
 		case <-ctx.Done():
 			return

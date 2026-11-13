@@ -175,14 +175,18 @@ func StartWebServer(cfg *Config, db *gorm.DB, logger *zap.Logger, emailQueue ema
 		go func() {
 			ticker := time.NewTicker(30 * time.Second)
 			defer ticker.Stop()
+			jobLogger := logger.With(zap.String("job", "support_outbox"))
 			for {
 				select {
 				case <-stop:
 					return
 				case <-ticker.C:
+					started := time.Now()
+					jobLogger.Debug("Background job run started")
 					if err := (services.SupportService{DB: db}).Notify(sender); err != nil {
-						logger.Error("Support outbox failed", zap.Error(err))
+						jobLogger.Error("Support outbox failed", zap.Error(err))
 					}
+					jobLogger.Debug("Background job run finished", zap.Duration("elapsed", time.Since(started)))
 				}
 			}
 		}()

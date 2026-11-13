@@ -2,6 +2,8 @@ package email
 
 import (
 	"time"
+
+	"go.uber.org/zap"
 )
 
 type Worker struct {
@@ -21,7 +23,11 @@ func (w *Worker) Start() {
 		for {
 			select {
 			case <-ticker.C:
-				w.Queue.ProcessBatch()
+				logger := zap.L().With(zap.String("job", "email_queue"))
+				started := time.Now()
+				logger.Debug("Background job run started")
+				err := w.Queue.ProcessBatch()
+				logger.Debug("Background job run finished", zap.Duration("elapsed", time.Since(started)), zap.Error(err))
 			case <-w.StopCh:
 				return
 			}
