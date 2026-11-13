@@ -55,6 +55,9 @@ func (s *ReplayRequestService) Create(ctx context.Context, rule models.ReplayReq
 	if err := validateReplayRequest(&rule, now); err != nil {
 		return nil, err
 	}
+	if err := s.validateTargetIDs(ctx, rule.Targets); err != nil {
+		return nil, err
+	}
 	// Serialize mutations with local cache loads. Other replicas refresh within 5s.
 	s.mu.Lock()
 	defer s.mu.Unlock()

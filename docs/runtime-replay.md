@@ -32,6 +32,13 @@ emails, query parameters and identity headers never establish identity. IP
 matching uses Fiber's client IP and the application's trusted-proxy policy;
 ensure the origin is restricted to trusted ingress in your deployment.
 
+The authenticated internal `GET /internal/replay-targets` directory supports
+`kind=tenants|users`, a literal `q` search, and optional `tenant_id` for users.
+It returns at most 20 ID/name/email suggestions, without credentials. Request
+creation validates tenant/user IDs against the current directory and rejects
+users outside a specified tenant. Email selectors may name an address not yet
+in the directory.
+
 At most 100 active requests and 10 groups per request are accepted. The bounded
 active-rule cache refreshes every five seconds, including when empty. Local
 management invalidates the cache immediately; other API replicas refresh within

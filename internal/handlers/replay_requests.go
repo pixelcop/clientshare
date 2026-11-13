@@ -26,9 +26,18 @@ func NewReplayRequestHandler(db *gorm.DB) *ReplayRequestHandler {
 func (h *ReplayRequestHandler) RegisterPublic(router fiber.Router) { router.Get("/config", h.Config) }
 
 func (h *ReplayRequestHandler) RegisterInternal(router fiber.Router) {
+	router.Get("/replay-targets", h.SearchTargets)
 	router.Get("/replay-requests", h.List)
 	router.Post("/replay-requests", h.Create)
 	router.Delete("/replay-requests/:id", h.Revoke)
+}
+
+func (h *ReplayRequestHandler) SearchTargets(c fiber.Ctx) error {
+	options, err := h.svc.SearchTargets(c.Context(), c.Query("kind"), c.Query("q"), c.Query("tenant_id"))
+	if err != nil {
+		return replayRequestError(c, err)
+	}
+	return c.JSON(fiber.Map{"options": options})
 }
 
 func (h *ReplayRequestHandler) Config(c fiber.Ctx) error {

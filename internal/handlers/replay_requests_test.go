@@ -13,6 +13,7 @@ import (
 	"github.com/pixelcop/clientshare/internal/handlers"
 	"github.com/pixelcop/clientshare/internal/middleware"
 	"github.com/pixelcop/clientshare/internal/models"
+	"github.com/pixelcop/clientshare/internal/services"
 	tenantctx "github.com/pixelcop/clientshare/internal/tenant"
 	"github.com/stretchr/testify/require"
 )
@@ -28,6 +29,24 @@ func TestReplayConfigAnonymousIdentityAndInternalAuthorization(t *testing.T) {
 	})
 	handler.RegisterPublic(app.Group("/api"))
 	handler.RegisterInternal(app.Group("/internal", middleware.InternalAuthRequired("secret")))
+	for _, token := range []string{"", "secret"} {
+		req := httptest.NewRequest("GET", "/internal/replay-targets?kind=users&q="+env.adminUser.ID, nil)
+		req.Header.Set("X-Internal-Token", token)
+		response, err := app.Test(req)
+		require.NoError(t, err)
+		if token == "" {
+			require.Equal(t, 401, response.StatusCode)
+		} else {
+			require.Equal(t, 200, response.StatusCode)
+			var body struct {
+				Options []services.ReplayTargetOption `json:"options"`
+			}
+			require.NoError(t, json.NewDecoder(response.Body).Decode(&body))
+			require.Len(t, body.Options, 1)
+			require.Equal(t, env.adminUser.ID, body.Options[0].ID)
+		}
+		response.Body.Close()
+	}
 	for _, method := range []string{"GET", "POST", "DELETE"} {
 		path := "/internal/replay-requests"
 		if method == "DELETE" {
