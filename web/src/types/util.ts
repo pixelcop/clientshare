@@ -49,6 +49,10 @@ export function getFileType(item: FileItem) {
   return '';
 }
 
+export function getFileContentURL(item: FileItem) {
+  return `/api/files/${item.id}/content`;
+}
+
 export function canPreviewFile(item: FileItem) {
   const type = getFileType(item);
   return type === 'application/pdf' || /^(image|text|audio)\//.test(type);

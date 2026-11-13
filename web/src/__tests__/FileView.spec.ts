@@ -79,6 +79,8 @@ describe('file page', () => {
     });
     const { wrapper, router } = await render();
     expect(wrapper.findComponent(FilePreview).props('fileType')).toBe('application/pdf');
+    expect(wrapper.findComponent(FilePreview).props('fileUrl')).toBe('/api/files/file/content');
+    expect(wrapper.findComponent(FilePreview).props('downloadUrl')).toBe('/api/files/file/download');
     expect(wrapper.findComponent(FilePreview).props('maximized')).toBe(true);
     await wrapper.get('button[aria-label="Back to files"]').trigger('click');
     await flushPromises();

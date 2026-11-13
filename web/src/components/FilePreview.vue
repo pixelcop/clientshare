@@ -6,10 +6,12 @@ import { useFile } from '@/composables/useFile';
 const {
   fileType,
   fileUrl,
+  downloadUrl,
   fileName = 'File',
   maximized,
 } = defineProps<{
   fileUrl: string;
+  downloadUrl: string;
   fileType: string;
   maximized?: boolean;
   fileName?: string;
@@ -72,7 +74,7 @@ watch(
     <i class="oi oi-file" aria-hidden="true" />
     <h2>{{ failed ? 'Preview couldn’t be loaded' : 'No preview available' }}</h2>
     <p>Download the file to open it on your device.</p>
-    <Button as="a" :href="fileUrl" :download="fileName" label="Download" icon="oi oi-download" />
+    <Button as="a" :href="downloadUrl" :download="fileName" label="Download" icon="oi oi-download" />
   </div>
   <div v-else-if="isImage" class="image-preview" :class="{ maximized }">
     <img :src="fileUrl" :alt="fileName" @error="failed = true" />
@@ -97,7 +99,6 @@ watch(
   height: 100%;
   min-height: 0;
 }
-.image-preview,
 .audio-preview,
 .preview-fallback {
   display: flex;
@@ -106,19 +107,23 @@ watch(
   justify-content: center;
   padding: 32px;
 }
+.image-preview {
+  display: flex;
+  align-items: flex-start;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 32px;
+}
 .image-preview img {
   display: block;
-  object-fit: contain;
-  max-width: 100%;
-  max-height: 60vh;
-}
-.image-preview.maximized {
-  min-height: 0;
-}
-.image-preview.maximized img {
-  width: 100%;
-  height: 100%;
-  max-height: 100%;
+  flex: none;
+  margin: auto;
+  width: auto;
+  height: auto;
+  max-width: none;
+  max-height: none;
 }
 .text-preview {
   width: 100%;

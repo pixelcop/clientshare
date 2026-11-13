@@ -9,6 +9,7 @@ import {
   canPreviewFile,
   formatDate,
   formatSize,
+  getFileContentURL,
   getFileIcon,
   getFileType,
   getFileURL,
@@ -33,6 +34,7 @@ let copyTimer: ReturnType<typeof setTimeout> | undefined;
 let requestVersion = 0;
 
 const downloadUrl = computed(() => (file.value ? getFileURL(file.value, true) : ''));
+const previewUrl = computed(() => (file.value ? getFileContentURL(file.value) : ''));
 const folderName = computed(() =>
   file.value?.folder_id === fileManager.context?.folder.id
     ? fileManager.context?.folder.filename
@@ -199,7 +201,8 @@ onBeforeUnmount(() => {
           v-if="file.capabilities?.can_read && canPreviewFile(file)"
           :key="file.id"
           :file-type="getFileType(file)"
-          :file-url="downloadUrl"
+          :file-url="previewUrl"
+          :download-url="downloadUrl"
           :file-name="file.filename"
           maximized
         />
