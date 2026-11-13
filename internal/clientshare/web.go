@@ -65,6 +65,8 @@ func NewWebApp(cfg *Config, db *gorm.DB, logger *zap.Logger, emailQueue emailpkg
 	})
 
 	tenantSettingsService := services.NewTenantSettingsService(db)
+	replayRequests := handlers.NewReplayRequestHandler(db)
+	replayRequests.RegisterPublic(insecure)
 
 	resetTTL := 30 * time.Minute
 	if cfg.Auth.PasswordResetDuration != "" {
@@ -136,6 +138,7 @@ func NewWebApp(cfg *Config, db *gorm.DB, logger *zap.Logger, emailQueue emailpkg
 		provisioningSvc := services.NewTenantProvisioningService(db, inviteTokenSecret, inviteTTL, emailQueue, cfg.Server.BaseURL)
 		handlers.RegisterInternalTenantRoutes(internalGroup, provisioningSvc)
 		handlers.RegisterInternalAuthRoutes(internalGroup, hostedLoginSvc, authHandler)
+		replayRequests.RegisterInternal(internalGroup)
 	}
 
 	// setup static serving last due to catch-all routes

@@ -433,6 +433,30 @@ export interface ReadableView {
 }
 
 //////////
+// source: replay_request.go
+
+/**
+ * ReplayTarget fields are ANDed; a request's targets are ORed. Empty fields
+ * impose no restriction. Identity fields only match verified portal sessions.
+ */
+export interface ReplayTarget {
+  ip?: string;
+  hostname?: string;
+  tenant_id?: string;
+  user_id?: string;
+  user_email?: string;
+}
+export interface ReplayRequest {
+  id: string;
+  label: string;
+  targets: ReplayTarget[];
+  start_on_failure: boolean;
+  expires_at: string;
+  revoked_at?: string;
+  created_at: string;
+}
+
+//////////
 // source: secure_link.go
 
 export interface SecureLink {

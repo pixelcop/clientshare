@@ -1,6 +1,12 @@
 import axios from 'axios';
 import { defineStore } from 'pinia';
 
+import { invalidateHelpCapabilities } from '@/services/helpCapabilities';
+import {
+  identifyReplayUser,
+  refreshRuntimeReplay,
+  suspendRuntimeReplay,
+} from '@/services/runtimeReplay';
 import type { User } from '@/types/models';
 
 // Global session expiry handler
@@ -76,7 +82,23 @@ export const useAuthStore = defineStore('auth', () => {
 
   clearLegacyToken();
 
+  let replayIdentity: string | undefined;
+  function syncDiagnostics(identity: { id: string; tenant_id?: string; session_id?: string } | null) {
+    const key = identity ? JSON.stringify([identity.tenant_id, identity.id, identity.session_id]) : '';
+    identifyReplayUser(identity);
+    const changed = replayIdentity !== undefined && replayIdentity !== key;
+    replayIdentity = key;
+    // Startup config already uses the browser's session cookie. Only a later
+    // identity/session transition needs another config evaluation.
+    if (changed) {
+      invalidateHelpCapabilities();
+      void suspendRuntimeReplay();
+      void refreshRuntimeReplay();
+    }
+  }
+
   function clear() {
+    syncDiagnostics(null);
     user.value = null;
     clearLegacyToken();
     clearPasskeyEnrollmentPrompt();
@@ -105,6 +127,7 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const res = await axios.get('/api/auth/me');
       user.value = res.data;
+      syncDiagnostics(res.data);
       if (token.value) {
         clearLegacyToken();
       }
@@ -115,6 +138,7 @@ export const useAuthStore = defineStore('auth', () => {
       }
       user.value = null;
       clearLegacyToken();
+      syncDiagnostics(null);
       return null;
     }
   }
@@ -205,6 +229,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function logout() {
     await axios.post('/api/auth/logout');
+    await suspendRuntimeReplay();
     clear();
   }
 
