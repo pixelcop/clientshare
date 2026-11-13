@@ -69,6 +69,7 @@ func RegisterFileRoutes(api fiber.Router, db *gorm.DB, store storage.Storage, em
 	secureFile.Get("", middleware.FileAccess(db, services.AccessRead), handler.GetFileOrFolder)
 	secureFile.Delete("", middleware.FileAccess(db, services.AccessDelete), handler.DeleteFileByPublicID)
 	secureFile.Get("/download", middleware.FileAccess(db, services.AccessDownload), handler.DownloadFileByPublicID)
+	secureFile.Get("/content", middleware.FileAccess(db, services.AccessDownload), handler.GetFileContent)
 }
 
 // Enforce the same access and lifetime advertised by secure-link controls, including
@@ -759,6 +760,15 @@ func (h *FileHandler) DownloadFolderZip(c fiber.Ctx) error {
 
 // DownloadFileByPublicID handles GET /api/files/:id/download
 func (h *FileHandler) DownloadFileByPublicID(c fiber.Ctx) error {
+	return h.sendFileContent(c, false)
+}
+
+// GetFileContent serves previewable content inline without changing explicit downloads.
+func (h *FileHandler) GetFileContent(c fiber.Ctx) error {
+	return h.sendFileContent(c, true)
+}
+
+func (h *FileHandler) sendFileContent(c fiber.Ctx, preview bool) error {
 	file, tenantErr := fileLocalForTenant(c)
 	if tenantErr != nil {
 		return c.Status(tenantErr.Code).JSON(fiber.Map{"error": tenantErr.Error()})
@@ -783,15 +793,39 @@ func (h *FileHandler) DownloadFileByPublicID(c fiber.Ctx) error {
 	}
 	logFileActivity(c.Context(), h.db, tenantIDFromCtx(c), file.ClientID, &file.ID, file.UserID, nil, "download", file.Path)
 	// Set Content-Type based on file extension
-	ext := filepath.Ext(file.Filename)
+	ext := strings.ToLower(filepath.Ext(file.Filename))
 	contentType := "application/octet-stream"
 	if ext != "" {
 		if t := mime.TypeByExtension(ext); t != "" {
 			contentType = t
 		}
 	}
+	disposition := "attachment"
+	if preview {
+		// Never render arbitrary uploads as active documents on the portal's origin.
+		// Text formats are intentionally plain text, including JSON and XML.
+		switch ext {
+		case ".txt", ".json", ".xml", ".csv":
+			contentType = "text/plain; charset=utf-8"
+			disposition = "inline"
+		default:
+			previewTypes := map[string]string{
+				".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+				".gif": "image/gif", ".webp": "image/webp", ".svg": "image/svg+xml",
+				".pdf": "application/pdf", ".mp3": "audio/mpeg", ".wav": "audio/wav",
+				".ogg": "audio/ogg", ".flac": "audio/flac", ".aac": "audio/aac",
+				".m4a": "audio/mp4", ".opus": "audio/ogg",
+			}
+			if previewType, ok := previewTypes[ext]; ok {
+				contentType = previewType
+				disposition = "inline"
+			}
+		}
+		c.Set("Content-Security-Policy", "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:")
+	}
+	c.Set("X-Content-Type-Options", "nosniff")
 	c.Set("Content-Type", contentType)
-	c.Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": file.Filename}))
+	c.Set("Content-Disposition", mime.FormatMediaType(disposition, map[string]string{"filename": file.Filename}))
 	return c.SendStream(reader)
 }
 
