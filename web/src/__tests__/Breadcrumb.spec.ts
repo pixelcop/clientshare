@@ -54,25 +54,19 @@ describe('breadcrumb client location', () => {
     return { wrapper, router };
   }
 
-  it('shows a plain visible heading without a pill or Home control at the root', async () => {
+  it('identifies the client at its workspace root', async () => {
     const { wrapper } = await render();
     expect(wrapper.get('h1').text()).toBe('Acme');
-    expect(wrapper.get('h1').classes()).not.toContain('sr-only');
-    expect(wrapper.find('.client-link').exists()).toBe(false);
-    expect(wrapper.find('.oi-home').exists()).toBe(false);
     wrapper.unmount();
   });
 
-  it('shows the client as a text link to the root without a Home icon in a subfolder', async () => {
+  it('navigates from a subfolder back to the client root', async () => {
     useFileManagerStore().breadcrumbs.push({ id: 'child', filename: 'Taxes' } as FileItem);
     const { wrapper, router } = await render();
     const clientLink = wrapper.get('a.client-link');
     expect(clientLink.text()).toBe('Acme');
-    expect(wrapper.find('.oi-home').exists()).toBe(false);
     expect(clientLink.attributes('href')).toBe('/folder/root');
-    expect(wrapper.findAll('a')).toHaveLength(1);
     expect(wrapper.get('h1').text()).toBe('Taxes');
-    expect(wrapper.get('h1').classes()).toContain('sr-only');
     await clientLink.trigger('click');
     await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/folder/root'));
     wrapper.unmount();

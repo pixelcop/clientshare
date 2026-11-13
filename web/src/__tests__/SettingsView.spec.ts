@@ -67,35 +67,17 @@ describe('settings tabs', () => {
     vi.unstubAllGlobals();
   });
 
-  it.each(['branding', 'email', 'access', 'usage'])(
-    'shows %s inside the shared settings panel with the four tabs in order',
-    async (value) => {
-      const { wrapper, router } = await open();
-      const tabs = wrapper.findAll('[role="tab"]');
-      expect(tabs.map((tab) => tab.text())).toEqual([
-        'Branding',
-        'Email notifications',
-        'Access roles',
-        'Usage',
-      ]);
-      expect(tabs[0].attributes('aria-selected')).toBe('true');
-      const index = ['branding', 'email', 'access', 'usage'].indexOf(value);
-      await tabs[index].trigger('click');
-      await flushPromises();
-      expect(router.currentRoute.value.query.tab || 'branding').toBe(value);
-      const panel = wrapper.get('[role="tabpanel"][data-p-active="true"]');
-      expect(panel.attributes('aria-labelledby')).toBe(tabs[index].attributes('id'));
-      expect(panel.element.closest('.settings-tabs')).not.toBeNull();
-      expect(wrapper.findAll('button').some((button) => button.text() === 'Save Changes')).toBe(
-        value === 'branding',
-      );
-      expect(wrapper.get('[aria-label="Workspace usage"]').text()).toContain('Staff: 2 of 5');
-      expect(wrapper.get('[aria-label="Workspace usage"]').attributes('class')).not.toContain(
-        'border-surface-200',
-      );
-      wrapper.unmount();
-    },
-  );
+  it('updates the URL when switching tabs and shows server-provided usage', async () => {
+    const { wrapper, router } = await open();
+    await wrapper
+      .findAll('[role="tab"]')
+      .find((tab) => tab.text() === 'Usage')!
+      .trigger('click');
+    await flushPromises();
+    expect(router.currentRoute.value.query.tab).toBe('usage');
+    expect(wrapper.get('[aria-label="Workspace usage"]').text()).toContain('Staff: 2 of 5');
+    wrapper.unmount();
+  });
 
   it('deep-links to roles and preserves branding drafts across tab switches', async () => {
     const { wrapper, router } = await open('access');

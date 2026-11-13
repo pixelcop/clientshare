@@ -24,23 +24,6 @@ describe('file email options', () => {
     });
   }
 
-  it('uses an icon trigger and lists pending emails with their count before notifications', async () => {
-    vi.mocked(axios.get).mockResolvedValue({
-      data: { pending: [{ id: 'one' }, { id: 'two' }] },
-    });
-    const wrapper = setup();
-    await flushPromises();
-    const trigger = wrapper.get('button[aria-label="Email options, 2 pending"]');
-    expect(trigger.text()).toBe('2');
-    await trigger.trigger('click');
-    await flushPromises();
-    const options = wrapper.get('.email-options');
-    expect(options.element.children[0].textContent).toContain('Pending emails');
-    expect(options.get('.pending-email-count').text()).toBe('2');
-    expect(options.element.children[1].textContent).toContain('Email notifications');
-    wrapper.unmount();
-  });
-
   it('binds the notification preference without sending mail and locks it during uploads', async () => {
     const post = vi.spyOn(axios, 'post');
     const wrapper = setup();
@@ -57,9 +40,11 @@ describe('file email options', () => {
     wrapper.unmount();
   });
 
-  it('opens the pending modal and refreshes the count', async () => {
+  it('shows the pending count and refreshes it when opening the queue', async () => {
+    vi.mocked(axios.get).mockResolvedValue({ data: { pending: [{ id: 'one' }, { id: 'two' }] } });
     const wrapper = setup();
     await flushPromises();
+    expect(wrapper.get('button').attributes('aria-label')).toBe('Email options, 2 pending');
     vi.mocked(axios.get).mockResolvedValue({ data: { pending: [] } });
     await wrapper.get('button').trigger('click');
     await flushPromises();
@@ -72,6 +57,7 @@ describe('file email options', () => {
     expect(axios.get).toHaveBeenLastCalledWith('/api/email/queue', {
       params: { client_id: 'client' },
     });
+    expect(wrapper.get('button').attributes('aria-label')).toBe('Email options, 0 pending');
     wrapper.unmount();
   });
 

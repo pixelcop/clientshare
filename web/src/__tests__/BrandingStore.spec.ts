@@ -12,15 +12,13 @@ describe('runtime documentation URL', () => {
 
   afterEach(() => vi.restoreAllMocks());
 
-  it.each(['/docs/', 'https://docs.clientshare.app', 'https://help.example.com/guide/'])(
-    'uses the server-provided URL %s',
-    async (docsURL) => {
-      vi.spyOn(axios, 'get').mockResolvedValue({ data: { docs_url: docsURL } });
-      const store = useBrandingStore();
-      await flushPromises();
-      expect(store.branding.docsURL).toBe(docsURL);
-    },
-  );
+  it('uses a custom server-provided documentation URL', async () => {
+    const docsURL = 'https://help.example.com/guide/';
+    vi.spyOn(axios, 'get').mockResolvedValue({ data: { docs_url: docsURL } });
+    const store = useBrandingStore();
+    await flushPromises();
+    expect(store.branding.docsURL).toBe(docsURL);
+  });
 
   it('falls back to local docs if branding cannot load', async () => {
     vi.spyOn(axios, 'get').mockRejectedValue(new Error('Unavailable'));

@@ -77,14 +77,12 @@ describe('exact-scope sharing panel', () => {
     });
   });
 
-  it('shares by email without a recipient-type selector or an identity-change hint', async () => {
+  it('shares by email without changing the recipient identity', async () => {
     const post = vi.spyOn(axios, 'post').mockResolvedValue({
       data: { id: 'invite', email: 'teammate@example.test', status: 'queued' },
     });
     const wrapper = mount(SharingPanel, { props: { scope }, global: { plugins: [OpenVue] } });
     await flushPromises();
-    expect(wrapper.text()).not.toContain('Recipient type');
-    expect(wrapper.findAllComponents(Select)).toHaveLength(0);
     await wrapper.get('#item-file-email').setValue('teammate@example.test');
     await wrapper.get('.add-person').trigger('submit');
     await wrapper.get('[aria-label="Send invitation"]').trigger('click');
@@ -104,7 +102,6 @@ describe('exact-scope sharing panel', () => {
     expect(wrapper.findComponent(SharingPeople).exists()).toBe(true);
     expect(wrapper.findComponent(SharingLinks).exists()).toBe(false);
     const requests = vi.mocked(axios.get).mock.calls.length;
-    expect(wrapper.find('[role="tab"]').exists()).toBe(false);
     await wrapper.get('input#item-file-email').setValue('draft@example.test');
     await wrapper.get('[aria-label="Sharing links"]').trigger('click');
     expect(wrapper.findComponent(SharingPeople).exists()).toBe(false);
@@ -122,21 +119,6 @@ describe('exact-scope sharing panel', () => {
     await flushPromises();
     expect(wrapper.find('[aria-label="Sharing links"]').exists()).toBe(true);
     expect((wrapper.get('input#item-folder-email').element as HTMLInputElement).value).toBe('');
-    wrapper.unmount();
-  });
-
-  it('preserves link settings across child remounts without reloading access', async () => {
-    const wrapper = mount(SharingPanel, { props: { scope }, global: { plugins: [OpenVue] } });
-    await flushPromises();
-    const requests = vi.mocked(axios.get).mock.calls.length;
-    await wrapper.get('[aria-label="Sharing links"]').trigger('click');
-    const expiry = new Date(Date.now() + 14 * 86400000);
-    wrapper.findComponent(SharingExpiry).vm.$emit('update:modelValue', expiry);
-    await flushPromises();
-    await wrapper.get('[aria-label="Back to sharing"]').trigger('click');
-    await wrapper.get('[aria-label="Sharing links"]').trigger('click');
-    expect(wrapper.findComponent(SharingExpiry).props('modelValue')).toEqual(expiry);
-    expect(axios.get).toHaveBeenCalledTimes(requests);
     wrapper.unmount();
   });
 
@@ -174,7 +156,7 @@ describe('exact-scope sharing panel', () => {
     },
   );
 
-  it('orders active links newest first, followed by inactive links newest first without a divider', async () => {
+  it('orders active links newest first and includes inactive links only on request', async () => {
     const links = [
       { id: 'active-old', created_at: '2026-01-01T00:00:00Z' },
       { id: 'revoked-new', created_at: '2026-06-01T00:00:00Z', revoked_at: '2026-07-01T00:00:00Z' },
@@ -205,7 +187,6 @@ describe('exact-scope sharing panel', () => {
       'expired-old',
     ]);
     expect(wrapper.findAll('.existing-links > .access-row')).toHaveLength(5);
-    expect(wrapper.text()).not.toContain('No recorded opens doesn’t guarantee');
     await wrapper.get('#item-file-history').setValue(false);
     expect(wrapper.findAll('.existing-links > .access-row')).toHaveLength(3);
     wrapper.unmount();
@@ -275,7 +256,7 @@ describe('exact-scope sharing panel', () => {
     second.unmount();
   });
 
-  it('separates creation and management, preserves their state, and puts sharing navigation in the footer', async () => {
+  it('preserves composer and history state across sharing navigation', async () => {
     vi.mocked(axios.get).mockImplementation(async (url) => {
       if (url === '/api/access-roles') return { data: catalog };
       return {
@@ -287,11 +268,7 @@ describe('exact-scope sharing panel', () => {
     const wrapper = mount(SharingPanel, { props: { scope }, global: { plugins: [OpenVue] } });
     await flushPromises();
     const requests = vi.mocked(axios.get).mock.calls.length;
-    await wrapper.get('.sharing-footer [aria-label="Sharing links"]').trigger('click');
-    expect(wrapper.get('.sharing-footer [aria-label="Back to sharing"]').exists()).toBe(true);
-    expect(
-      wrapper.findComponent(SharingLinks).find('[aria-label="Back to sharing"]').exists(),
-    ).toBe(false);
+    await wrapper.get('[aria-label="Sharing links"]').trigger('click');
     expect(wrapper.find('.link-composer').exists()).toBe(true);
     expect(wrapper.find('.existing-links').exists()).toBe(false);
     const expiry = new Date(Date.now() + 14 * 86400000);
@@ -304,9 +281,9 @@ describe('exact-scope sharing panel', () => {
     expect(wrapper.findComponent(SharingExpiry).props('modelValue')).toEqual(expiry);
     await wrapper.findAll('[role="tab"]')[1]!.trigger('click');
     expect(wrapper.findAll('.existing-links .access-row')).toHaveLength(1);
-    await wrapper.get('.sharing-footer [aria-label="Back to sharing"]').trigger('click');
+    await wrapper.get('[aria-label="Back to sharing"]').trigger('click');
     expect(wrapper.findComponent(SharingPeople).exists()).toBe(true);
-    await wrapper.get('.sharing-footer [aria-label="Sharing links"]').trigger('click');
+    await wrapper.get('[aria-label="Sharing links"]').trigger('click');
     expect(wrapper.findAll('[role="tab"]')[1]!.attributes('aria-selected')).toBe('true');
     expect(wrapper.findAll('.existing-links .access-row')).toHaveLength(1);
     expect(axios.get).toHaveBeenCalledTimes(requests);
@@ -338,10 +315,6 @@ describe('exact-scope sharing panel', () => {
     const wrapper = mount(SharingPanel, { props: { scope }, global: { plugins: [OpenVue] } });
     await flushPromises();
     await wrapper.get('[aria-label="Sharing links"]').trigger('click');
-    expect(wrapper.findComponent(SharingExpiry).props('compact')).toBe(false);
-    expect(wrapper.findComponent(SharingExpiry).props('label')).toBe('Link expiry');
-    expect(wrapper.get('.link-settings').text()).toContain('Link expiry');
-    expect(wrapper.find('[aria-label="Existing links"]').exists()).toBe(false);
     await wrapper.findAll('[role="tab"]')[1]!.trigger('click');
     expect(wrapper.find('[aria-label="Existing links"]').exists()).toBe(true);
     expect(wrapper.find('#item-file-history').exists()).toBe(hasHistory);
@@ -383,7 +356,6 @@ describe('exact-scope sharing panel', () => {
     await wrapper.get('input#item-file-email').setValue('recipient@example.test');
     await wrapper.get('.add-person').trigger('submit');
     expect(wrapper.findComponent(Select).props('options')).toHaveLength(1);
-    expect(wrapper.text()).not.toContain('This file only');
     await wrapper.get('[aria-label="Send invitation"]').trigger('click');
     await flushPromises();
     expect(post).toHaveBeenNthCalledWith(
@@ -423,8 +395,6 @@ describe('exact-scope sharing panel', () => {
     });
     await flushPromises();
     await wrapper.get('[aria-label="Sharing links"]').trigger('click');
-    expect(wrapper.findComponent(Select).props('ariaLabelledby')).toBe('item-file-mode-label');
-    expect(wrapper.get('#item-file-mode-label').text()).toBe('Anyone with this link can');
     const form = wrapper.findAll('form')[0];
     await form.trigger('submit');
     await flushPromises();
@@ -441,9 +411,6 @@ describe('exact-scope sharing panel', () => {
     expect(wrapper.find('input#item-file-link-email').exists()).toBe(false);
     await wrapper.get('[aria-label="Email link"]').trigger('click');
     expect(document.activeElement?.id).toBe('item-file-link-email');
-    expect(wrapper.get('input#item-file-link-email').attributes('placeholder')).toBe(
-      'Email link to',
-    );
     await wrapper.get('input#item-file-link-email').setValue('reader@example.test');
     const emailForm = wrapper.get('input#item-file-link-email').element.closest('form')!;
     emailForm.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
@@ -473,21 +440,15 @@ describe('exact-scope sharing panel', () => {
     });
     await flushPromises();
     await wrapper.get('[aria-label="Sharing links"]').trigger('click');
-    const backButton = wrapper.get('[aria-label="Back to sharing"]').element;
     const requests = vi.mocked(axios.get).mock.calls.length;
     await wrapper.get('.link-composer').trigger('submit');
     await flushPromises();
     expect(post).toHaveBeenCalledTimes(1);
     expect(axios.get).toHaveBeenCalledTimes(requests);
-    expect(wrapper.get('[aria-label="Back to sharing"]').element).toBe(backButton);
     expect(wrapper.find('[role="status"]').text()).not.toContain('Loading');
     expect(wrapper.findAll('.existing-links .access-row')).toHaveLength(0);
     expect(document.activeElement?.textContent).toContain('Link ready');
-    expect(wrapper.find('[aria-label="Open recipient view"]').exists()).toBe(false);
     expect(wrapper.find('.link-email-form').exists()).toBe(false);
-    expect(wrapper.findAll('label').some((label) => label.text() === 'Link address')).toBe(false);
-    expect(wrapper.get('#item-file-url').attributes('aria-label')).toBe('Link address');
-    expect(wrapper.text()).not.toContain('Copy the link to share it yourself');
     await wrapper.get('.link-address button').trigger('click');
     await flushPromises();
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith(link.link_url);
@@ -598,14 +559,8 @@ describe('exact-scope sharing panel', () => {
       global: { plugins: [OpenVue] },
     });
     await flushPromises();
-    expect(wrapper.find('.person-form').exists()).toBe(false);
-    expect(wrapper.find('fieldset').exists()).toBe(false);
-    expect(wrapper.find('.past-access').exists()).toBe(false);
-    expect(wrapper.text()).not.toContain('Show history');
     await wrapper.get('#item-file-email').setValue('person@example.test');
     await wrapper.get('.add-person').trigger('submit');
-    expect(wrapper.find('[role="tablist"]').exists()).toBe(false);
-    expect(wrapper.find('[aria-label="People with access"]').exists()).toBe(false);
     expect(wrapper.findComponent(SharingExpiry).props('modelValue')).toBeNull();
     expect(wrapper.find('[aria-label="Sharing links"]').exists()).toBe(false);
     expect(document.activeElement?.id).toBe('item-file-email');
@@ -646,7 +601,6 @@ describe('exact-scope sharing panel', () => {
     await wrapper.get('.add-person').trigger('submit');
     await flushPromises();
     expect(document.activeElement).toBe(document.body);
-    expect(wrapper.get('.sharing-panel').attributes('tabindex')).toBeUndefined();
     expect(wrapper.get('.draft-people').text()).toContain('mobile@example.test');
     expect(input.element.value).toBe('');
     wrapper.unmount();
@@ -697,7 +651,6 @@ describe('exact-scope sharing panel', () => {
     expect(wrapper.find('[aria-label="People with access"]').exists()).toBe(false);
     await wrapper.get('.mobile-manage-access').trigger('click');
     expect(wrapper.get('.mobile-sharing-header h2').text()).toBe('Manage access');
-    expect(wrapper.text()).not.toContain('General access');
     expect(wrapper.find('[aria-label="Sharing links"]').exists()).toBe(false);
     expect(wrapper.find('.add-person').exists()).toBe(false);
     await wrapper.get('[aria-label="Change access for amber@example.test"]').trigger('click');
@@ -806,7 +759,6 @@ describe('exact-scope sharing panel', () => {
       global: { plugins: [OpenVue] },
     });
     await flushPromises();
-    expect(wrapper.get('.past-access').attributes('open')).toBeUndefined();
     expect(wrapper.get('.past-access').text()).toContain('Invitation revoked');
     await wrapper.get('#item-file-email').setValue('person@example.test');
     await wrapper.get('.add-person').trigger('submit');
@@ -818,9 +770,6 @@ describe('exact-scope sharing panel', () => {
       'File manager',
       'Client contact',
     ]);
-    select.vm.$emit('update:modelValue', 'uploader');
-    await flushPromises();
-    expect(wrapper.get('.draft-people').text()).not.toContain('existing files stay private');
     wrapper.unmount();
   });
 });

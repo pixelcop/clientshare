@@ -70,21 +70,6 @@ async function mountComponent() {
 }
 
 describe('ClientListItem', () => {
-  it('includes an Add User action in the client menu', async () => {
-    const { wrapper } = await mountComponent();
-
-    const actions = wrapper.getComponent(splitButtonStub).props('model') as {
-      label?: string;
-      visible?: boolean;
-      command?: () => void;
-    }[];
-
-    const addUserAction = actions.find((action) => action.label === 'Add User');
-
-    expect(addUserAction).toBeDefined();
-    expect(addUserAction?.visible).toBe(true);
-  });
-
   it('emits add-user from the Add User action', async () => {
     const { wrapper, router } = await mountComponent();
 
@@ -95,9 +80,11 @@ describe('ClientListItem', () => {
     }[];
     const addUserAction = actions.find((action) => action.label === 'Add User');
 
+    expect(addUserAction?.visible).toBe(true);
     addUserAction?.command?.();
 
     expect(wrapper.emitted('add-user')).toEqual([[client]]);
     expect(router.currentRoute.value.name).toBe('Home');
+    wrapper.unmount();
   });
 });

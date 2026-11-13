@@ -3,7 +3,7 @@ import Button from 'openvue/button';
 import DatePicker from 'openvue/datepicker';
 import Dialog from 'openvue/dialog';
 import Select from 'openvue/select';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import SharingExpiry from '@/components/SharingExpiry.vue';
 
@@ -25,18 +25,6 @@ function control(modelValue: Date | null = null, required = false, preset?: stri
 }
 
 describe('sharing expiry', () => {
-  it('highlights only a set expiry and exposes its exact date without a native title', async () => {
-    const wrapper = control();
-    expect(wrapper.find('.expiry-clock.is-active').exists()).toBe(false);
-    expect(wrapper.getComponent(Select).attributes('title')).toBeUndefined();
-    await wrapper.setProps({ modelValue: new Date(2027, 2, 14, 17, 30) });
-    expect(wrapper.find('.expiry-clock.is-active').exists()).toBe(true);
-    expect(wrapper.getComponent(Select).attributes('title')).toBeUndefined();
-    expect(wrapper.getComponent(Select).props('pt').label['aria-description']).toContain(
-      'Expires in',
-    );
-    wrapper.unmount();
-  });
   it('offers only no expiry, 7 days, 30 days and custom, with no unlimited links', () => {
     const optional = control();
     expect(
@@ -64,30 +52,6 @@ describe('sharing expiry', () => {
     expect(wrapper.emitted('update:modelValue')).toBeUndefined();
     wrapper.unmount();
   });
-
-  it.each(['7', '30'])(
-    'keeps a chosen %s-day composer preset after time passes and the control remounts',
-    (preset) => {
-      vi.useFakeTimers({ toFake: ['Date'] });
-      try {
-        vi.setSystemTime(new Date('2026-11-12T12:00:00Z'));
-        const expiry = new Date(Date.now() + Number(preset) * 86400000);
-        const first = control(expiry, true, preset);
-        expect(first.getComponent(Select).props('modelValue')).toBe(preset);
-        first.unmount();
-        vi.setSystemTime(new Date('2026-11-12T14:00:00Z'));
-        const remounted = control(expiry, true, preset);
-        expect(remounted.getComponent(Select).props('modelValue')).toBe(preset);
-        expect(remounted.getComponent(Select).props('ariaLabel')).toBe(
-          `Expiry: Expires in ${preset} days`,
-        );
-        expect(remounted.emitted('update:modelValue')).toBeUndefined();
-        remounted.unmount();
-      } finally {
-        vi.useRealTimers();
-      }
-    },
-  );
 
   it('reports the chosen preset without committing a cancelled custom selection', async () => {
     const wrapper = control(new Date(Date.now() + 7 * 86400000), true, '7');

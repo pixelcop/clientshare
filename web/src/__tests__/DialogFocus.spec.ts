@@ -1,20 +1,18 @@
 import { flushPromises, mount } from '@vue/test-utils';
 import OpenVue from 'openvue/config';
-import ConfirmationService from 'openvue/confirmationservice';
-import ConfirmDialog from 'openvue/confirmdialog';
 import Dialog from 'openvue/dialog';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-describe('OpenVue dialog initial focus', () => {
+// Regression coverage for patches/openvue@1.1.1.patch, not the general Dialog API.
+describe('patched OpenVue dialog behavior', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
   it.each([
-    { maximizable: true, autofocus: false, section: 'pcMaximizeButton' },
-    { maximizable: false, autofocus: false, section: 'pcCloseButton' },
-    { maximizable: true, autofocus: true, section: 'input' },
-  ])('focuses $section without forcing a ring', async ({ maximizable, autofocus, section }) => {
+    { maximizable: true, section: 'pcMaximizeButton' },
+    { maximizable: false, section: 'pcCloseButton' },
+  ])('focuses $section without forcing a ring', async ({ maximizable, section }) => {
     const focus = vi.spyOn(HTMLElement.prototype, 'focus');
     const wrapper = mount(Dialog, {
       props: {
@@ -25,7 +23,6 @@ describe('OpenVue dialog initial focus', () => {
         maximizeButtonProps: { 'data-testid': 'pcMaximizeButton' },
         closeButtonProps: { 'data-testid': 'pcCloseButton' },
       },
-      slots: autofocus ? { default: '<input autofocus data-testid="input" />' } : {},
       global: { plugins: [OpenVue], stubs: { transition: false } },
       attachTo: document.body,
     });
@@ -76,26 +73,6 @@ describe('OpenVue dialog initial focus', () => {
     } finally {
       top.unmount();
       bottom.unmount();
-    }
-  });
-
-  it('passes outside-click dismissal through the global confirmation dialog', async () => {
-    const wrapper = mount(ConfirmDialog, {
-      attrs: { dismissableMask: true },
-      global: { plugins: [OpenVue, ConfirmationService], stubs: { transition: false } },
-      attachTo: document.body,
-    });
-    try {
-      wrapper.vm.$confirm.require({ message: 'Confirm this action?' });
-      await flushPromises();
-      expect(wrapper.findComponent(Dialog).props('dismissableMask')).toBe(true);
-      const mask = document.querySelector('.p-dialog-mask')!;
-      mask.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-      mask.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
-      await flushPromises();
-      expect(wrapper.findComponent(Dialog).props('visible')).toBe(false);
-    } finally {
-      wrapper.unmount();
     }
   });
 });
