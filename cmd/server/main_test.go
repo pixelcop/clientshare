@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestVersionFlagDoesNotLoadConfig(t *testing.T) {
+func TestVersionDoesNotLoadConfig(t *testing.T) {
 	originalCommit, originalBuildTime := clientshare.CommitHash, clientshare.BuildTime
 	t.Cleanup(func() {
 		clientshare.CommitHash, clientshare.BuildTime = originalCommit, originalBuildTime
@@ -26,12 +26,14 @@ func TestVersionFlagDoesNotLoadConfig(t *testing.T) {
 	} {
 		t.Run(tc.want, func(t *testing.T) {
 			clientshare.CommitHash, clientshare.BuildTime = tc.commit, tc.buildTime
-			var stdout, stderr bytes.Buffer
-			cmd := newRootCommand(context.Background(), &stdout, &stderr)
-			cmd.SetArgs([]string{"--config", filepath.Join(t.TempDir(), "missing.yaml"), "--version"})
-			require.NoError(t, cmd.Execute())
-			require.Equal(t, tc.want, stdout.String())
-			require.Empty(t, stderr.String())
+			for _, args := range [][]string{{"--version"}, {"version"}} {
+				var stdout, stderr bytes.Buffer
+				cmd := newRootCommand(context.Background(), &stdout, &stderr)
+				cmd.SetArgs(append([]string{"--config", filepath.Join(t.TempDir(), "missing.yaml")}, args...))
+				require.NoError(t, cmd.Execute())
+				require.Equal(t, tc.want, stdout.String())
+				require.Empty(t, stderr.String())
+			}
 		})
 	}
 }
@@ -116,7 +118,7 @@ func runConfigCommand(args []string, stdout, stderr io.Writer) error {
 
 func TestCommandHelpDoesNotLoadConfig(t *testing.T) {
 	for _, args := range [][]string{
-		{}, {"--help"}, {"help"}, {"serve", "--help"},
+		{}, {"--help"}, {"help"}, {"serve", "--help"}, {"version", "--help"},
 		{"config"}, {"config", "verify", "--help"}, {"config", "schema", "--help"},
 		{"storage"}, {"storage", "--help"},
 		{"storage", "inventory", "--help"}, {"storage", "migrate", "--help"},
@@ -138,7 +140,7 @@ func TestCommandHelpDoesNotLoadConfig(t *testing.T) {
 
 func TestCommandRejectsInvalidInput(t *testing.T) {
 	for _, args := range [][]string{
-		{"unknown"}, {"--unknown"}, {"serve", "extra"}, {"serve", "--unknown"},
+		{"unknown"}, {"--unknown"}, {"serve", "extra"}, {"serve", "--unknown"}, {"version", "extra"},
 		{"config", "unknown"}, {"config", "verify", "extra"}, {"config", "schema", "extra"},
 		{"storage", "unknown"}, {"storage", "verify", "extra"},
 		{"storage", "migrate", "--unknown"}, {"storage", "orphan-cleanup", "--grace", "invalid"},

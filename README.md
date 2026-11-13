@@ -124,6 +124,7 @@ starting the server:
 
 ```sh
 ./clientshare --version
+./clientshare version
 ```
 
 Builds without injected commit metadata report `dev`. See [Access logs](./docs/access-logs.md)

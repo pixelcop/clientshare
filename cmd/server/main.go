@@ -38,6 +38,15 @@ func newRootCommand(ctx context.Context, stdout, stderr io.Writer) *cobra.Comman
 	root.SetErr(stderr)
 	root.PersistentFlags().StringVar(&configPath, "config", defaultConfigPath, "Path to YAML configuration file")
 	root.AddCommand(&cobra.Command{
+		Use:   "version",
+		Short: "Print build version",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			_, err := fmt.Fprintf(cmd.OutOrStdout(), "clientshare version %s\n", root.Version)
+			return err
+		},
+	})
+	root.AddCommand(&cobra.Command{
 		Use:   "serve",
 		Short: "Start the ClientShare server",
 		Args:  cobra.NoArgs,
