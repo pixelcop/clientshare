@@ -12,10 +12,14 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/pixelcop/clientshare/internal/models"
 	"github.com/pixelcop/clientshare/internal/services/storage"
 	"go.uber.org/zap"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/unicode/norm"
 	"gorm.io/gorm"
 )
 
@@ -159,26 +163,47 @@ func (v *ReadableViews) Probe() error {
 	return nil
 }
 
-func viewName(name string) error {
+// viewName is a one-way, filesystem-independent display mapping. Never use it
+// for portal names or object keys. Reject structural corruption before mapping.
+func viewName(name string) (string, error) {
 	if err := LogicalName(name); err != nil {
-		return err
+		return "", fmt.Errorf("unsafe projection name %q: %w", name, err)
 	}
-	if strings.TrimRight(name, " .") != name || strings.ContainsAny(name, ":*?\"<>|") {
-		return fmt.Errorf("unsupported NAS name %q", name)
+	if !utf8.ValidString(name) {
+		return "", fmt.Errorf("invalid UTF-8 projection name %q", name)
 	}
-	for _, c := range name {
-		if c < 32 {
-			return fmt.Errorf("unsupported NAS name %q", name)
+	trailing := len(strings.TrimRight(name, " ."))
+	var mapped strings.Builder
+	for i, c := range name {
+		if !unicode.IsPrint(c) || strings.ContainsRune(":*?\"<>|", c) || i >= trailing {
+			mapped.WriteByte('_')
+		} else {
+			mapped.WriteRune(c)
 		}
 	}
-	base := strings.ToUpper(strings.SplitN(name, ".", 2)[0])
-	if base == "CON" || base == "PRN" || base == "AUX" || base == "NUL" || (len(base) == 4 && (strings.HasPrefix(base, "COM") || strings.HasPrefix(base, "LPT")) && base[3] >= '1' && base[3] <= '9') {
-		return fmt.Errorf("reserved NAS name %q", name)
+	result := mapped.String()
+	base := strings.ToUpper(strings.TrimRight(strings.SplitN(result, ".", 2)[0], " "))
+	deviceNumber := strings.TrimPrefix(base, "COM")
+	if strings.HasPrefix(base, "LPT") {
+		deviceNumber = strings.TrimPrefix(base, "LPT")
 	}
-	return nil
+	if base == "CON" || base == "PRN" || base == "AUX" || base == "NUL" || base == "CONIN$" || base == "CONOUT$" ||
+		((strings.HasPrefix(base, "COM") || strings.HasPrefix(base, "LPT")) && strings.Contains("123456789¹²³", deviceNumber) && utf8.RuneCountInString(deviceNumber) == 1) {
+		result = "_" + result
+	}
+	if len(result) > 255 {
+		return "", fmt.Errorf("projection name %q exceeds 255 bytes after mapping; no truncation is performed", name)
+	}
+	return result, nil
 }
 
-func (v *ReadableViews) expected(ctx context.Context, state models.ReadableView) ([]ViewEntry, error) {
+// Compare conservatively even on case-sensitive POSIX filesystems. SMB clients
+// and normalization-insensitive filesystems must not expose ambiguous aliases.
+func viewCanonical(name string) string {
+	return norm.NFC.String(cases.Fold().String(norm.NFC.String(name)))
+}
+
+func (v *ReadableViews) expected(ctx context.Context, state models.ReadableView, output io.Writer) ([]ViewEntry, error) {
 	if v.Mode == ViewModeNone || v.Clear {
 		return nil, nil
 	}
@@ -191,7 +216,7 @@ func (v *ReadableViews) expected(ctx context.Context, state models.ReadableView)
 		return nil, err
 	}
 	var files []models.File
-	if err := v.DB.WithContext(ctx).Where("tenant_id = ? AND client_id = ? AND deleted_at IS NULL", state.TenantID, state.ClientID).Find(&files).Error; err != nil {
+	if err := v.DB.WithContext(ctx).Where("tenant_id = ? AND client_id = ? AND deleted_at IS NULL", state.TenantID, state.ClientID).Order("id").Find(&files).Error; err != nil {
 		return nil, err
 	}
 	// Only export records reachable from the active client root. Legacy data
@@ -225,27 +250,64 @@ func (v *ReadableViews) expected(ctx context.Context, state models.ReadableView)
 		}
 	}
 	files = active
+	for _, f := range files {
+		if _, err := viewName(f.Filename); err != nil {
+			return nil, fmt.Errorf("client %s entry %s: %w", state.ClientID, f.ID, err)
+		}
+	}
+	// Client roots share a tenant namespace, including clients not yet applied.
+	var roots []models.File
+	if err := v.DB.WithContext(ctx).Table("files").Select("files.*").Joins("JOIN clients ON clients.root_folder_id = files.id AND clients.tenant_id = files.tenant_id").Where("files.tenant_id = ? AND files.deleted_at IS NULL", state.TenantID).Order("files.id").Find(&roots).Error; err != nil {
+		return nil, err
+	}
+	rootName := ""
+	for _, f := range files {
+		if f.ID == *client.RootFolderID {
+			rootName = f.Filename
+		}
+	}
+	projectedRoot, err := viewName(rootName)
+	if err != nil {
+		return nil, err
+	}
+	for _, other := range roots {
+		if other.ID == *client.RootFolderID {
+			continue
+		}
+		name, err := viewName(other.Filename)
+		if err == nil && viewCanonical(name) == viewCanonical(projectedRoot) {
+			return nil, fmt.Errorf("projection root collision: client %s name %q and client %s name %q map to %q / %q; no names were changed", client.ID, rootName, other.ClientID, other.Filename, projectedRoot, name)
+		}
+	}
 	paths, err := LogicalPaths(files)
 	if err != nil {
 		return nil, err
 	}
 	entries := make([]ViewEntry, 0, len(files))
-	seen := map[string]bool{}
+	seen := map[string]string{}
+	var problems []error
 	for _, f := range files {
 		if f.StorageMissing {
 			continue
 		}
-		p := paths[f.ID]
-		for _, part := range strings.Split(p, "/") {
-			if err := viewName(part); err != nil {
+		logical := paths[f.ID]
+		parts := strings.Split(logical, "/")
+		for i, part := range parts {
+			mapped, err := viewName(part)
+			if err != nil {
 				return nil, err
 			}
+			parts[i] = mapped
 		}
-		p = state.TenantID + "/" + p
-		if seen[strings.ToLower(p)] {
-			return nil, fmt.Errorf("case-insensitive view collision: %s", p)
+		p := state.TenantID + "/" + strings.Join(parts, "/")
+		if logical != strings.Join(parts, "/") {
+			fmt.Fprintf(output, "map client %s entry %s: %q -> %q\n", state.ClientID, f.ID, logical, p)
 		}
-		seen[strings.ToLower(p)] = true
+		canonical := viewCanonical(p)
+		if previous, ok := seen[canonical]; ok {
+			problems = append(problems, fmt.Errorf("projection collision: %s and entry %s name %q map to %q (case/Unicode-insensitive comparison); no names were changed", previous, f.ID, logical, p))
+		}
+		seen[canonical] = fmt.Sprintf("entry %s name %q", f.ID, logical)
 		e := ViewEntry{Path: p, Directory: f.Type == "folder", Checksum: f.Checksum, Size: f.Size}
 		if !e.Directory {
 			if f.StorageKey == nil {
@@ -254,6 +316,9 @@ func (v *ReadableViews) expected(ctx context.Context, state models.ReadableView)
 			e.Key = *f.StorageKey
 		}
 		entries = append(entries, e)
+	}
+	if err := errors.Join(problems...); err != nil {
+		return nil, err
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Path < entries[j].Path })
 	return entries, nil
@@ -397,6 +462,12 @@ func (v *ReadableViews) Reconcile(ctx context.Context, state models.ReadableView
 			v.DB.Model(&models.ReadableView{}).Where("tenant_id = ? AND client_id = ?", state.TenantID, state.ClientID).Update("last_error", result.Error())
 		}
 	}()
+	// Find predictable conflicts before changing owned entries or the manifest.
+	if !dryRun {
+		if err := v.Reconcile(ctx, state, true, io.Discard); err != nil {
+			return err
+		}
+	}
 	manifestRoot := v.Root
 	if v.Mode == ViewModeNone {
 		manifestRoot = ""
@@ -413,7 +484,7 @@ func (v *ReadableViews) Reconcile(ctx context.Context, state models.ReadableView
 	if manifest.Mode != v.Mode || manifest.Root != manifestRoot {
 		return errors.New("view mode/root changed: reconcile old mode with deleted desired entries before explicit rebuild")
 	}
-	expected, err := v.expected(ctx, state)
+	expected, err := v.expected(ctx, state, output)
 	if err != nil {
 		return err
 	}
@@ -425,15 +496,22 @@ func (v *ReadableViews) Reconcile(ctx context.Context, state models.ReadableView
 		}
 		owned[e.Path] = e
 	}
-	// Case-only renames and replacing the object at the same logical name
+	// Case/normalization-only renames and replacing the object at the same name
 	// cannot coexist on a case-insensitive filesystem. Verify and remove those
 	// owned entries first; ordinary renames still create before removing.
 	replace := map[string]bool{}
+	replacementPaths := map[string]bool{}
+	replacementLeaves := map[string]bool{}
+	nextByName := map[string]ViewEntry{}
+	for _, next := range expected {
+		nextByName[viewCanonical(next.Path)] = next
+	}
 	for _, old := range manifest.Entries {
-		for _, next := range expected {
-			if strings.EqualFold(old.Path, next.Path) && old != next {
-				replace[old.Path] = true
-			}
+		canonical := viewCanonical(old.Path)
+		if next, ok := nextByName[canonical]; ok && old != next {
+			replace[old.Path] = true
+			replacementPaths[canonical] = true
+			replacementLeaves[viewCanonical(filepath.Dir(old.Path))+"/"+filepath.Base(old.Path)] = true
 		}
 	}
 	sort.Slice(manifest.Entries, func(i, j int) bool { return manifest.Entries[i].Path > manifest.Entries[j].Path })
@@ -489,14 +567,7 @@ func (v *ReadableViews) Reconcile(ctx context.Context, state models.ReadableView
 			return err
 		}
 		if !known {
-			plannedReplacement := false
-			if dryRun {
-				for old := range replace {
-					if strings.EqualFold(old, e.Path) {
-						plannedReplacement = true
-					}
-				}
-			}
+			plannedReplacement := dryRun && replacementPaths[viewCanonical(e.Path)]
 			// Ask the filesystem too: Unicode-normalized aliases need not compare
 			// equal as Go strings, but must never become newly claimed ownership.
 			if _, statErr := os.Lstat(p); statErr == nil && !plannedReplacement {
@@ -507,8 +578,10 @@ func (v *ReadableViews) Reconcile(ctx context.Context, state models.ReadableView
 			// Refuse even a matching unmanaged entry, and case aliases on Unix.
 			if entries, err := os.ReadDir(filepath.Dir(p)); err == nil {
 				for _, entry := range entries {
-					if strings.EqualFold(entry.Name(), filepath.Base(p)) {
-						if dryRun && replace[filepath.ToSlash(filepath.Join(filepath.Dir(e.Path), entry.Name()))] {
+					if viewCanonical(entry.Name()) == viewCanonical(filepath.Base(p)) {
+						// The parent may itself be renamed, but only the
+						// exact owned leaf is excused, never a second alias.
+						if dryRun && replacementLeaves[viewCanonical(filepath.Dir(e.Path))+"/"+entry.Name()] {
 							continue
 						}
 						return fmt.Errorf("unmanaged view collision: %s", e.Path)
@@ -525,12 +598,8 @@ func (v *ReadableViews) Reconcile(ctx context.Context, state models.ReadableView
 			}
 		}
 		exists, err := v.matches(ctx, state.TenantID, e)
-		if dryRun {
-			for old := range replace {
-				if strings.EqualFold(old, e.Path) {
-					exists, err = false, nil
-				}
-			}
+		if dryRun && replacementPaths[viewCanonical(e.Path)] {
+			exists, err = false, nil
 		}
 		if err != nil {
 			return err

@@ -195,11 +195,61 @@ the ordinary worker processes dirty clients only. Portal access does not depend
 on reconciliation success. Retention waits for the client's applied revision
 before deleting object bytes, so managed links/copies cannot retain them silently.
 
-Names preserve logical spelling. Invalid/reserved NAS names and case-insensitive
-collisions are reported; there are no silent ID suffixes. Unknown files, modified
+### Projection names
+
+The view is a **one-way display projection**, never an import or source of portal
+metadata. Portal names, permissions, stable IDs and immutable object keys are not
+changed. All modes use the same deterministic portable mapping on POSIX-local
+filesystems and on NAS/SMB destinations, even where POSIX permits the original
+name. There is no filesystem-dependent naming policy:
+
+- Replace each non-printable Unicode character (including control/format
+  characters) and each of `: * ? " < > |` with one `_`.
+- Replace each period or ASCII space in the trailing run of periods/spaces with
+  `_`, rather than trimming it. For example, `Example Consulting P.C.` becomes
+  `Example Consulting P.C_`, and `report.txt. ` becomes `report.txt__`.
+- Prefix Windows device names with `_`, including names with extensions:
+  `CON.txt` becomes `_CON.txt`. This covers CON, PRN, AUX, NUL, CONIN$, CONOUT$,
+  COM1–COM9 and LPT1–LPT9 (including the Windows-reserved superscript digits).
+- Preserve other printable characters, spelling and interior spaces/periods.
+  Reject corrupt logical names (empty, `.`/`..`, slash, backslash or NUL), invalid
+  UTF-8 and mapped components exceeding 255 UTF-8 bytes. Never truncate a name.
+
+The mapping applies independently to the client root folder and every nested
+file/folder. The same logical name always yields the same projected component,
+regardless of reconciliation order or restarts. A portal rename changes the
+projection through ordinary reconciliation; paths are not frozen across renames.
+The mapping is intentionally lossy and must never be reversed to identify a
+client or file. The database and owned manifest remain authoritative.
+
+Different logical names can map to the same name (`report.` and `report_`, for
+example). Such collisions, case-folded collisions and canonically equivalent
+Unicode names are **errors**, including client roots within the same tenant.
+Comparison uses Unicode case folding and NFC normalization without normalizing
+the displayed spelling. No automatic suffixes or customer-data renames are used.
+Dry-run prints quoted original/projected paths and entry IDs for changed names,
+and identifies conflicting names/IDs. The CLI checks all selected clients before
+applying any of them; a planning conflict blocks the selected apply. Resolve the
+conflict explicitly or leave the view disabled (`mode: none`).
+
+Names unaffected by these mapping rules keep their existing paths. Previously
+rejected names can now be projected without changing portal data. Names accepted
+by older versions but newly mapped (for example, non-printable format characters)
+are renamed only in the projection on reconciliation. Existing manifests are not
+discarded: reconciliation verifies old ownership before removing/replacing
+entries, including case/normalization-only renames. Unknown files, modified
 exports and directory symlinks block reconciliation. Empty folders are managed.
 Ordinary renames publish new entries before removing old owned entries. Same-name
-replacement and case-only renames remove verified old entries first.
+replacement and case/normalization-only renames remove verified old entries first.
+Preflight is not a filesystem transaction: concurrent external changes or I/O
+failures can still interrupt apply; persisted ownership supports safe retry.
+
+This naming policy does not guarantee every SMB server/client supports every
+Unicode name or path length. Before enabling a view on an existing installation,
+back up, capability-probe the actual mounted storage, review a dry-run and approve
+the rollout separately. Upgrading does not enable a disabled view. Read-only
+share/export permissions are still required; sanitization does not make hardlinks
+read-only and must not be implemented by chmod on individual links.
 
 To switch mode/root or rebuild, stop the owner, run `storage view-clear --apply`
 using the old manifest ownership, change configuration, then run

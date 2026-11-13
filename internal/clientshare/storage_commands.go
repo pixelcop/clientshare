@@ -257,6 +257,26 @@ func newStorageOperation(operation, description string, config *string) *cobra.C
 				return err
 			}
 		}
+		// Plan every selected client before applying any of them. A dry-run
+		// reports all affected clients rather than stopping at the first name.
+		if operation == "view-reconcile" {
+			var problems []error
+			planOutput := out
+			if *apply {
+				planOutput = io.Discard // Actual apply reports its own mappings/actions.
+			}
+			for _, state := range states {
+				if err := views.Reconcile(ctx, state, true, planOutput); err != nil {
+					problems = append(problems, fmt.Errorf("view %s/%s: %w", state.TenantID, state.ClientID, err))
+				}
+			}
+			if err := errors.Join(problems...); err != nil {
+				return err
+			}
+			if !*apply {
+				return nil
+			}
+		}
 		for _, state := range states {
 			if operation == "view-clear" {
 				var previous services.ViewManifest
