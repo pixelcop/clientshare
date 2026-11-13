@@ -3,6 +3,8 @@ import { PDFViewer, type PDFViewerConfig, ZoomMode } from '@embedpdf/vue-pdf-vie
 
 import { useFile } from '@/composables/useFile';
 
+import ImagePreview from './ImagePreview.vue';
+
 const {
   fileType,
   fileUrl,
@@ -76,9 +78,7 @@ watch(
     <p>Download the file to open it on your device.</p>
     <Button as="a" :href="downloadUrl" :download="fileName" label="Download" icon="oi oi-download" />
   </div>
-  <div v-else-if="isImage" class="image-preview" :class="{ maximized }">
-    <img :src="fileUrl" :alt="fileName" @error="failed = true" />
-  </div>
+  <ImagePreview v-else-if="isImage" :file-url="fileUrl" :file-name="fileName" @error="failed = true" />
   <div v-else-if="isAudio" class="audio-preview">
     <audio :src="fileUrl" controls class="w-full max-w-lg" @error="failed = true">
       Your browser does not support the audio element.
@@ -106,24 +106,6 @@ watch(
   align-items: center;
   justify-content: center;
   padding: 32px;
-}
-.image-preview {
-  display: flex;
-  align-items: flex-start;
-  width: 100%;
-  min-width: 0;
-  min-height: 0;
-  overflow: auto;
-  padding: 32px;
-}
-.image-preview img {
-  display: block;
-  flex: none;
-  margin: auto;
-  width: auto;
-  height: auto;
-  max-width: none;
-  max-height: none;
 }
 .text-preview {
   width: 100%;
