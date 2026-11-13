@@ -9,9 +9,34 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/pixelcop/clientshare/internal/clientshare"
 	"github.com/pixelcop/clientshare/pkg/configschema"
 	"github.com/stretchr/testify/require"
 )
+
+func TestVersionDoesNotLoadConfig(t *testing.T) {
+	originalCommit, originalBuildTime := clientshare.CommitHash, clientshare.BuildTime
+	t.Cleanup(func() {
+		clientshare.CommitHash, clientshare.BuildTime = originalCommit, originalBuildTime
+	})
+	for _, tc := range []struct{ commit, buildTime, want string }{
+		{"abc123", "2026-11-13T12:00:00Z", "clientshare version abc123 (built 2026-11-13T12:00:00Z)\n"},
+		{"abc123", "", "clientshare version abc123\n"},
+		{"", "", "clientshare version dev\n"},
+	} {
+		t.Run(tc.want, func(t *testing.T) {
+			clientshare.CommitHash, clientshare.BuildTime = tc.commit, tc.buildTime
+			for _, args := range [][]string{{"--version"}, {"version"}} {
+				var stdout, stderr bytes.Buffer
+				cmd := newRootCommand(context.Background(), &stdout, &stderr)
+				cmd.SetArgs(append([]string{"--config", filepath.Join(t.TempDir(), "missing.yaml")}, args...))
+				require.NoError(t, cmd.Execute())
+				require.Equal(t, tc.want, stdout.String())
+				require.Empty(t, stderr.String())
+			}
+		})
+	}
+}
 
 func TestRunConfigVerifyReportsMissingOptionalFields(t *testing.T) {
 	filename := writeCommandConfig(t, validServerConfig+"server:\n  port: 8080\n")
@@ -93,7 +118,7 @@ func runConfigCommand(args []string, stdout, stderr io.Writer) error {
 
 func TestCommandHelpDoesNotLoadConfig(t *testing.T) {
 	for _, args := range [][]string{
-		{}, {"--help"}, {"help"}, {"serve", "--help"},
+		{}, {"--help"}, {"help"}, {"serve", "--help"}, {"version", "--help"},
 		{"config"}, {"config", "verify", "--help"}, {"config", "schema", "--help"},
 		{"storage"}, {"storage", "--help"},
 		{"storage", "inventory", "--help"}, {"storage", "migrate", "--help"},
@@ -115,7 +140,7 @@ func TestCommandHelpDoesNotLoadConfig(t *testing.T) {
 
 func TestCommandRejectsInvalidInput(t *testing.T) {
 	for _, args := range [][]string{
-		{"unknown"}, {"--unknown"}, {"serve", "extra"}, {"serve", "--unknown"},
+		{"unknown"}, {"--unknown"}, {"serve", "extra"}, {"serve", "--unknown"}, {"version", "extra"},
 		{"config", "unknown"}, {"config", "verify", "extra"}, {"config", "schema", "extra"},
 		{"storage", "unknown"}, {"storage", "verify", "extra"},
 		{"storage", "migrate", "--unknown"}, {"storage", "orphan-cleanup", "--grace", "invalid"},

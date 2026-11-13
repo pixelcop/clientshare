@@ -23,6 +23,11 @@ func NewWebApp(cfg *Config, db *gorm.DB, logger *zap.Logger, emailQueue emailpkg
 		return nil, fmt.Errorf("validate config: %w", err)
 	}
 	maxBodyMB := cfg.Server.MaxBodyMB
+	commitHash := cfg.CommitHash
+	if commitHash == "" {
+		commitHash = "dev"
+	}
+	logger = logger.With(zap.String("commit_hash", commitHash))
 	app := web.CreateApp(maxBodyMB, logger, cfg.DevMode)
 	sessionStore := &auth.SessionStore{DB: db}
 	app.Use(func(c fiber.Ctx) error {

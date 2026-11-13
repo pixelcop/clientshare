@@ -119,6 +119,17 @@ The config path defaults to `config/config.yaml`. Use `./clientshare --help` or
 the `config` and offline `storage` maintenance commands. Long flags use `--`,
 for example `--config` and `--apply`.
 
+Print the build's Git commit and build time without loading configuration or
+starting the server:
+
+```sh
+./clientshare --version
+./clientshare version
+```
+
+Builds without injected commit metadata report `dev`. See [Access logs](./docs/access-logs.md)
+for the request, build, and identity fields included in server logs.
+
 When upgrading, update binary launchers (such as systemd `ExecStart`) to append
 `serve`. The Docker entrypoint and `make run` already do this.
 

@@ -29,6 +29,7 @@ func newRootCommand(ctx context.Context, stdout, stderr io.Writer) *cobra.Comman
 	root := &cobra.Command{
 		Use:           "clientshare",
 		Short:         "ClientShare self-hosted client portal",
+		Version:       buildVersion(),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
@@ -36,6 +37,15 @@ func newRootCommand(ctx context.Context, stdout, stderr io.Writer) *cobra.Comman
 	root.SetOut(stdout)
 	root.SetErr(stderr)
 	root.PersistentFlags().StringVar(&configPath, "config", defaultConfigPath, "Path to YAML configuration file")
+	root.AddCommand(&cobra.Command{
+		Use:   "version",
+		Short: "Print build version",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			_, err := fmt.Fprintf(cmd.OutOrStdout(), "clientshare version %s\n", root.Version)
+			return err
+		},
+	})
 	root.AddCommand(&cobra.Command{
 		Use:   "serve",
 		Short: "Start the ClientShare server",
@@ -47,6 +57,17 @@ func newRootCommand(ctx context.Context, stdout, stderr io.Writer) *cobra.Comman
 	root.AddCommand(newConfigCommand(&configPath))
 	root.AddCommand(clientshare.NewStorageCommand(&configPath))
 	return root
+}
+
+func buildVersion() string {
+	commit := clientshare.CommitHash
+	if commit == "" {
+		commit = "dev"
+	}
+	if clientshare.BuildTime != "" {
+		return fmt.Sprintf("%s (built %s)", commit, clientshare.BuildTime)
+	}
+	return commit
 }
 
 func runServer(ctx context.Context, configPath string) error {

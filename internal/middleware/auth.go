@@ -25,6 +25,7 @@ func AuthRequired(c fiber.Ctx) error {
 	tokenStr := c.Cookies(auth.SessionCookie)
 	expectsJSON := expectsJSON(c)
 	if tokenStr == "" {
+		c.Locals("auth_outcome", "missing_cookie")
 		utils.Logger(c).Debug("Missing token")
 		if expectsJSON {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
@@ -33,13 +34,16 @@ func AuthRequired(c fiber.Ctx) error {
 	}
 	store := auth.Store(c)
 	if store == nil {
+		c.Locals("auth_outcome", "validation_unavailable")
 		return c.SendStatus(fiber.StatusServiceUnavailable)
 	}
 	identity, err := store.Validate(c.Context(), tokenStr, auth.PortalAudience, tenantctx.IDFromFiber(c))
 	if err != nil {
 		if !errors.Is(err, auth.ErrSessionInvalid) {
+			c.Locals("auth_outcome", "validation_unavailable")
 			return c.Status(503).JSON(fiber.Map{"error": "Session validation is temporarily unavailable"})
 		}
+		c.Locals("auth_outcome", "invalid_session")
 		utils.Logger(c).Debug("Invalid token", zap.Error(err))
 		if expectsJSON {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
@@ -49,6 +53,7 @@ func AuthRequired(c fiber.Ctx) error {
 	requestTenantID := strings.TrimSpace(tenantctx.IDFromFiber(c))
 	tokenTenantID := identity.TenantID
 	if requestTenantID == "" || tokenTenantID == "" || requestTenantID != tokenTenantID {
+		c.Locals("auth_outcome", "tenant_mismatch")
 		utils.Logger(c).Debug("Tenant mismatch", zap.String("request_tenant_id", requestTenantID), zap.String("token_tenant_id", tokenTenantID))
 		if expectsJSON {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
@@ -56,6 +61,7 @@ func AuthRequired(c fiber.Ctx) error {
 		return c.Redirect().To("/401")
 	}
 
+	c.Locals("auth_outcome", "authenticated")
 	c.Locals("session_id", identity.SessionID)
 	c.Locals("role", identity.Role)
 	c.Locals("user_id", identity.UserID)

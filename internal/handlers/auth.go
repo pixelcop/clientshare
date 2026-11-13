@@ -62,7 +62,10 @@ func RegisterAuthRoutes(insecureApi fiber.Router, db *gorm.DB, signingKey string
 
 	var l fiber.Handler
 	if rateLimitEnabled {
-		l = limiter.New()
+		l = limiter.New(limiter.Config{LimitReached: func(c fiber.Ctx) error {
+			c.Locals("auth_outcome", "rate_limited")
+			return c.SendStatus(fiber.StatusTooManyRequests)
+		}})
 	} else {
 		// no-op middleware (only used in tests)
 		l = func(c fiber.Ctx) error {
@@ -93,6 +96,7 @@ func RegisterAuthRoutes(insecureApi fiber.Router, db *gorm.DB, signingKey string
 }
 
 func (h *AuthHandler) ExchangeHostedLoginHandler(c fiber.Ctx) error {
+	c.Locals("auth_outcome", "validation_unavailable")
 	if h.hostedLogin == nil {
 		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "hosted login is unavailable"})
 	}
@@ -100,11 +104,13 @@ func (h *AuthHandler) ExchangeHostedLoginHandler(c fiber.Ctx) error {
 		Code string `json:"code"`
 	}
 	if err := c.Bind().Body(&req); err != nil || strings.TrimSpace(req.Code) == "" {
+		c.Locals("auth_outcome", "invalid_request")
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid hosted login handoff"})
 	}
 	identity, err := h.hostedLogin.ConsumeHandoff(tenantIDFromCtx(c), req.Code)
 	if err != nil {
 		if errors.Is(err, services.ErrHostedLoginHandoffInvalid) {
+			c.Locals("auth_outcome", "invalid_handoff")
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid hosted login handoff"})
 		}
 		utils.Logger(c).Error("failed consuming hosted login handoff", zap.Error(err))
@@ -462,6 +468,7 @@ func clearAuthSessionCookie(c fiber.Ctx) {
 
 // LoginHandler handles /api/auth/login
 func (h *AuthHandler) LoginHandler(c fiber.Ctx) error {
+	c.Locals("auth_outcome", "invalid_request")
 	tenantID := tenantIDFromCtx(c)
 	var req struct {
 		Email    string `json:"email"`
@@ -472,9 +479,14 @@ func (h *AuthHandler) LoginHandler(c fiber.Ctx) error {
 	}
 	var user models.User
 	if err := h.db.WithContext(c.Context()).Where("tenant_id = ? AND email = ?", tenantID, req.Email).First(&user).Error; err != nil {
+		c.Locals("auth_outcome", "invalid_credentials")
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			c.Locals("auth_outcome", "validation_unavailable")
+		}
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid credentials"})
 	}
 	if !auth.CheckPasswordHash(req.Password, user.PasswordHash) {
+		c.Locals("auth_outcome", "invalid_credentials")
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid credentials"})
 	}
 	token, err := h.createUserSession(c, user.TenantID, user.ID, "")
@@ -490,6 +502,7 @@ func (h *AuthHandler) LoginHandler(c fiber.Ctx) error {
 
 // LogoutHandler handles /api/auth/logout
 func (h *AuthHandler) LogoutHandler(c fiber.Ctx) error {
+	c.Locals("auth_outcome", "logout_failed")
 	store := &auth.SessionStore{DB: h.db}
 	if c.Query("scope") == "all" {
 		identity, err := store.Validate(c.Context(), c.Cookies(auth.SessionCookie), auth.PortalAudience, tenantIDFromCtx(c))
@@ -505,6 +518,7 @@ func (h *AuthHandler) LogoutHandler(c fiber.Ctx) error {
 		return err
 	}
 	clearAuthSessionCookie(c)
+	c.Locals("auth_outcome", "logout_completed")
 	return c.SendStatus(fiber.StatusOK)
 }
 

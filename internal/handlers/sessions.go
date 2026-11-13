@@ -7,6 +7,7 @@ import (
 )
 
 func (h *AuthHandler) createUserSession(c fiber.Ctx, tenantID, userID, groupID string) (string, error) {
+	c.Locals("auth_outcome", "session_issue_failed")
 	var raw string
 	err := h.db.WithContext(c.Context()).Transaction(func(tx *gorm.DB) error {
 		store := &auth.SessionStore{DB: tx}
@@ -20,6 +21,12 @@ func (h *AuthHandler) createUserSession(c fiber.Ctx, tenantID, userID, groupID s
 		}
 		return nil
 	})
+	if err == nil {
+		c.Locals("auth_outcome", "session_issued")
+		// Session issuance has verified the identity even though login routes do
+		// not run AuthRequired. Expose it to the completion access log only now.
+		c.Locals("user_id", userID)
+	}
 	return raw, err
 }
 

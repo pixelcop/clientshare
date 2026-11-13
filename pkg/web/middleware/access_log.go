@@ -20,6 +20,7 @@ type request struct {
 	contentLength int
 	hostname      string
 	remoteAddress string
+	userAgent     string
 }
 
 // Access logs retain routing context, not bearer credentials, auth query values
@@ -46,6 +47,7 @@ func (r request) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddInt("bytes", r.contentLength)
 	enc.AddString("hostname", r.hostname)
 	enc.AddString("remoteAddress", r.remoteAddress)
+	enc.AddString("userAgent", r.userAgent)
 	return nil
 }
 
@@ -81,7 +83,10 @@ func NewAccessLogger(logger *zap.Logger, disableSSRLogs bool, useColor bool) fib
 		})
 
 		// create new logger with context
-		child := utils.Logger(c)
+		child := logger
+		if child == nil {
+			child = utils.Logger(c)
+		}
 		if requestId := c.GetRespHeader(fiber.HeaderXRequestID); requestId != "" {
 			child = child.With(zap.String("requestId", requestId))
 		}
@@ -123,6 +128,8 @@ func LogWebRequest(c fiber.Ctx, startTime *time.Time, elapsedTime *time.Duration
 		hostname:      c.Hostname(),
 		remoteAddress: utils.GetIP(c),
 		contentLength: len(c.Request().Body()),
+		// User-Agent is untrusted and can otherwise grow every access log entry.
+		userAgent: accessLogUserAgent(c.Get(fiber.HeaderUserAgent)),
 	}
 
 	// When streaming a response, do not log the response body size.
@@ -147,6 +154,16 @@ func LogWebRequest(c fiber.Ctx, startTime *time.Time, elapsedTime *time.Duration
 		zap.Object("req", req),
 		zap.Object("res", res),
 		zap.Durationp("elapsedTime", elapsedTime),
+	}
+	// Read locals after downstream tenant resolution/authentication. Never infer
+	// an identity from request headers, query parameters or an unvalidated cookie.
+	for _, key := range []string{"tenant_id", "user_id"} {
+		if id := fiber.Locals[string](c, key); id != "" {
+			fields = append(fields, zap.String(key, id))
+		}
+	}
+	if outcome := fiber.Locals[string](c, "auth_outcome"); outcome != "" {
+		fields = append(fields, zap.String("auth_outcome", outcome))
 	}
 	if chainErr != nil {
 		fields = append(fields, zap.Error(chainErr))
@@ -183,4 +200,12 @@ func LogWebRequest(c fiber.Ctx, startTime *time.Time, elapsedTime *time.Duration
 	} else {
 		child.Info(msg, fields...)
 	}
+}
+
+func accessLogUserAgent(value string) string {
+	const maxBytes = 1024
+	if len(value) > maxBytes {
+		return strings.ToValidUTF8(value[:maxBytes], "")
+	}
+	return strings.ToValidUTF8(value, "")
 }
