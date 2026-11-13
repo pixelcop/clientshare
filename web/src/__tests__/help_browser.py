@@ -26,6 +26,8 @@ with sync_playwright() as p:
                     status = 401
                 else:
                     data = {"id": "test-user", "role": state["role"], "email": "admin@example.invalid", "name": "Test Admin"}
+            elif path.endswith("/auth/passkeys/login/options"):
+                data = {"passkey": False, "password": True}
             elif path.endswith("/settings/branding"):
                 data = {"site_title": "Test Portal", "docs_url": "/configured-guide/"}
             elif path.endswith("/help") or path.endswith("/help/login"):
@@ -148,6 +150,15 @@ with sync_playwright() as p:
         assert set(state["posts"][-1]) == {"id", "message", "email"}
         page.keyboard.press("Escape")
         expect(widget).to_be_focused()
+        # Email-first sign-in moves focus to the password when revealed,
+        # including after returning to choose a different email.
+        login_email = page.get_by_label("Email", exact=True)
+        login_email.fill("visitor@example.invalid")
+        login_email.press("Enter")
+        expect(page.get_by_label("Password", exact=True)).to_be_focused()
+        page.get_by_role("button", name="Use a different email", exact=True).click()
+        page.get_by_label("Email", exact=True).press("Enter")
+        expect(page.get_by_label("Password", exact=True)).to_be_focused()
         page.close()
     browser.close()
 print("Help browser checks passed (desktop and mobile)")

@@ -26,6 +26,9 @@ const { user } = storeToRefs(auth);
 const loading = ref(false);
 const error = ref<string | null>(null);
 const showPassword = ref(false);
+const vFocus = {
+  mounted: (element: HTMLElement) => element.focus(),
+};
 
 function redirectAfterLogin() {
   const redirect =
@@ -179,7 +182,7 @@ onMounted(async () => {
         <div class="mb-6">
           <FloatLabel variant="on">
             <label class="block mb-1 font-medium" for="password">Password</label>
-            <InputText v-model="password" type="password" id="password" required fluid />
+            <InputText v-focus v-model="password" type="password" id="password" required fluid />
           </FloatLabel>
         </div>
         <Button type="submit" class="w-full" :disabled="loading">
