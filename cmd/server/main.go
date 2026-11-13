@@ -29,6 +29,7 @@ func newRootCommand(ctx context.Context, stdout, stderr io.Writer) *cobra.Comman
 	root := &cobra.Command{
 		Use:           "clientshare",
 		Short:         "ClientShare self-hosted client portal",
+		Version:       buildVersion(),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
@@ -47,6 +48,17 @@ func newRootCommand(ctx context.Context, stdout, stderr io.Writer) *cobra.Comman
 	root.AddCommand(newConfigCommand(&configPath))
 	root.AddCommand(clientshare.NewStorageCommand(&configPath))
 	return root
+}
+
+func buildVersion() string {
+	commit := clientshare.CommitHash
+	if commit == "" {
+		commit = "dev"
+	}
+	if clientshare.BuildTime != "" {
+		return fmt.Sprintf("%s (built %s)", commit, clientshare.BuildTime)
+	}
+	return commit
 }
 
 func runServer(ctx context.Context, configPath string) error {
