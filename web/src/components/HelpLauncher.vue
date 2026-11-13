@@ -4,12 +4,20 @@ import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 
 import HelpPanel from '@/components/HelpPanel.vue';
+import { useAuthStore } from '@/stores/auth';
 import { useBrandingStore } from '@/stores/branding';
 import { useCollectionStore } from '@/stores/collection';
 
 const branding = useBrandingStore();
 const collection = useCollectionStore();
 const route = useRoute();
+const auth = useAuthStore();
+const loginHelp = computed(
+  () => !auth.user && ['Login', 'ForgotPassword', 'ResetPassword'].includes(String(route.name)),
+);
+const internal = computed(() => ['admin', 'manager'].includes(auth.user?.role || ''));
+const email = ref('');
+const floating = ref(false);
 const visible = ref(false);
 const contact = ref(false);
 const loading = ref(false);
@@ -17,7 +25,7 @@ const sending = ref(false);
 const message = ref('');
 const error = ref('');
 const receipt = ref('');
-const retry = ref<{ id: string; message: string; screen: string }>();
+const retry = ref<{ id: string; message: string; screen?: string; email?: string }>();
 const capabilities = ref<{
   provider: string;
   guide_url?: string;
@@ -32,7 +40,7 @@ const guideURL = computed(() => capabilities.value.guide_url || branding.brandin
 async function loadCapabilities() {
   loading.value = true;
   try {
-    capabilities.value = (await axios.get('/api/help')).data;
+    capabilities.value = (await axios.get(auth.user ? '/api/help' : '/api/help/login')).data;
   } catch {
     capabilities.value = { provider: 'none' };
   } finally {
@@ -46,11 +54,19 @@ async function loadCapabilities() {
 onMounted(loadCapabilities);
 
 function open() {
+  floating.value = false;
   contact.value = Boolean(message.value.trim()) || sending.value;
   if (!contact.value) {
     error.value = '';
     receipt.value = '';
   }
+  visible.value = true;
+  void loadCapabilities();
+}
+
+function openWidget() {
+  floating.value = true;
+  contact.value = true;
   visible.value = true;
   void loadCapabilities();
 }
@@ -61,18 +77,29 @@ async function send() {
   }
   sending.value = true;
   error.value = '';
-  if (!retry.value || retry.value.message !== message.value.trim()) {
+  if (
+    !retry.value ||
+    retry.value.message !== message.value.trim() ||
+    (loginHelp.value && retry.value.email !== email.value.trim())
+  ) {
     const section = route.path.split('/')[1] || 'portal';
     retry.value = {
       id: crypto.randomUUID(),
       message: message.value.trim(),
-      screen: ['clients', 'files', 'activity', 'users', 'settings'].includes(section)
-        ? section
-        : 'portal',
+      ...(loginHelp.value
+        ? { email: email.value.trim() }
+        : {
+            screen: ['clients', 'files', 'activity', 'users', 'settings'].includes(section)
+              ? section
+              : 'portal',
+          }),
     };
   }
   try {
-    const { data } = await axios.post('/api/help/messages', retry.value);
+    const { data } = await axios.post(
+      loginHelp.value ? '/api/help/login/messages' : '/api/help/messages',
+      retry.value,
+    );
     if (!data.received || !data.id) {
       throw new Error('No receipt');
     }
@@ -89,6 +116,20 @@ async function send() {
 </script>
 
 <template>
+  <Button
+    v-if="
+      (internal || loginHelp) &&
+      (capabilities.provider === 'clientshare' || capabilities.support_url)
+    "
+    class="support-widget-launcher"
+    label="Need help?"
+    icon="oi oi-comments"
+    rounded
+    raised
+    aria-haspopup="dialog"
+    :aria-expanded="visible && floating"
+    @click="capabilities.provider === 'clientshare' ? openWidget() : open()"
+  />
   <HelpPanel
     v-model:visible="visible"
     v-model:contact="contact"
@@ -97,7 +138,9 @@ async function send() {
     :supportURL="capabilities.support_url"
     :contactAvailable="capabilities.provider === 'clientshare'"
     :loading="loading"
-    :gettingStarted="collection.allowed"
+    :showLauncher="Boolean(auth.user)"
+    :floating="floating"
+    :gettingStarted="Boolean(auth.user) && collection.allowed"
     @start="collection.start()"
     @open="open"
   >
@@ -129,6 +172,23 @@ async function send() {
         class="w-full"
       />
       <p v-if="error" role="alert">{{ error }}</p>
+      <template v-if="loginHelp">
+        <label for="support-email">Where should we reply?</label>
+        <InputText
+          id="support-email"
+          v-model="email"
+          type="email"
+          autocomplete="email"
+          maxlength="254"
+          required
+          :disabled="sending"
+          class="w-full"
+          placeholder="you@example.com"
+        />
+        <p class="text-sm">
+          Don’t include passwords, sign-in codes, or confidential client information.
+        </p>
+      </template>
       <p class="text-sm">We’ll reply by email.</p>
       <Button
         type="submit"
@@ -137,7 +197,7 @@ async function send() {
         :disabled="sending || !message.trim()"
       />
       <a
-        v-if="capabilities.booking_url"
+        v-if="internal && capabilities.booking_url"
         :href="capabilities.booking_url"
         target="_blank"
         rel="noopener noreferrer"
@@ -145,6 +205,7 @@ async function send() {
         >Book a 20-minute setup session</a
       >
       <Button
+        v-if="!floating"
         label="Back to Help"
         severity="secondary"
         text
@@ -154,3 +215,12 @@ async function send() {
     </form>
   </HelpPanel>
 </template>
+
+<style scoped>
+.support-widget-launcher {
+  position: fixed;
+  right: max(1rem, env(safe-area-inset-right));
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  z-index: 100;
+}
+</style>

@@ -1,6 +1,6 @@
 # Help and support
 
-Core owns authenticated support receipt and notification. Apply migrations through 43 before
+Core owns support receipt and notification. Apply migrations through 43 before
 starting the new server. `support_messages` is a private durable outbox, separate
 from tenant-editable email queues. No SaaS control-plane service connection is required.
 
@@ -39,7 +39,9 @@ invitation. This feature does not create calendar resources.
 authenticated hosted administrators/managers. Existing authentication binds the
 JWT to the resolved tenant. The handler reloads the user in that tenant, enforcing
 the current database role as well as role middleware. Client users and secure-link
-recipients cannot submit. Anonymous requests are rejected by authentication.
+recipients cannot submit to these authenticated endpoints. Anonymous requests are
+rejected by authentication. The booking URL is returned only to administrators/managers,
+never clients, secure-link recipients, or unauthenticated visitors.
 Recipient and SMTP credentials are never public capabilities.
 
 The payload is strictly `id` (UUID v4 retry key), `message` (1–8000 bytes), and
@@ -48,6 +50,20 @@ are rejected. Identity, role, email, tenant, provider, timestamp and version com
 from the server. Route IDs, queries, secure-link tokens, files and diagnostics are
 not attached. Ten requests per account/tenant per hour are allowed per server
 process; use shared edge limits for additional multi-replica abuse protection.
+
+The bottom-right **Need help?** widget opens the same form directly for internal
+users, while the Help menu remains available. Login and password-recovery screens
+also show the widget when a support provider is configured. Self-hosted operator
+configuration opens the operator contact link rather than the ClientShare form.
+
+`GET /api/help/login` exposes only public support options, never account details
+or the booking URL. `POST /api/help/login/messages` accepts exactly `id` (UUID v4),
+`message` (1–8000 bytes), and `email` (a valid reply address). No account lookup is
+performed: the reply address is self-reported and the receipt is marked anonymous,
+with screen `login`. Tenant and destination still come from the server. Five
+submissions per IP per hour are allowed per process. JSON, same-origin browser
+checks, size limits, durable receipts and retry protection apply. Configure shared
+edge abuse limits for public deployments, particularly with multiple replicas.
 
 ## Receipt and operations
 
@@ -60,7 +76,7 @@ while the component remains mounted; reload/sign-out clears them.
 A worker checks every 30 seconds, leasing up to 20 rows for ten minutes. SMTP
 failures remain queued; inspect `attempts`, `next_attempt_at` and `notified_at` for
 delivery health. The support mailbox is the email's To recipient, and the trusted
-requester email is Reply-To. Receipt IDs appear in notification subjects, with
+requester email (or self-reported login-support address) is Reply-To. Receipt IDs appear in notification subjects, with
 reply identity also in the body. SMTP delivery is at-least-once: a crash after SMTP acceptance can
 duplicate a notification, not the support receipt. Back up the database and include
 this table in your support-data retention policy. Disabling the provider stops

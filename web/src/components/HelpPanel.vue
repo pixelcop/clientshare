@@ -6,6 +6,8 @@ defineProps<{
   contactAvailable: boolean;
   loading: boolean;
   gettingStarted?: boolean;
+  showLauncher?: boolean;
+  floating?: boolean;
 }>();
 const visible = defineModel<boolean>('visible', { required: true });
 const contact = defineModel<boolean>('contact', { required: true });
@@ -13,23 +15,31 @@ defineEmits<{ open: []; start: [] }>();
 </script>
 
 <template>
-  <Button
-    v-if="!contactAvailable && !supportURL && !gettingStarted"
-    as="a"
-    label="User guide"
-    :href="guideURL"
-    target="_blank"
-    rel="noopener noreferrer"
-    severity="secondary"
-    outlined
-  />
-  <Button v-else label="Help" severity="secondary" outlined @click="$emit('open')" />
+  <Teleport v-if="showLauncher" to="#help-launcher">
+    <Button
+      v-if="!contactAvailable && !supportURL && !gettingStarted"
+      as="a"
+      label="User guide"
+      :href="guideURL"
+      target="_blank"
+      rel="noopener noreferrer"
+      severity="secondary"
+      outlined
+    />
+    <Button v-else label="Help" severity="secondary" outlined @click="$emit('open')" />
+  </Teleport>
   <Dialog
     v-model:visible="visible"
     modal
     dismissableMask
+    :draggable="false"
+    :position="floating ? 'bottomright' : 'center'"
     :header="contact ? supportLabel : 'Help'"
-    :style="{ width: '32rem', maxWidth: 'calc(100vw - 2rem)' }"
+    :style="{
+      width: '32rem',
+      maxWidth: 'calc(100vw - 2rem)',
+      ...(floating ? { marginBottom: '5rem', maxHeight: 'calc(100dvh - 6rem)' } : {}),
+    }"
   >
     <div v-if="!contact" class="flex flex-col gap-4">
       <Button
