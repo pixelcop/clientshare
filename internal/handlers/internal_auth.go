@@ -37,6 +37,7 @@ func RegisterInternalAuthRoutes(router fiber.Router, svc *services.HostedLoginSe
 	router.Post("/auth/hosted-email/complete", h.HostedEmailComplete)
 	router.Post("/auth/sessions/validate", h.ValidateAccountSession)
 	router.Post("/auth/sessions/revoke", h.RevokeAccountSession)
+	router.Post("/auth/sessions/handoff", h.AccountSessionHandoff)
 }
 
 func (h *InternalAuthHandler) HostedEmailRequest(c fiber.Ctx) error {
@@ -101,6 +102,27 @@ func (h *InternalAuthHandler) ValidateAccountSession(c fiber.Ctx) error {
 	}
 	c.Set("Cache-Control", "no-store")
 	return c.JSON(identity)
+}
+
+func (h *InternalAuthHandler) AccountSessionHandoff(c fiber.Ctx) error {
+	c.Set("Cache-Control", "no-store")
+	if h.svc == nil {
+		return c.SendStatus(503)
+	}
+	var req struct {
+		Token string `json:"token"`
+	}
+	if err := c.Bind().Body(&req); err != nil {
+		return c.SendStatus(400)
+	}
+	result, err := h.svc.HandoffFromAccountSession(c.Context(), req.Token)
+	if errors.Is(err, auth.ErrSessionInvalid) {
+		return c.SendStatus(401)
+	}
+	if err != nil {
+		return hostedLoginError(c, err)
+	}
+	return c.JSON(result)
 }
 
 func (h *InternalAuthHandler) RevokeAccountSession(c fiber.Ctx) error {
