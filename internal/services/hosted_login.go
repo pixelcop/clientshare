@@ -167,6 +167,48 @@ func (s *HostedLoginService) IssueHandoff(identity HostedLoginIdentity) (*Hosted
 	}, nil
 }
 
+// HandoffFromAccountSession opens the portal without creating or extending an
+// account session. Keeping its group ties the handoff to existing revocation.
+func (s *HostedLoginService) HandoffFromAccountSession(ctx context.Context, token string) (*HostedLoginResult, error) {
+	if s == nil || s.db == nil || s.handoffSecret == "" {
+		return nil, errors.New("hosted login handoffs are unavailable")
+	}
+	identity, err := (&auth.SessionStore{DB: s.db}).Validate(ctx, token, auth.AccountAudience, "")
+	if err != nil {
+		return nil, err
+	}
+	var match hostedLoginUserMatch
+	if err := s.db.WithContext(ctx).Table("users AS u").
+		Select("u.id AS user_id, u.role, u.tenant_id, t.slug AS tenant_slug, COALESCE(te.status, '') AS entitlement_status").
+		Joins("JOIN tenants AS t ON t.id = u.tenant_id").
+		Joins("LEFT JOIN tenant_entitlements AS te ON te.tenant_id = u.tenant_id").
+		Where("u.tenant_id = ? AND u.id = ?", identity.TenantID, identity.UserID).
+		Take(&match).Error; err != nil {
+		return nil, err
+	}
+	redirectURL, err := s.redirectURL(match)
+	if err != nil {
+		return nil, err
+	}
+	code, err := generateHostedLoginHandoffCode()
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now().UTC()
+	handoff := models.HostedLoginHandoff{
+		TenantID: identity.TenantID, UserID: identity.UserID, Role: identity.Role,
+		SessionGroupID: identity.GroupID, CodeHash: hashHostedLoginHandoff(s.handoffSecret, code),
+		ExpiresAt: now.Add(2 * time.Minute), CreatedAt: now,
+	}
+	if err := s.db.WithContext(ctx).Create(&handoff).Error; err != nil {
+		return nil, err
+	}
+	return &HostedLoginResult{
+		HandoffCode: code, TenantID: identity.TenantID, TenantSlug: match.TenantSlug,
+		UserID: identity.UserID, Role: identity.Role, RedirectURL: redirectURL,
+	}, nil
+}
+
 func (s *HostedLoginService) ConsumeHandoff(tenantID, code string) (*HostedLoginIdentity, error) {
 	if s == nil || s.db == nil || s.handoffSecret == "" {
 		return nil, ErrHostedLoginHandoffInvalid
