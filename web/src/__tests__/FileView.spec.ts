@@ -5,6 +5,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMemoryHistory, createRouter } from 'vue-router';
 
+import FileComments from '@/components/FileComments.vue';
 import FilePreview from '@/components/FilePreview.vue';
 import { useAuthStore } from '@/stores/auth';
 import { useFileManagerStore } from '@/stores/fileManager';
@@ -168,6 +169,52 @@ describe('file page', () => {
     const { wrapper } = await render();
     expect(wrapper.find('#file-comments-toggle').exists()).toBe(false);
     expect(wrapper.find('file-comments-stub').exists()).toBe(false);
+    expect(
+      vi.mocked(axios.get).mock.calls.some(([url]) => String(url).endsWith('/comments/count')),
+    ).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('shows the authorized count before opening and updates the toggle after comment changes', async () => {
+    vi.mocked(axios.get).mockResolvedValue({ data: { count: 3 } });
+    const { wrapper } = await render();
+    const toggle = wrapper.get('#file-comments-toggle');
+    expect(toggle.attributes('aria-label')).toBe('Comments, 3 comments');
+    expect(toggle.get('.p-badge').text()).toBe('3');
+    expect(toggle.attributes('data-p-severity')).not.toBe('secondary');
+    expect(wrapper.findComponent(FileComments).exists()).toBe(false);
+    await toggle.trigger('click');
+    expect(toggle.attributes('aria-pressed')).toBe('true');
+    wrapper.findComponent(FileComments).vm.$emit('count', 83);
+    await flushPromises();
+    expect(toggle.get('.p-badge').text()).toBe('83');
+    vi.mocked(axios.get).mockResolvedValueOnce({ data: { count: 0 } });
+    wrapper.findComponent(FileComments).vm.$emit('changed');
+    await flushPromises();
+    expect(toggle.get('.p-badge').text()).toBe('0');
+    expect(toggle.attributes('data-p-severity')).toBe('secondary');
+    await toggle.trigger('click');
+    expect(toggle.attributes('aria-expanded')).toBe('false');
+    expect(wrapper.findComponent(FileComments).exists()).toBe(true);
+    wrapper.unmount();
+  });
+
+  it('does not reuse a count response from the previous file', async () => {
+    let resolve!: (response: { data: { count: number } }) => void;
+    vi.mocked(axios.get).mockImplementationOnce(
+      () =>
+        new Promise((done) => {
+          resolve = done;
+        }),
+    );
+    const { wrapper } = await render();
+    vi.mocked(useFileManagerStore().fetchFile).mockResolvedValueOnce({ ...file, id: 'new-file' });
+    vi.mocked(axios.get).mockResolvedValueOnce({ data: { count: 0 } });
+    await wrapper.setProps({ fileId: 'new-file' });
+    await flushPromises();
+    resolve({ data: { count: 99 } });
+    await flushPromises();
+    expect(wrapper.get('#file-comments-toggle .p-badge').text()).toBe('0');
     wrapper.unmount();
   });
 

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useEventListener } from '@vueuse/core';
+import axios from 'axios';
 
 import FileComments from '@/components/FileComments.vue';
 import FilePreview from '@/components/FilePreview.vue';
@@ -31,6 +32,14 @@ const loading = ref(false);
 const showShare = ref(false);
 const showComments = ref(false);
 const commentsVisited = ref(false);
+const commentCount = ref<number | null>(null);
+let countVersion = 0;
+const hasComments = computed(() => (commentCount.value || 0) > 0);
+const commentLabel = computed(() =>
+  commentCount.value === null
+    ? 'Comments'
+    : `Comments, ${commentCount.value} ${commentCount.value === 1 ? 'comment' : 'comments'}`,
+);
 const error = ref('');
 const downloadError = ref('');
 const downloading = ref(false);
@@ -82,6 +91,35 @@ function closeComments() {
   document.getElementById('file-comments-toggle')?.focus();
 }
 
+function setCommentCount(count: number | null) {
+  countVersion += 1;
+  commentCount.value =
+    typeof count === 'number' && Number.isSafeInteger(count) && count >= 0 ? count : null;
+}
+async function refreshCommentCount() {
+  if (!file.value?.capabilities?.can_read || !auth.user || auth.user.role === 'link') {
+    return;
+  }
+  const id = file.value.id;
+  countVersion += 1;
+  const version = countVersion;
+  try {
+    const { data } = await axios.get<{ count: number }>(`/api/files/${id}/comments/count`);
+    if (version === countVersion && file.value?.id === id) {
+      commentCount.value = Number.isSafeInteger(data.count) && data.count >= 0 ? data.count : null;
+    }
+  } catch (cause) {
+    if (version !== countVersion) {
+      return;
+    }
+    if (axios.isAxiosError(cause) && [401, 403, 404].includes(cause.response?.status || 0)) {
+      setCommentCount(null);
+      showComments.value = false;
+      commentsVisited.value = false;
+    }
+  }
+}
+
 useEventListener(window, 'keydown', (event: KeyboardEvent) => {
   if (event.key !== 'Escape' || event.defaultPrevented || event.repeat || event.isComposing) {
     return;
@@ -119,6 +157,7 @@ async function loadFile() {
   showShare.value = false;
   showComments.value = false;
   commentsVisited.value = false;
+  setCommentCount(null);
   error.value = '';
   downloadError.value = '';
   copied.value = false;
@@ -128,6 +167,7 @@ async function loadFile() {
     const current = await fileManager.fetchFile(fileId);
     if (version === requestVersion) {
       file.value = current;
+      void refreshCommentCount();
     }
   } catch {
     if (version === requestVersion) {
@@ -186,13 +226,18 @@ async function toggleComments() {
   showComments.value = !showComments.value;
   if (showComments.value && file.value) {
     await nextTick();
-    document.getElementById(`file-comment-${file.value.id}-heading`)?.focus();
+    document.getElementById(`file-comment-${file.value.id}-region`)?.focus();
   }
 }
 
-watch([() => fileId, () => auth.user?.session_id] as const, loadFile, { immediate: true });
+watch(
+  [() => fileId, () => auth.user?.session_id, () => auth.user?.id, () => auth.user?.role] as const,
+  loadFile,
+  { immediate: true },
+);
 onBeforeUnmount(() => {
   requestVersion += 1;
+  countVersion += 1;
   clearTimeout(copyTimer);
 });
 </script>
@@ -234,8 +279,13 @@ onBeforeUnmount(() => {
             id="file-comments-toggle"
             label="Comments"
             icon="oi oi-comment"
-            severity="secondary"
-            variant="text"
+            class="file-comments-toggle"
+            :severity="hasComments ? undefined : 'secondary'"
+            :variant="showComments ? undefined : 'text'"
+            :badge="commentCount === null ? undefined : String(commentCount)"
+            :badgeSeverity="hasComments ? undefined : 'secondary'"
+            :aria-label="commentLabel"
+            :aria-pressed="showComments"
             :aria-expanded="showComments"
             aria-controls="file-comments-pane"
             @click="toggleComments"
@@ -254,6 +304,9 @@ onBeforeUnmount(() => {
             v-if="file.capabilities?.can_read"
             icon="oi oi-download"
             label="Download"
+            class="file-download"
+            aria-label="Download"
+            title="Download"
             severity="secondary"
             variant="text"
             :loading="downloading"
@@ -322,7 +375,8 @@ onBeforeUnmount(() => {
         <FileComments
           :key="`${file.id}:${auth.user?.session_id}`"
           :fileId="file.id"
-          @close="closeComments"
+          @count="setCommentCount"
+          @changed="refreshCommentCount"
         />
       </aside>
     </div>
@@ -488,6 +542,25 @@ h1 {
   .file-header-actions {
     justify-content: flex-end;
     width: 100%;
+    gap: 4px;
+  }
+  .file-header-actions :deep(.p-button) {
+    padding-inline: 8px;
+  }
+  .file-share {
+    min-width: 0;
+  }
+  .file-download {
+    width: 44px;
+  }
+  .file-download :deep(.p-button-label) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
   }
   .file-metadata {
     font-size: 12px;

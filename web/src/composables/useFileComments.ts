@@ -7,6 +7,7 @@ interface CommentPage {
   items: FileComment[];
   next_cursor: string;
   can_internal: boolean;
+  total_count: number;
 }
 
 // Conversation state belongs to the current file/session, never a shared cache.
@@ -15,6 +16,7 @@ export function useFileComments(context: () => { fileId: string; sessionKey: str
   const loading = ref(false);
   const saving = ref(false);
   const ready = ref(false);
+  const totalCount = ref<number | null>(null);
   const canInternal = ref(false);
   const nextCursor = ref('');
   const error = ref('');
@@ -31,6 +33,7 @@ export function useFileComments(context: () => { fileId: string; sessionKey: str
     loading.value = false;
     saving.value = false;
     ready.value = false;
+    totalCount.value = null;
     canInternal.value = false;
     nextCursor.value = '';
     error.value = '';
@@ -73,6 +76,7 @@ export function useFileComments(context: () => { fileId: string; sessionKey: str
       nextCursor.value = data.next_cursor;
       canInternal.value = data.can_internal;
       ready.value = true;
+      totalCount.value = data.total_count;
     } catch (cause) {
       if (current === generation && request === listGeneration && !axios.isCancel(cause)) {
         failed(cause);
@@ -151,6 +155,7 @@ export function useFileComments(context: () => { fileId: string; sessionKey: str
     loading,
     saving,
     ready,
+    totalCount,
     canInternal,
     nextCursor,
     error,

@@ -26,14 +26,18 @@ const page = (items = [comment], team = true, cursor = '') => ({
   items,
   can_internal: team,
   next_cursor: cursor,
+  total_count: items.filter((item) => !item.deleted_at).length,
 });
-async function render() {
+async function render(compose = true) {
   const wrapper = mount(FileComments, {
     props: { fileId: 'file' },
     global: { plugins: [OpenVue] },
     attachTo: document.body,
   });
   await flushPromises();
+  if (compose && wrapper.find('[id$="-toggle"]').exists()) {
+    await wrapper.get('[id$="-toggle"]').trigger('click');
+  }
   return wrapper;
 }
 
@@ -151,9 +155,8 @@ describe('file conversation', () => {
     expect(post).toHaveBeenCalledTimes(2);
     expect(post.mock.calls[0]?.[2]).toEqual(post.mock.calls[1]?.[2]);
     expect(post.mock.calls[1]?.[1]).toEqual({ body: 'A note', visibility: 'team' });
-    expect((wrapper.get('.comment-composer textarea').element as HTMLTextAreaElement).value).toBe(
-      '',
-    );
+    expect(wrapper.find('.comment-composer').exists()).toBe(false);
+    expect(wrapper.emitted('changed')).toHaveLength(1);
     expect(wrapper.findAll('.comment')).toHaveLength(2);
     wrapper.unmount();
   });
@@ -333,6 +336,26 @@ describe('file conversation', () => {
     await flushPromises();
     expect(wrapper.text()).not.toContain('Previously visible team note');
     expect(wrapper.findComponent(Select).exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('starts without a header or editor, preserves collapsed drafts, and reports the server count', async () => {
+    vi.mocked(axios.get).mockResolvedValueOnce({ data: { ...page(), total_count: 83 } });
+    const wrapper = await render(false);
+    expect(wrapper.find('.comments-heading').exists()).toBe(false);
+    expect(wrapper.find('.comment-composer').exists()).toBe(false);
+    expect(wrapper.emitted('count')?.at(-1)).toEqual([83]);
+    const toggle = wrapper.get('[id$="-toggle"]');
+    expect(toggle.text()).toBe('Add comment');
+    expect(toggle.attributes('aria-expanded')).toBe('false');
+    await toggle.trigger('click');
+    await wrapper.get('.comment-composer textarea').setValue('Keep this draft');
+    await toggle.trigger('click');
+    expect(wrapper.find('.comment-composer').exists()).toBe(false);
+    await toggle.trigger('click');
+    expect((wrapper.get('.comment-composer textarea').element as HTMLTextAreaElement).value).toBe(
+      'Keep this draft',
+    );
     wrapper.unmount();
   });
 });

@@ -9,7 +9,7 @@ import { useAuthStore } from '@/stores/auth';
 import type { FileComment, FileCommentRevision } from '@/types/models';
 
 const props = defineProps<{ fileId: string }>();
-const emit = defineEmits<{ close: [] }>();
+const emit = defineEmits<{ count: [value: number | null]; changed: [] }>();
 const auth = useAuthStore();
 const sessionKey = computed(() => `${auth.user?.session_id}:${auth.user?.id}:${auth.user?.role}`);
 const {
@@ -17,6 +17,7 @@ const {
   loading,
   saving,
   ready,
+  totalCount,
   canInternal,
   nextCursor,
   error,
@@ -27,6 +28,7 @@ const {
   reportError,
 } = useFileComments(() => ({ fileId: props.fileId, sessionKey: sessionKey.value }));
 const draft = ref('');
+const composerOpen = ref(false);
 const visibility = ref('shared');
 const draftKey = ref(crypto.randomUUID());
 const editing = ref<FileComment | null>(null);
@@ -57,6 +59,12 @@ function closeHistory() {
   historyError.value = '';
   moreHistory.value = false;
 }
+watch(totalCount, (count) => emit('count', count));
+watch(error, (message) => {
+  if (message && !ready.value) {
+    emit('count', null);
+  }
+});
 watch(
   [draft, visibility],
   () => {
@@ -77,6 +85,7 @@ watch(
   () => [props.fileId, sessionKey.value],
   () => {
     draft.value = '';
+    composerOpen.value = false;
     editing.value = null;
     removing.value = '';
     closeHistory();
@@ -136,13 +145,16 @@ async function send() {
   }
   if (await post(draft.value.trim(), visibility.value, draftKey.value)) {
     draft.value = '';
+    composerOpen.value = false;
+    emit('changed');
     closeHistory();
     await nextTick();
     list.value?.scrollTo?.({ top: list.value.scrollHeight, behavior: 'instant' });
-    document.getElementById(composerId.value)?.focus();
+    document.getElementById(`${composerId.value}-toggle`)?.focus();
   }
 }
 async function startEdit(comment: FileComment) {
+  composerOpen.value = false;
   editing.value = comment;
   editBody.value = comment.body;
   removing.value = '';
@@ -155,43 +167,34 @@ async function saveEdit() {
   }
   if (await edit(editing.value, editBody.value.trim())) {
     editing.value = null;
+    emit('changed');
     closeHistory();
   }
 }
 async function confirmRemove(comment: FileComment) {
   if (await remove(comment)) {
     removing.value = '';
+    emit('changed');
     closeHistory();
   }
+}
+async function toggleComposer() {
+  composerOpen.value = !composerOpen.value;
+  await nextTick();
+  document
+    .getElementById(composerOpen.value ? composerId.value : `${composerId.value}-toggle`)
+    ?.focus();
 }
 onBeforeUnmount(closeHistory);
 </script>
 
 <template>
-  <section class="file-comments" aria-label="File comments">
-    <header class="comments-heading">
-      <div>
-        <h2 :id="`${composerId}-heading`" tabindex="-1">Conversation</h2>
-        <p>About this file</p>
-      </div>
-      <div class="comment-actions">
-        <Button
-          icon="oi oi-refresh"
-          aria-label="Refresh comments"
-          severity="secondary"
-          variant="text"
-          :disabled="loading || saving"
-          @click="load()"
-        />
-        <Button
-          icon="oi oi-times"
-          aria-label="Close comments"
-          severity="secondary"
-          variant="text"
-          @click="emit('close')"
-        />
-      </div>
-    </header>
+  <section
+    :id="`${composerId}-region`"
+    class="file-comments"
+    aria-label="File comments"
+    tabindex="-1"
+  >
     <div ref="list" class="comments-list" :aria-busy="loading">
       <p v-if="loading && !ready" role="status" class="comment-state">Loading conversation…</p>
       <p v-else-if="ready && !comments.length" class="comment-state">
@@ -312,66 +315,99 @@ onBeforeUnmount(closeHistory);
       </ol>
     </div>
     <p v-if="error" role="alert" class="comment-error">{{ error }}</p>
-    <form v-if="ready" class="comment-composer" data-sentry-mask @submit.prevent="send">
-      <label :for="composerId">{{
-        visibility === 'team' ? 'Add a team note' : 'Add a shared comment'
-      }}</label>
-      <Select
-        v-if="canInternal"
-        v-model="visibility"
-        :options="audiences"
-        optionLabel="label"
-        optionValue="value"
-        ariaLabel="Comment audience"
-        :disabled="saving"
-        fluid
-      />
-      <p :id="`${composerId}-audience`" class="audience-help">
-        {{
-          visibility === 'team'
-            ? 'Only staff with access to this file can see this note.'
-            : 'Visible to signed-in people with access to this file.'
-        }}
-      </p>
-      <p v-if="teamDraftUnavailable" role="status" class="audience-help">
-        Team-note access changed. Copy your draft, or clear it before writing a shared comment.
+    <div class="comment-footer">
+      <div class="comment-toolbar">
         <Button
-          label="Clear team draft"
+          v-if="ready"
+          :id="`${composerId}-toggle`"
+          :label="composerOpen ? 'Hide editor' : 'Add comment'"
+          :icon="composerOpen ? 'oi oi-chevron-up' : 'oi oi-plus'"
           severity="secondary"
           variant="text"
           size="small"
-          @click="
-            draft = '';
-            visibility = 'shared';
-          "
+          :disabled="saving"
+          :aria-expanded="composerOpen"
+          :aria-controls="`${composerId}-form`"
+          @click="toggleComposer"
         />
-      </p>
-      <Textarea
-        :id="composerId"
-        v-model="draft"
-        rows="3"
-        fluid
-        :maxlength="8000"
-        required
-        :disabled="saving"
-        :readonly="teamDraftUnavailable"
-        :invalid="length > 4000"
-        :aria-describedby="`${composerId}-audience ${composerId}-length`"
-        placeholder="Write about this document…"
-      />
-      <div class="composer-actions">
-        <small :id="`${composerId}-length`">{{ length }}/4000</small>
         <Button
-          type="submit"
-          :label="visibility === 'team' ? 'Post team note' : 'Post comment'"
-          :loading="saving"
-          :disabled="!draft.trim() || length > 4000 || loading || teamDraftUnavailable"
+          icon="oi oi-refresh"
+          aria-label="Refresh comments"
+          title="Refresh comments"
+          severity="secondary"
+          variant="text"
+          class="comment-refresh"
+          :disabled="loading || saving"
+          @click="load()"
         />
       </div>
-      <small class="notification-note"
-        >Comments stay on this file. No email notifications are sent.</small
+      <form
+        v-if="ready && composerOpen"
+        :id="`${composerId}-form`"
+        class="comment-composer"
+        data-sentry-mask
+        @submit.prevent="send"
       >
-    </form>
+        <label :for="composerId">{{
+          visibility === 'team' ? 'Add a team note' : 'Add a shared comment'
+        }}</label>
+        <Select
+          v-if="canInternal"
+          v-model="visibility"
+          :options="audiences"
+          optionLabel="label"
+          optionValue="value"
+          ariaLabel="Comment audience"
+          :disabled="saving"
+          fluid
+        />
+        <p :id="`${composerId}-audience`" class="audience-help">
+          {{
+            visibility === 'team'
+              ? 'Only staff with access to this file can see this note.'
+              : 'Visible to signed-in people with access to this file.'
+          }}
+        </p>
+        <p v-if="teamDraftUnavailable" role="status" class="audience-help">
+          Team-note access changed. Copy your draft, or clear it before writing a shared comment.
+          <Button
+            label="Clear team draft"
+            severity="secondary"
+            variant="text"
+            size="small"
+            @click="
+              draft = '';
+              visibility = 'shared';
+            "
+          />
+        </p>
+        <Textarea
+          :id="composerId"
+          v-model="draft"
+          rows="3"
+          fluid
+          :maxlength="8000"
+          required
+          :disabled="saving"
+          :readonly="teamDraftUnavailable"
+          :invalid="length > 4000"
+          :aria-describedby="`${composerId}-audience ${composerId}-length`"
+          placeholder="Write about this document…"
+        />
+        <div class="composer-actions">
+          <small :id="`${composerId}-length`">{{ length }}/4000</small>
+          <Button
+            type="submit"
+            :label="visibility === 'team' ? 'Post team note' : 'Post comment'"
+            :loading="saving"
+            :disabled="!draft.trim() || length > 4000 || loading || teamDraftUnavailable"
+          />
+        </div>
+        <small class="notification-note"
+          >Comments stay on this file. No email notifications are sent.</small
+        >
+      </form>
+    </div>
   </section>
 </template>
 
@@ -383,29 +419,20 @@ onBeforeUnmount(closeHistory);
   min-height: 0;
   background: var(--p-content-background);
 }
-.comments-heading {
+.comment-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 16px;
-  border-bottom: 1px solid var(--p-content-border-color);
+  padding: 4px 8px;
+  min-height: 52px;
 }
-.comments-heading h2 {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-}
-.comments-heading p,
 .audience-help,
 .notification-note,
 .comment-state,
 .comment-history small {
   color: var(--p-text-muted-color);
   font-size: 12px;
-}
-.comments-heading p {
-  margin: 4px 0 0;
 }
 .comments-list {
   flex: 1;
@@ -438,15 +465,21 @@ ol {
   align-items: center;
   gap: 4px;
 }
-.comments-heading :deep(.p-button) {
+.comment-refresh {
   width: 40px;
   height: 40px;
+  margin-inline-start: auto;
+}
+.comment-footer {
+  border-top: 1px solid var(--p-content-border-color);
+}
+.comment-toolbar :deep(.p-button) {
+  min-height: 40px;
 }
 .comment-composer {
   display: grid;
   gap: 8px;
-  padding: 16px;
-  border-top: 1px solid var(--p-content-border-color);
+  padding: 4px 12px 12px;
 }
 .comment-composer > label,
 .comment-edit > label {
