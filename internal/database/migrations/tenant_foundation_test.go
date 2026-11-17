@@ -25,7 +25,7 @@ func TestMigrationProviderUpCreatesCurrentSchemaAndSeedsTenant(t *testing.T) {
 
 	results, err := provider.Up(context.Background())
 	require.NoError(t, err)
-	require.Len(t, results, 26)
+	require.Len(t, results, 27)
 
 	requireDefaultTenantSeeded(t, db, dbpkg.DatabaseDriverSQLite)
 	requireColumnPresent(t, db, "passkey_signups", "token_hash")
@@ -37,6 +37,8 @@ func TestMigrationProviderUpCreatesCurrentSchemaAndSeedsTenant(t *testing.T) {
 	requireColumnPresent(t, db, "hosted_email_tokens", "credential_hash")
 	requireColumnPresent(t, db, "files", "storage_key")
 	requireColumnPresent(t, db, "files", "disk_deleted_at")
+	requireColumnPresent(t, db, "file_comments", "visibility")
+	requireColumnPresent(t, db, "file_comment_revisions", "version")
 }
 
 func TestMigrationProviderUpCreatesCurrentSchemaAndSeedsTenantPostgres(t *testing.T) {
@@ -45,7 +47,7 @@ func TestMigrationProviderUpCreatesCurrentSchemaAndSeedsTenantPostgres(t *testin
 
 	results, err := provider.Up(context.Background())
 	require.NoError(t, err)
-	require.Len(t, results, 26)
+	require.Len(t, results, 27)
 
 	requireDefaultTenantSeeded(t, db, dbpkg.DatabaseDriverPostgres)
 	requireColumnPresent(t, db, "passkey_signups", "token_hash")
@@ -57,6 +59,8 @@ func TestMigrationProviderUpCreatesCurrentSchemaAndSeedsTenantPostgres(t *testin
 	requireColumnPresent(t, db, "hosted_email_tokens", "credential_hash")
 	requireColumnPresent(t, db, "files", "storage_key")
 	requireColumnPresent(t, db, "files", "disk_deleted_at")
+	requireColumnPresent(t, db, "file_comments", "visibility")
+	requireColumnPresent(t, db, "file_comment_revisions", "version")
 }
 
 func TestMigrationProviderUpIsIdempotent(t *testing.T) {
@@ -96,7 +100,7 @@ func TestMigrationProviderResetDropsManagedTables(t *testing.T) {
 
 	results, err := provider.DownTo(context.Background(), 0)
 	require.NoError(t, err)
-	require.Len(t, results, 26)
+	require.Len(t, results, 27)
 
 	requireManagedTablesMissing(t, db, dbpkg.DatabaseDriverSQLite)
 }
@@ -110,7 +114,7 @@ func TestMigrationProviderResetDropsManagedTablesPostgres(t *testing.T) {
 
 	results, err := provider.DownTo(context.Background(), 0)
 	require.NoError(t, err)
-	require.Len(t, results, 26)
+	require.Len(t, results, 27)
 
 	requireManagedTablesMissing(t, db, dbpkg.DatabaseDriverPostgres)
 }
@@ -153,6 +157,7 @@ func newMigrationProviderForTest(t *testing.T, db *sql.DB, dialect goose.Dialect
 			migration.NewGoMigration(57, upReconcileAccessRoleActivation, downReconcileAccessRoleActivation),
 			migration.NewGoMigration(58, upBindPendingInvitationContacts, downBindPendingInvitationContacts),
 			migration.NewGoMigration(59, upAddReplayRequests, downAddReplayRequests),
+			migration.NewGoMigration(60, upAddFileComments, downAddFileComments),
 		},
 	)
 	require.NoError(t, err)
@@ -275,6 +280,8 @@ func requireColumnPresent(t *testing.T, db *sql.DB, table, column string) {
 
 func requireManagedTablesMissing(t *testing.T, db *sql.DB, driver string) {
 	t.Helper()
+	requireTableMissing(t, db, driver, "file_comments")
+	requireTableMissing(t, db, driver, "file_comment_revisions")
 	requireTableMissing(t, db, driver, "web_authn_challenges")
 	requireTableMissing(t, db, driver, "passkey_credentials")
 	requireTableMissing(t, db, driver, "hosted_login_handoffs")
