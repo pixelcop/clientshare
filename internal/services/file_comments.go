@@ -25,6 +25,7 @@ const (
 var (
 	ErrCommentInput    = errors.New("invalid comment")
 	ErrCommentConflict = errors.New("comment changed; reload before saving")
+	ErrCommentMention  = errors.New("unavailable comment mention")
 )
 
 type FileCommentService struct{ DB *gorm.DB }
@@ -149,6 +150,13 @@ func decorateComments(db *gorm.DB, actor models.User, comments []models.FileComm
 		}
 		c.CanViewHistory = c.AuthorID == actor.ID
 		c.CanEdit = c.CanViewHistory && c.DeletedAt == nil
+		if c.DeletedAt == nil {
+			rendered, _, err := RenderCommentMarkdown(c.Body)
+			if err != nil {
+				return err
+			}
+			c.BodyHTML = &rendered
+		}
 	}
 	return nil
 }
@@ -158,7 +166,6 @@ func validCommentBody(body string) bool {
 }
 
 func (s *FileCommentService) Create(ctx context.Context, req AccessRequest, input CommentInput, key string) (*models.FileComment, error) {
-	input.Body = strings.TrimSpace(input.Body)
 	if !validCommentBody(input.Body) || (input.Visibility != CommentShared && input.Visibility != CommentTeam) || strings.TrimSpace(key) == "" || len(key) > 128 {
 		return nil, ErrCommentInput
 	}
@@ -185,6 +192,9 @@ func (s *FileCommentService) Create(ctx context.Context, req AccessRequest, inpu
 		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
 		} else {
+			if err := (&FileCommentService{DB: tx}).validateMentions(ctx, req, actor, input.Visibility, input.Body); err != nil {
+				return err
+			}
 			now := time.Now().UTC()
 			comment = models.FileComment{TenantID: req.TenantID, FileID: req.FileID, AuthorID: actor.ID,
 				Body: input.Body, Visibility: input.Visibility, Version: 1, CreationKey: key, CreationHash: hash, CreatedAt: now, UpdatedAt: now}
@@ -208,7 +218,6 @@ func (s *FileCommentService) Create(ctx context.Context, req AccessRequest, inpu
 // Update edits text only; audience changes require an intentional new comment.
 // Optimistic versions prevent one tab from overwriting another's edit/removal.
 func (s *FileCommentService) Update(ctx context.Context, req AccessRequest, id, body string, version int, remove bool) (*models.FileComment, error) {
-	body = strings.TrimSpace(body)
 	if version < 1 || (!remove && !validCommentBody(body)) {
 		return nil, ErrCommentInput
 	}
@@ -226,6 +235,11 @@ func (s *FileCommentService) Update(ctx context.Context, req AccessRequest, id, 
 		}
 		if comment.Version != version || comment.DeletedAt != nil {
 			return ErrCommentConflict
+		}
+		if !remove {
+			if err := (&FileCommentService{DB: tx}).validateMentions(ctx, req, actor, comment.Visibility, body); err != nil {
+				return err
+			}
 		}
 		now := time.Now().UTC()
 		action := "edited"
@@ -286,5 +300,15 @@ func (s *FileCommentService) History(ctx context.Context, req AccessRequest, id 
 	}
 	revisions := []models.FileCommentRevision{}
 	err = q.Order("version DESC").Limit(commentPageSize).Find(&revisions).Error
+	if err != nil {
+		return nil, err
+	}
+	for i := range revisions {
+		rendered, _, err := RenderCommentMarkdown(revisions[i].Body)
+		if err != nil {
+			return nil, err
+		}
+		revisions[i].BodyHTML = &rendered
+	}
 	return revisions, err
 }

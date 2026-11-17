@@ -299,7 +299,8 @@ export interface FileComment {
   file_id: string;
   author_id: string;
   visibility: string;
-  body: string;
+  body: string; // Markdown source, never rendered HTML.
+  body_html?: string;
   version: number /* int */;
   created_at: string;
   updated_at: string;
@@ -317,6 +318,7 @@ export interface FileCommentRevision {
   comment_id: string;
   version: number /* int */;
   body: string;
+  body_html?: string;
   action: string;
   created_at: string;
 }

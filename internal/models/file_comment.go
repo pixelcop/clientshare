@@ -15,7 +15,8 @@ type FileComment struct {
 	FileID         string     `gorm:"not null;size:26;index:idx_comment_file,priority:2" json:"file_id"`
 	AuthorID       string     `gorm:"not null;size:26;uniqueIndex:idx_comment_creation,priority:2" json:"author_id"`
 	Visibility     string     `gorm:"not null;size:16" json:"visibility"`
-	Body           string     `gorm:"not null;type:text" json:"body"`
+	Body           string     `gorm:"not null;type:text" json:"body"` // Markdown source, never rendered HTML.
+	BodyHTML       *string    `gorm:"-" json:"body_html,omitempty"`
 	Version        int        `gorm:"not null" json:"version"`
 	CreationKey    string     `gorm:"not null;size:128;uniqueIndex:idx_comment_creation,priority:3" json:"-"`
 	CreationHash   string     `gorm:"not null;size:64" json:"-"`
@@ -43,6 +44,7 @@ type FileCommentRevision struct {
 	CommentID string    `gorm:"not null;size:26;uniqueIndex:idx_comment_revision,priority:2" json:"comment_id"`
 	Version   int       `gorm:"not null;uniqueIndex:idx_comment_revision,priority:3" json:"version"`
 	Body      string    `gorm:"not null;type:text" json:"body"`
+	BodyHTML  *string   `gorm:"-" json:"body_html,omitempty"`
 	Action    string    `gorm:"not null;size:16" json:"action"`
 	CreatedAt time.Time `json:"created_at"`
 }

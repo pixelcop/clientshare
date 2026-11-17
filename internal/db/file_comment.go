@@ -13,6 +13,7 @@ var FileComment = struct {
 	AuthorID       field.String
 	Visibility     field.String
 	Body           field.String
+	BodyHTML       field.String
 	Version        field.Number[int]
 	CreationKey    field.String
 	CreationHash   field.String
@@ -29,6 +30,7 @@ var FileComment = struct {
 	AuthorID:       field.String{}.WithColumn("author_id"),
 	Visibility:     field.String{}.WithColumn("visibility"),
 	Body:           field.String{}.WithColumn("body"),
+	BodyHTML:       field.String{}.WithColumn("body_html"),
 	Version:        field.Number[int]{}.WithColumn("version"),
 	CreationKey:    field.String{}.WithColumn("creation_key"),
 	CreationHash:   field.String{}.WithColumn("creation_hash"),
@@ -46,6 +48,7 @@ var FileCommentRevision = struct {
 	CommentID field.String
 	Version   field.Number[int]
 	Body      field.String
+	BodyHTML  field.String
 	Action    field.String
 	CreatedAt field.Time
 }{
@@ -54,6 +57,7 @@ var FileCommentRevision = struct {
 	CommentID: field.String{}.WithColumn("comment_id"),
 	Version:   field.Number[int]{}.WithColumn("version"),
 	Body:      field.String{}.WithColumn("body"),
+	BodyHTML:  field.String{}.WithColumn("body_html"),
 	Action:    field.String{}.WithColumn("action"),
 	CreatedAt: field.Time{}.WithColumn("created_at"),
 }

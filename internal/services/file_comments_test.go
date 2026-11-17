@@ -76,7 +76,7 @@ func TestFileCommentEditsRemovalHistoryAndRetryAreExplicit(t *testing.T) {
 	input := CommentInput{Body: "  Original <script>text</script>  ", Visibility: CommentShared}
 	comment, err := s.Create(t.Context(), req, input, "retry-key")
 	require.NoError(t, err)
-	require.Equal(t, strings.TrimSpace(input.Body), comment.Body)
+	require.Equal(t, input.Body, comment.Body)
 	again, err := s.Create(t.Context(), req, input, "retry-key")
 	require.NoError(t, err)
 	require.Equal(t, comment.ID, again.ID)
@@ -108,7 +108,7 @@ func TestFileCommentEditsRemovalHistoryAndRetryAreExplicit(t *testing.T) {
 	require.Len(t, history, 3)
 	require.Equal(t, "removed", history[0].Action)
 	require.Equal(t, "Updated", history[1].Body)
-	require.Equal(t, strings.TrimSpace(input.Body), history[2].Body)
+	require.Equal(t, input.Body, history[2].Body)
 	_, err = s.History(t.Context(), f.req("admin", "file", AccessRead), comment.ID, 0)
 	require.ErrorIs(t, err, gorm.ErrRecordNotFound)
 	var events []models.AuditEvent
