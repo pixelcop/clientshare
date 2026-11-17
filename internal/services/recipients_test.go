@@ -1,6 +1,7 @@
 package services
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -68,6 +69,11 @@ func TestRecipientsRespectVisibilityAndNeverGrantAccess(t *testing.T) {
 	req.ClientID = "other-client"
 	_, err = s.Search(t.Context(), req, "", true)
 	require.ErrorIs(t, err, gorm.ErrRecordNotFound)
+	require.NoError(t, f.db.Where("tenant_id = ? AND user_id = ?", "tenant", "manager").Delete(&models.UserClient{}).Error)
+	f.grant(t, "file", "manager", models.AccessCapabilities{CanRead: true, CanShare: true})
+	req.ClientID = "client"
+	_, err = s.Search(t.Context(), req, "", false)
+	require.ErrorIs(t, err, gorm.ErrRecordNotFound, "item-only staff cannot discover the client directory")
 }
 
 func TestRecipientsSearchIsBoundedLiteralAndDeduplicated(t *testing.T) {
@@ -84,8 +90,14 @@ func TestRecipientsSearchIsBoundedLiteralAndDeduplicated(t *testing.T) {
 	require.Equal(t, "member", contacts[0].ID)
 	require.True(t, contacts[0].WorkspaceAccess)
 	require.Len(t, contacts[0].Clients, 1)
+	for i := range 25 {
+		require.NoError(t, f.db.Create(&models.User{
+			ID: fmt.Sprintf("extra-%02d", i), TenantID: "tenant",
+			Email: fmt.Sprintf("extra-%02d@example.test", i), Role: "client",
+		}).Error)
+	}
 	contacts, err = s.Search(t.Context(), req, "", true)
 	require.NoError(t, err)
 	require.True(t, contacts[0].CurrentClient, "current-client contacts rank first")
-	require.LessOrEqual(t, len(contacts), 20)
+	require.Len(t, contacts, 20)
 }
