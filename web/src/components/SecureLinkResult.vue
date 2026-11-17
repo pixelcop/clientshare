@@ -2,6 +2,7 @@
 import axios from 'axios';
 import { Button, InputText } from 'openvue';
 
+import RecipientPicker from '@/components/RecipientPicker.vue';
 import { useCollectionStore } from '@/stores/collection';
 import { useSecureLinksStore } from '@/stores/secureLinks';
 import {
@@ -93,7 +94,9 @@ watch(recipient, () => {
     <dl class="link-summary">
       <div>
         <dt>Sharing</dt>
-        <dd>Entire client workspace · <span data-sentry-mask>{{ targetName }}</span></dd>
+        <dd>
+          Entire client workspace · <span data-sentry-mask>{{ targetName }}</span>
+        </dd>
       </div>
       <div>
         <dt>Audience</dt>
@@ -154,13 +157,12 @@ watch(recipient, () => {
       </p>
       <form class="link-email" @submit.prevent="email">
         <label :for="`link-recipient-${link.id}`">Email link to</label>
-        <InputText
-          :id="`link-recipient-${link.id}`"
+        <RecipientPicker
+          :inputId="`link-recipient-${link.id}`"
           v-model="recipient"
-          type="email"
-          autocomplete="email"
+          :clientId="link.client_id"
+          label="Email link to"
           required
-          fluid
           :disabled="sending"
         />
         <Button

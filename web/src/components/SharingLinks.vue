@@ -12,6 +12,7 @@ import {
 } from 'openvue';
 
 import AccessSelect from '@/components/AccessSelect.vue';
+import RecipientPicker from '@/components/RecipientPicker.vue';
 import type { SharingPanelSession } from '@/composables/useSharingPanel';
 
 import SharingExpiry from './SharingExpiry.vue';
@@ -84,7 +85,9 @@ function openedAt(value: string) {
             class="access-form link-composer"
             @submit.prevent="createLink"
           >
-            <h4>Create a link for <span data-sentry-mask>{{ scope.name }}</span></h4>
+            <h4>
+              Create a link for <span data-sentry-mask>{{ scope.name }}</span>
+            </h4>
             <div class="link-settings">
               <div class="link-setting">
                 <label :id="`${key}-mode-label`" :for="`${key}-mode`"
@@ -161,20 +164,19 @@ function openedAt(value: string) {
               class="link-email-form"
               @submit.prevent="emailLink"
             >
-              <InputGroup>
-                <InputText
-                  :id="`${key}-link-email`"
-                  v-model="recipient"
-                  placeholder="Email link to"
-                  aria-label="Email link to"
-                  autocomplete="email"
-                  type="email"
-                  :disabled="busy"
-                  required
-                  fluid
-                />
-                <Button type="submit" label="Email link" severity="secondary" :loading="busy" />
-              </InputGroup>
+              <RecipientPicker
+                :inputId="`${key}-link-email`"
+                v-model="recipient"
+                :clientId="view?.client_id || (scope.kind === 'client' ? scope.id : '')"
+                placeholder="Email link to"
+                label="Email link to"
+                :disabled="busy"
+                required
+              >
+                <template #action>
+                  <Button type="submit" label="Email link" severity="secondary" :loading="busy" />
+                </template>
+              </RecipientPicker>
             </form>
             <div class="link-actions">
               <Button

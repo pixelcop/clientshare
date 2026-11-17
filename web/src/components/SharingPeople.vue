@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { Button, Dialog, InputText } from 'openvue';
+import { Button, Dialog } from 'openvue';
 
 import AccessSelect from '@/components/AccessSelect.vue';
+import RecipientPicker from '@/components/RecipientPicker.vue';
 import type { SharingPanelSession } from '@/composables/useSharingPanel';
 import { GROUPS_UI_ENABLED } from '@/features';
 import { replaySensitiveTitlePT } from '@/services/replayPrivacy';
@@ -131,18 +132,24 @@ const {
           :disabled="busy"
       /></label>
       <div class="recipient-entry">
-        <InputText
-          :id="`${key}-email`"
+        <RecipientPicker
+          :inputId="`${key}-email`"
           v-model="email"
-          type="email"
-          autocomplete="email"
-          :placeholder="drafts.length ? 'Add another email address' : 'Enter an email address'"
+          :clientId="view.client_id || (scope.kind === 'client' ? scope.id : '')"
+          :placeholder="drafts.length ? 'Add another name or email' : 'Name or email address'"
           :autofocus="!isMobile"
           required
           :disabled="busy || !roleOptions.length"
-          fluid
-        />
-        <Button v-if="email.trim()" type="submit" label="Add" :disabled="busy || !selectedRole" />
+        >
+          <template #action>
+            <Button
+              v-if="email.trim()"
+              type="submit"
+              label="Add"
+              :disabled="busy || !selectedRole"
+            />
+          </template>
+        </RecipientPicker>
       </div>
       <p v-if="!roleOptions.length" class="muted">You don’t have a shareable role for this item.</p>
     </form>
