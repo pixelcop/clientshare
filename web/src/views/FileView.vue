@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useEventListener } from '@vueuse/core';
 
+import FileComments from '@/components/FileComments.vue';
 import FilePreview from '@/components/FilePreview.vue';
 import SharingDialog from '@/components/SharingDialog.vue';
 import { useAuthStore } from '@/stores/auth';
@@ -28,6 +29,8 @@ const brandingStore = useBrandingStore();
 const file = ref<FileItem | null>(null);
 const loading = ref(false);
 const showShare = ref(false);
+const showComments = ref(false);
+const commentsVisited = ref(false);
 const error = ref('');
 const downloadError = ref('');
 const downloading = ref(false);
@@ -53,7 +56,9 @@ const homeRoute = computed(() => {
 });
 
 function goBack() {
-  if (returning) {return;}
+  if (returning) {
+    return;
+  }
   const previous = router.options.history.state.back;
   // Restore real in-app navigation, but never send a fresh file link back to sign-in.
   if (typeof previous === 'string' && previous.startsWith('/') && !previous.startsWith('//')) {
@@ -72,10 +77,29 @@ function goBack() {
   void router.replace(homeRoute.value);
 }
 
+function closeComments() {
+  showComments.value = false;
+  document.getElementById('file-comments-toggle')?.focus();
+}
+
 useEventListener(window, 'keydown', (event: KeyboardEvent) => {
-  if (event.key !== 'Escape' || event.defaultPrevented || event.repeat || event.isComposing) {return;}
+  if (event.key !== 'Escape' || event.defaultPrevented || event.repeat || event.isComposing) {
+    return;
+  }
   // Dialogs (including sharing's nested confirmations) own Escape until dismissed.
-  if (showShare.value || document.querySelector('[role="dialog"], [role="alertdialog"]')) {return;}
+  if (showShare.value || document.querySelector('[role="dialog"], [role="alertdialog"]')) {
+    return;
+  }
+  if (
+    (event.target as HTMLElement | null)?.closest?.('input, textarea, [contenteditable="true"]')
+  ) {
+    return;
+  }
+  if (showComments.value) {
+    event.preventDefault();
+    closeComments();
+    return;
+  }
   event.preventDefault();
   goBack();
 });
@@ -86,6 +110,8 @@ async function loadFile() {
   returnWhenLoaded = false;
   file.value = null;
   showShare.value = false;
+  showComments.value = false;
+  commentsVisited.value = false;
   error.value = '';
   downloadError.value = '';
   copied.value = false;
@@ -112,7 +138,9 @@ async function loadFile() {
 }
 
 async function download() {
-  if (!file.value || downloading.value) {return;}
+  if (!file.value || downloading.value) {
+    return;
+  }
   const id = file.value.id;
   downloading.value = true;
   downloadError.value = '';
@@ -129,15 +157,29 @@ async function download() {
 }
 
 async function copyLink() {
-  if (!file.value) {return;}
+  if (!file.value) {
+    return;
+  }
   const base = brandingStore.branding.effectivePublicBaseURL.trim() || window.location.origin;
   try {
     await navigator.clipboard.writeText(`${base.replace(/\/+$/, '')}/files/${file.value.id}`);
     copied.value = true;
     clearTimeout(copyTimer);
-    copyTimer = setTimeout(() => { copied.value = false; }, 2000);
+    copyTimer = setTimeout(() => {
+      copied.value = false;
+    }, 2000);
   } catch {
-    downloadError.value = 'The file address couldn’t be copied. Copy it from your browser’s address bar.';
+    downloadError.value =
+      'The file address couldn’t be copied. Copy it from your browser’s address bar.';
+  }
+}
+
+async function toggleComments() {
+  commentsVisited.value = true;
+  showComments.value = !showComments.value;
+  if (showComments.value && file.value) {
+    await nextTick();
+    document.getElementById(`file-comment-${file.value.id}-heading`)?.focus();
   }
 }
 
@@ -181,6 +223,17 @@ onBeforeUnmount(() => {
         </div>
         <div class="file-header-actions">
           <Button
+            v-if="file.capabilities?.can_read && auth.user?.role !== 'link'"
+            id="file-comments-toggle"
+            label="Comments"
+            icon="oi oi-comment"
+            severity="secondary"
+            variant="text"
+            :aria-expanded="showComments"
+            aria-controls="file-comments-pane"
+            @click="toggleComments"
+          />
+          <Button
             :icon="copied ? 'oi oi-check' : 'oi oi-link'"
             aria-label="Copy file address — access is still required"
             :title="copied ? 'Copied' : 'Copy file address — access is still required'"
@@ -214,42 +267,57 @@ onBeforeUnmount(() => {
       <h1 v-else>File viewer</h1>
     </header>
     <p v-if="downloadError" role="alert" class="file-download-error">{{ downloadError }}</p>
-    <div class="file-canvas">
-      <p v-if="loading" role="status" class="file-state">Loading file…</p>
-      <div v-else-if="error" class="file-state" role="alert">
-        <i class="oi oi-file" aria-hidden="true" />
-        <h2>File unavailable</h2>
-        <p>{{ error }}</p>
-        <Button label="Try again" severity="secondary" @click="loadFile" />
-      </div>
-      <template v-else-if="file">
-        <FilePreview
-          v-if="file.capabilities?.can_read && canPreviewFile(file)"
-          :key="file.id"
-          :file-type="getFileType(file)"
-          :file-url="previewUrl"
-          :download-url="downloadUrl"
-          :file-name="file.filename"
-          maximized
-        />
-        <div v-else class="file-state">
-          <i :class="getFileIcon(file)" aria-hidden="true" />
-          <h2>
-            {{ file.capabilities?.can_read ? 'No preview available' : 'Preview unavailable' }}
-          </h2>
-          <p v-if="file.capabilities?.can_read">
-            This file type can’t be previewed. Download the file to open it on your device.
-          </p>
-          <p v-else>You don’t have permission to view or download this file.</p>
-          <Button
-            v-if="file.capabilities?.can_read"
-            label="Download"
-            icon="oi oi-download"
-            :loading="downloading"
-            @click="download"
-          />
+    <div class="file-workspace" :class="{ 'comments-open': showComments }">
+      <div class="file-canvas">
+        <p v-if="loading" role="status" class="file-state">Loading file…</p>
+        <div v-else-if="error" class="file-state" role="alert">
+          <i class="oi oi-file" aria-hidden="true" />
+          <h2>File unavailable</h2>
+          <p>{{ error }}</p>
+          <Button label="Try again" severity="secondary" @click="loadFile" />
         </div>
-      </template>
+        <template v-else-if="file">
+          <FilePreview
+            v-if="file.capabilities?.can_read && canPreviewFile(file)"
+            :key="file.id"
+            :file-type="getFileType(file)"
+            :file-url="previewUrl"
+            :download-url="downloadUrl"
+            :file-name="file.filename"
+            maximized
+          />
+          <div v-else class="file-state">
+            <i :class="getFileIcon(file)" aria-hidden="true" />
+            <h2>
+              {{ file.capabilities?.can_read ? 'No preview available' : 'Preview unavailable' }}
+            </h2>
+            <p v-if="file.capabilities?.can_read">
+              This file type can’t be previewed. Download the file to open it on your device.
+            </p>
+            <p v-else>You don’t have permission to view or download this file.</p>
+            <Button
+              v-if="file.capabilities?.can_read"
+              label="Download"
+              icon="oi oi-download"
+              :loading="downloading"
+              @click="download"
+            />
+          </div>
+        </template>
+      </div>
+      <aside
+        v-if="file && commentsVisited && file.capabilities?.can_read && auth.user?.role !== 'link'"
+        v-show="showComments"
+        id="file-comments-pane"
+        class="file-comments-pane"
+        aria-label="File conversation"
+      >
+        <FileComments
+          :key="`${file.id}:${auth.user?.session_id}`"
+          :fileId="file.id"
+          @close="closeComments"
+        />
+      </aside>
     </div>
     <SharingDialog
       v-if="showShare && file"
@@ -343,10 +411,23 @@ h1 {
   color: var(--p-red-700);
   background: var(--p-red-50);
 }
+.file-workspace {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+.file-comments-pane {
+  flex: 0 0 360px;
+  width: 360px;
+  min-width: 0;
+  border-inline-start: 1px solid var(--p-content-border-color);
+}
 .file-canvas {
   display: flex;
   flex: 1;
   min-height: 0;
+  min-width: 0;
   overflow: auto;
   background: var(--p-surface-100);
 }
@@ -404,6 +485,16 @@ h1 {
   .file-metadata {
     font-size: 12px;
     gap: 4px 12px;
+  }
+}
+@media (max-width: 1023px) {
+  .comments-open .file-canvas {
+    display: none;
+  }
+  .file-comments-pane {
+    flex: 1;
+    width: 100%;
+    border-inline-start: 0;
   }
 }
 </style>

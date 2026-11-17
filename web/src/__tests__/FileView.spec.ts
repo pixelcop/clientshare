@@ -26,22 +26,46 @@ async function render(previous?: string) {
     history: createMemoryHistory(),
     routes: [
       { path: '/files/:fileId', name: 'FileView', component: FileView, meta: { public: false } },
-      { path: '/folder/:folderId', name: 'FolderView', component: { template: '<div />' }, meta: { public: false } },
-      { path: '/shared-with-me', name: 'SharedWithMe', component: { template: '<div />' }, meta: { public: false } },
-      { path: '/folder', name: 'FolderRootView', component: { template: '<div />' }, meta: { public: false } },
-      { path: '/activity', name: 'Activity', component: { template: '<div />' }, meta: { public: false } },
+      {
+        path: '/folder/:folderId',
+        name: 'FolderView',
+        component: { template: '<div />' },
+        meta: { public: false },
+      },
+      {
+        path: '/shared-with-me',
+        name: 'SharedWithMe',
+        component: { template: '<div />' },
+        meta: { public: false },
+      },
+      {
+        path: '/folder',
+        name: 'FolderRootView',
+        component: { template: '<div />' },
+        meta: { public: false },
+      },
+      {
+        path: '/activity',
+        name: 'Activity',
+        component: { template: '<div />' },
+        meta: { public: false },
+      },
       { path: '/login', name: 'Login', component: { template: '<div />' }, meta: { public: true } },
     ],
   });
-  if (previous) {await router.push(previous);}
+  if (previous) {
+    await router.push(previous);
+  }
   await router.push('/files/file');
   // Memory history does not maintain the browser history's `back` state.
-  if (previous) {router.options.history.state.back = previous;}
+  if (previous) {
+    router.options.history.state.back = previous;
+  }
   const wrapper = mount(FileView, {
     props: { fileId: 'file' },
     global: {
       plugins: [OpenVue, router],
-      stubs: { FilePreview: true, SharingDialog: true },
+      stubs: { FilePreview: true, SharingDialog: true, FileComments: true },
     },
   });
   await flushPromises();
@@ -88,7 +112,9 @@ describe('file page', () => {
     const { wrapper, router } = await render();
     expect(wrapper.findComponent(FilePreview).props('fileType')).toBe('application/pdf');
     expect(wrapper.findComponent(FilePreview).props('fileUrl')).toBe('/api/files/file/view');
-    expect(wrapper.findComponent(FilePreview).props('downloadUrl')).toBe('/api/files/file/download');
+    expect(wrapper.findComponent(FilePreview).props('downloadUrl')).toBe(
+      '/api/files/file/download',
+    );
     expect(wrapper.findComponent(FilePreview).props('maximized')).toBe(true);
     await wrapper.get('button[aria-label="Back to files"]').trigger('click');
     await flushPromises();
@@ -123,11 +149,38 @@ describe('file page', () => {
     wrapper.unmount();
   });
 
+  it('opens comments on demand, preserves the panel on close, and lets Escape close it before navigating', async () => {
+    const { wrapper, router } = await render();
+    expect(wrapper.find('file-comments-stub').exists()).toBe(false);
+    await wrapper.get('#file-comments-toggle').trigger('click');
+    expect(wrapper.find('file-comments-stub').exists()).toBe(true);
+    expect(wrapper.get('#file-comments-toggle').attributes('aria-expanded')).toBe('true');
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true }));
+    await flushPromises();
+    expect(wrapper.get('#file-comments-toggle').attributes('aria-expanded')).toBe('false');
+    expect(wrapper.find('file-comments-stub').exists()).toBe(true);
+    expect(router.currentRoute.value.path).toBe('/files/file');
+    wrapper.unmount();
+  });
+
+  it('never offers conversations to anonymous link sessions, even for readable files', async () => {
+    useAuthStore().user = { role: 'link' } as User;
+    const { wrapper } = await render();
+    expect(wrapper.find('#file-comments-toggle').exists()).toBe(false);
+    expect(wrapper.find('file-comments-stub').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
   it('shows failed downloads on the page without poisoning the folder listing', async () => {
     const store = useFileManagerStore();
-    vi.spyOn(store, 'downloadFile').mockImplementation(async () => { store.error = 'missing'; });
+    vi.spyOn(store, 'downloadFile').mockImplementation(async () => {
+      store.error = 'missing';
+    });
     const { wrapper } = await render();
-    await wrapper.findAll('button').find(b => b.text() === 'Download')!.trigger('click');
+    await wrapper
+      .findAll('button')
+      .find((b) => b.text() === 'Download')!
+      .trigger('click');
     await flushPromises();
     expect(wrapper.get('[role="alert"]').text()).toContain('couldn’t be downloaded');
     expect(store.error).toBe('');
@@ -136,7 +189,12 @@ describe('file page', () => {
 
   it('ignores an old metadata response after navigation to another file', async () => {
     let resolve!: (file: FileItem) => void;
-    vi.mocked(useFileManagerStore().fetchFile).mockImplementationOnce(() => new Promise(r => { resolve = r; }));
+    vi.mocked(useFileManagerStore().fetchFile).mockImplementationOnce(
+      () =>
+        new Promise((r) => {
+          resolve = r;
+        }),
+    );
     const { wrapper } = await render();
     expect(wrapper.get('[role="status"]').text()).toContain('Loading file');
     await wrapper.setProps({ fileId: 'new-file' });
@@ -148,7 +206,8 @@ describe('file page', () => {
   });
 
   it.each(['/folder/another?page=3&sort_by=filename', '/shared-with-me?page=2', '/activity'])(
-    'returns to the previous app page %s on Escape', async (previous) => {
+    'returns to the previous app page %s on Escape',
+    async (previous) => {
       const { wrapper, router } = await render(previous);
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true }));
       await flushPromises();
@@ -158,7 +217,8 @@ describe('file page', () => {
   );
 
   it.each([undefined, '/login?redirect=/files/file'])(
-    'returns fresh navigation with previous=%s to the parent, replacing the file entry', async (previous) => {
+    'returns fresh navigation with previous=%s to the parent, replacing the file entry',
+    async (previous) => {
       const { wrapper, router } = await render(previous);
       const back = vi.spyOn(router, 'back');
       const replace = vi.spyOn(router, 'replace');
@@ -173,7 +233,12 @@ describe('file page', () => {
 
   it('waits for file metadata before returning a fresh navigation to its parent', async () => {
     let resolve!: (file: FileItem) => void;
-    vi.mocked(useFileManagerStore().fetchFile).mockImplementationOnce(() => new Promise(r => { resolve = r; }));
+    vi.mocked(useFileManagerStore().fetchFile).mockImplementationOnce(
+      () =>
+        new Promise((r) => {
+          resolve = r;
+        }),
+    );
     const { wrapper, router } = await render();
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true }));
     await flushPromises();
