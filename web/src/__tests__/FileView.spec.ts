@@ -171,6 +171,22 @@ describe('file page', () => {
     wrapper.unmount();
   });
 
+  it('leaves Escape to comment action menus instead of closing the conversation underneath', async () => {
+    const { wrapper, router } = await render();
+    await wrapper.get('#file-comments-toggle').trigger('click');
+    const popup = document.createElement('ul');
+    popup.setAttribute('role', 'menu');
+    document.body.append(popup);
+    popup.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+    );
+    await flushPromises();
+    expect(wrapper.get('#file-comments-toggle').attributes('aria-expanded')).toBe('true');
+    expect(router.currentRoute.value.path).toBe('/files/file');
+    popup.remove();
+    wrapper.unmount();
+  });
+
   it('shows failed downloads on the page without poisoning the folder listing', async () => {
     const store = useFileManagerStore();
     vi.spyOn(store, 'downloadFile').mockImplementation(async () => {

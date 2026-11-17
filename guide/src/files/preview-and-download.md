@@ -53,7 +53,8 @@ document. Closing the panel keeps your draft while you remain on that file.
 - Anonymous secure-link sessions cannot view or post comments. Sign in through
   your own account with file access to join the conversation.
 
-You can edit or remove your own comments. An edit cannot change the audience;
+Use a comment's **…** menu to edit or remove your own comments or view their
+history. An edit cannot change the audience;
 post a new comment if you need a different audience. Removed comments leave a
 placeholder in the conversation. **History** lets you review your own earlier
 versions, including removed text, while you still have the required access.

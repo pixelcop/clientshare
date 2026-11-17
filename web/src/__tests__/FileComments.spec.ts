@@ -1,4 +1,4 @@
-import { flushPromises, mount } from '@vue/test-utils';
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
 import axios from 'axios';
 import { Select } from 'openvue';
 import OpenVue from 'openvue/config';
@@ -31,9 +31,21 @@ async function render() {
   const wrapper = mount(FileComments, {
     props: { fileId: 'file' },
     global: { plugins: [OpenVue] },
+    attachTo: document.body,
   });
   await flushPromises();
   return wrapper;
+}
+
+async function commentAction(wrapper: VueWrapper, label: string, index = 0) {
+  const trigger = wrapper.findAll('.comment')[index].get('[aria-label="Comment actions"]');
+  await trigger.trigger('click');
+  await flushPromises();
+  const popup = document.getElementById(trigger.attributes('aria-controls')!);
+  const item = popup?.querySelector<HTMLElement>(`[role="menuitem"][aria-label="${label}"] a`);
+  expect(item, `Menu action "${label}" should exist`).toBeTruthy();
+  item!.click();
+  await flushPromises();
 }
 
 describe('file conversation', () => {
@@ -55,6 +67,7 @@ describe('file conversation', () => {
   });
   afterEach(() => {
     vi.unstubAllGlobals();
+    document.body.replaceChildren();
   });
 
   it('labels audiences, defaults staff to team-only, and renders text rather than HTML', async () => {
@@ -75,6 +88,34 @@ describe('file conversation', () => {
     wrapper.unmount();
   });
 
+  it('uses compact card headers and targets the correct comment from its action menu', async () => {
+    vi.mocked(axios.get).mockResolvedValueOnce({
+      data: page([{ ...comment, id: '02', body: 'Second comment' }, comment]),
+    });
+    const remove = vi.spyOn(axios, 'delete').mockResolvedValue({
+      data: {
+        ...comment,
+        id: '02',
+        body: '',
+        deleted_at: comment.created_at,
+        version: 2,
+        can_edit: false,
+      },
+    });
+    const wrapper = await render();
+    expect(wrapper.findAll('article.comment-card')).toHaveLength(2);
+    expect(wrapper.findAll('.comment-card-header [aria-label="Comment actions"]')).toHaveLength(2);
+    expect(wrapper.findAll('.comment-avatar')[0]?.text()).toBe('A');
+    expect(wrapper.find('.comment-tools').exists()).toBe(false);
+    expect(document.querySelector('[role="menuitem"]')).toBeNull();
+    await commentAction(wrapper, 'Remove comment', 1);
+    expect(wrapper.findAll('.comment')[0]?.find('.comment-confirm').exists()).toBe(false);
+    await wrapper.findAll('.comment')[1].get('.comment-confirm button').trigger('click');
+    await flushPromises();
+    expect(remove).toHaveBeenCalledWith('/api/files/file/comments/02', { data: { version: 1 } });
+    wrapper.unmount();
+  });
+
   it('allows shared discussion for client readers without internal controls or other authors’ tools', async () => {
     useAuthStore().user = { id: 'client', role: 'client', session_id: 'client-session' } as User;
     vi.mocked(axios.get).mockResolvedValue({
@@ -83,6 +124,7 @@ describe('file conversation', () => {
     const wrapper = await render();
     expect(wrapper.findComponent(Select).exists()).toBe(false);
     expect(wrapper.find('[aria-label="Edit comment"]').exists()).toBe(false);
+    expect(wrapper.find('[aria-label="Comment actions"]').exists()).toBe(false);
     expect(wrapper.text()).not.toContain('History');
     expect(wrapper.text()).toContain('Add a shared comment');
     expect(wrapper.text()).toContain('Visible to signed-in people with access to this file');
@@ -130,7 +172,7 @@ describe('file conversation', () => {
       },
     });
     const wrapper = await render();
-    await wrapper.get('[aria-label="Edit comment"]').trigger('click');
+    await commentAction(wrapper, 'Edit comment');
     await wrapper.get('.comment-edit textarea').setValue('Updated');
     await wrapper.get('.comment-edit').trigger('submit');
     await flushPromises();
@@ -139,7 +181,7 @@ describe('file conversation', () => {
       version: 1,
     });
     expect(wrapper.text()).toContain('Edited');
-    await wrapper.get('[aria-label="Remove comment"]').trigger('click');
+    await commentAction(wrapper, 'Remove comment');
     expect(remove).not.toHaveBeenCalled();
     await wrapper.get('.comment-confirm button').trigger('click');
     await flushPromises();
@@ -158,10 +200,7 @@ describe('file conversation', () => {
         },
       ],
     });
-    await wrapper
-      .findAll('button')
-      .find((b) => b.text() === 'History')!
-      .trigger('click');
+    await commentAction(wrapper, 'View history');
     await flushPromises();
     expect(wrapper.get('[aria-label="Your comment history"]').text()).toContain('Original text');
     wrapper.unmount();
@@ -225,7 +264,7 @@ describe('file conversation', () => {
     expect(
       wrapper.get('.comment-composer button[type="submit"]').attributes('disabled'),
     ).toBeDefined();
-    await wrapper.get('[aria-label="Edit comment"]').trigger('click');
+    await commentAction(wrapper, 'Edit comment');
     await wrapper.get('.comment-edit textarea').setValue('My edit');
     await wrapper.get('.comment-edit').trigger('submit');
     await flushPromises();
@@ -266,7 +305,7 @@ describe('file conversation', () => {
     vi.spyOn(axios, 'put').mockResolvedValue({
       data: { ...comment, body: 'Latest edit', version: 2 },
     });
-    await wrapper.get('[aria-label="Edit comment"]').trigger('click');
+    await commentAction(wrapper, 'Edit comment');
     await wrapper.get('.comment-edit textarea').setValue('Latest edit');
     await wrapper.get('.comment-edit').trigger('submit');
     await flushPromises();

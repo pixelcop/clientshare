@@ -3,6 +3,7 @@ import axios from 'axios';
 import { Button, Select, Textarea } from 'openvue';
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 
+import FileCommentCard from '@/components/FileCommentCard.vue';
 import { useFileComments } from '@/composables/useFileComments';
 import { useAuthStore } from '@/stores/auth';
 import type { FileComment, FileCommentRevision } from '@/types/models';
@@ -208,136 +209,105 @@ onBeforeUnmount(closeHistory);
       />
       <ol aria-label="Comments" data-sentry-mask>
         <li v-for="comment in comments" :key="comment.id" class="comment">
-          <div class="comment-byline">
-            <strong>{{ comment.author_name }}</strong>
-            <span class="comment-audience" :class="{ 'team-note': comment.visibility === 'team' }">
-              {{ comment.visibility === 'team' ? 'Team only' : 'Shared' }}
-            </span>
-          </div>
-          <div class="comment-time">
-            <time :datetime="comment.created_at">{{ date(comment.created_at) }}</time>
-            <span v-if="comment.version > 1 && !comment.deleted_at"> · Edited</span>
-          </div>
-          <form v-if="editing?.id === comment.id" class="comment-edit" @submit.prevent="saveEdit">
-            <label :for="`${composerId}-edit`"
-              >Edit {{ comment.visibility === 'team' ? 'team note' : 'shared comment' }}</label
+          <FileCommentCard
+            :comment="comment"
+            :disabled="saving"
+            :editing="editing?.id === comment.id"
+            :historyOpen="historyFor === comment.id"
+            @edit="startEdit(comment)"
+            @remove="removing = comment.id"
+            @history="showHistory(comment)"
+          >
+            <form v-if="editing?.id === comment.id" class="comment-edit" @submit.prevent="saveEdit">
+              <label :for="`${composerId}-edit`"
+                >Edit {{ comment.visibility === 'team' ? 'team note' : 'shared comment' }}</label
+              >
+              <Textarea
+                :id="`${composerId}-edit`"
+                v-model="editBody"
+                rows="4"
+                fluid
+                :maxlength="8000"
+                :disabled="saving"
+                required
+                :invalid="editLength > 4000"
+              />
+              <small>{{ editLength }}/4000 · Audience stays unchanged</small>
+              <div class="comment-actions">
+                <Button
+                  type="submit"
+                  label="Save edit"
+                  size="small"
+                  :loading="saving"
+                  :disabled="!editBody.trim() || editLength > 4000"
+                />
+                <Button
+                  label="Cancel edit"
+                  severity="secondary"
+                  variant="text"
+                  size="small"
+                  :disabled="saving"
+                  @click="editing = null"
+                />
+              </div>
+            </form>
+            <p v-else class="comment-body" :class="{ removed: comment.deleted_at }">
+              {{ comment.deleted_at ? 'Comment removed' : comment.body }}
+            </p>
+            <div
+              v-if="removing === comment.id"
+              class="comment-confirm"
+              role="group"
+              aria-label="Confirm comment removal"
             >
-            <Textarea
-              :id="`${composerId}-edit`"
-              v-model="editBody"
-              rows="4"
-              fluid
-              :maxlength="8000"
-              :disabled="saving"
-              required
-              :invalid="editLength > 4000"
-            />
-            <small>{{ editLength }}/4000 · Audience stays unchanged</small>
-            <div class="comment-actions">
-              <Button
-                type="submit"
-                label="Save edit"
-                size="small"
-                :loading="saving"
-                :disabled="!editBody.trim() || editLength > 4000"
-              />
-              <Button
-                label="Cancel edit"
-                severity="secondary"
-                variant="text"
-                size="small"
-                :disabled="saving"
-                @click="editing = null"
-              />
+              <p>Remove this comment? It will remain in your private history.</p>
+              <div class="comment-actions">
+                <Button
+                  label="Remove comment"
+                  severity="danger"
+                  size="small"
+                  :loading="saving"
+                  @click="confirmRemove(comment)"
+                />
+                <Button
+                  label="Cancel"
+                  severity="secondary"
+                  variant="text"
+                  size="small"
+                  :disabled="saving"
+                  @click="removing = ''"
+                />
+              </div>
             </div>
-          </form>
-          <p v-else class="comment-body" :class="{ removed: comment.deleted_at }">
-            {{ comment.deleted_at ? 'Comment removed' : comment.body }}
-          </p>
-          <div v-if="comment.can_view_history" class="comment-actions comment-tools">
-            <template v-if="comment.can_edit && editing?.id !== comment.id">
+            <section
+              v-if="historyFor === comment.id"
+              class="comment-history"
+              aria-label="Your comment history"
+            >
+              <p v-if="historyLoading" role="status">Loading history…</p>
+              <p v-if="historyError" role="alert">{{ historyError }}</p>
+              <ol>
+                <li v-for="revision in history" :key="revision.id">
+                  <small
+                    >Version {{ revision.version }} · {{ revision.action }} ·
+                    {{ date(revision.created_at) }}</small
+                  >
+                  <p class="comment-body">
+                    {{ revision.action === 'removed' ? 'Comment removed' : revision.body }}
+                  </p>
+                </li>
+              </ol>
               <Button
-                label="Edit"
-                aria-label="Edit comment"
+                v-if="moreHistory"
+                label="Earlier versions"
+                size="small"
                 severity="secondary"
                 variant="text"
-                size="small"
-                :disabled="saving"
-                @click="startEdit(comment)"
+                :disabled="historyLoading"
+                @click="showHistory(comment, true)"
               />
-              <Button
-                label="Remove"
-                aria-label="Remove comment"
-                severity="secondary"
-                variant="text"
-                size="small"
-                :disabled="saving"
-                @click="removing = comment.id"
-              />
-            </template>
-            <Button
-              label="History"
-              severity="secondary"
-              variant="text"
-              size="small"
-              :aria-expanded="historyFor === comment.id"
-              :disabled="saving"
-              @click="showHistory(comment)"
-            />
-          </div>
-          <div
-            v-if="removing === comment.id"
-            class="comment-confirm"
-            role="group"
-            aria-label="Confirm comment removal"
-          >
-            <p>Remove this comment? It will remain in your private history.</p>
-            <div class="comment-actions">
-              <Button
-                label="Remove comment"
-                severity="danger"
-                size="small"
-                :loading="saving"
-                @click="confirmRemove(comment)"
-              />
-              <Button
-                label="Cancel"
-                severity="secondary"
-                variant="text"
-                size="small"
-                :disabled="saving"
-                @click="removing = ''"
-              />
-            </div>
-          </div>
-          <section
-            v-if="historyFor === comment.id"
-            class="comment-history"
-            aria-label="Your comment history"
-          >
-            <p v-if="historyLoading" role="status">Loading history…</p>
-            <p v-if="historyError" role="alert">{{ historyError }}</p>
-            <ol>
-              <li v-for="revision in history" :key="revision.id">
-                <small
-                  >Version {{ revision.version }} · {{ revision.action }} ·
-                  {{ date(revision.created_at) }}</small
-                >
-                <p class="comment-body">
-                  {{ revision.action === 'removed' ? 'Comment removed' : revision.body }}
-                </p>
-              </li>
-            </ol>
-            <Button
-              v-if="moreHistory"
-              label="Earlier versions"
-              size="small"
-              severity="secondary"
-              variant="text"
-              :disabled="historyLoading"
-              @click="showHistory(comment, true)"
-            />
-          </section>
+            </section>
+          </FileCommentCard>
         </li>
       </ol>
     </div>
@@ -427,7 +397,6 @@ onBeforeUnmount(closeHistory);
   font-weight: 600;
 }
 .comments-heading p,
-.comment-time,
 .audience-help,
 .notification-note,
 .comment-state,
@@ -442,7 +411,7 @@ onBeforeUnmount(closeHistory);
   flex: 1;
   overflow: auto;
   min-height: 0;
-  padding: 0 16px;
+  padding: 12px;
 }
 ol {
   padding: 0;
@@ -450,37 +419,14 @@ ol {
   list-style: none;
 }
 .comment {
-  padding: 16px 0;
-  border-bottom: 1px solid var(--p-content-border-color);
-}
-.comment-byline {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 8px;
-  overflow-wrap: anywhere;
-}
-.comment-byline strong {
-  font-size: 14px;
-  font-weight: 600;
-}
-.comment-audience {
-  font-size: 11px;
-  color: var(--p-text-muted-color);
-}
-.team-note {
-  font-weight: 600;
-  color: var(--p-primary-color);
-}
-.comment-time {
-  margin-top: 4px;
+  margin-bottom: 12px;
 }
 .comment-body {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   font-size: 14px;
   line-height: 1.6;
-  margin: 12px 0 0;
+  margin: 0;
 }
 .removed {
   color: var(--p-text-muted-color);
@@ -491,13 +437,6 @@ ol {
   flex-wrap: wrap;
   align-items: center;
   gap: 4px;
-}
-.comment-tools {
-  margin-top: 4px;
-}
-.comment-tools :deep(.p-button) {
-  padding-inline: 8px;
-  min-height: 40px;
 }
 .comments-heading :deep(.p-button) {
   width: 40px;
@@ -536,7 +475,6 @@ ol {
 .comment-edit {
   display: grid;
   gap: 8px;
-  margin-top: 12px;
 }
 .comment-confirm,
 .comment-history {

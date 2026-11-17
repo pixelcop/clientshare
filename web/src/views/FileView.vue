@@ -91,6 +91,13 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
     return;
   }
   if (
+    (event.target as HTMLElement | null)?.closest?.(
+      '[role="menu"], [role="menubar"], [role="listbox"]',
+    )
+  ) {
+    return;
+  }
+  if (
     (event.target as HTMLElement | null)?.closest?.('input, textarea, [contenteditable="true"]')
   ) {
     return;
