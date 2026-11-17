@@ -288,6 +288,40 @@ export interface FileActivity {
 }
 
 //////////
+// source: file_comment.go
+
+/**
+ * FileComment visibility is immutable. Editing a team note must never silently
+ * publish its content (or revision history) to a wider audience.
+ */
+export interface FileComment {
+  id: string;
+  file_id: string;
+  author_id: string;
+  visibility: string;
+  body: string;
+  version: number /* int */;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string;
+  author_name: string;
+  can_edit: boolean;
+  can_view_history: boolean;
+}
+/**
+ * Revisions are append-only. They are accessible only to the author while the
+ * author still has file and visibility access; comments are not an access grant.
+ */
+export interface FileCommentRevision {
+  id: string;
+  comment_id: string;
+  version: number /* int */;
+  body: string;
+  action: string;
+  created_at: string;
+}
+
+//////////
 // source: hosted_email_token.go
 
 /**
