@@ -33,6 +33,23 @@ type FileCommentPage struct {
 	Items       []models.FileComment `json:"items"`
 	NextCursor  string               `json:"next_cursor"`
 	CanInternal bool                 `json:"can_internal"`
+	TotalCount  int64                `json:"total_count"`
+}
+
+// Count includes only live comments visible to the actor, not removed
+// placeholders or private team notes the actor cannot read.
+func (s *FileCommentService) Count(ctx context.Context, req AccessRequest) (int64, error) {
+	_, team, err := s.authorize(ctx, req)
+	if err != nil {
+		return 0, err
+	}
+	return visibleCommentCount(s.DB.WithContext(ctx), req, team)
+}
+
+func visibleCommentCount(db *gorm.DB, req AccessRequest, team bool) (int64, error) {
+	var count int64
+	err := commentQuery(db, req, team).Where("deleted_at IS NULL").Count(&count).Error
+	return count, err
 }
 
 type CommentInput struct {
@@ -91,6 +108,10 @@ func (s *FileCommentService) List(ctx context.Context, req AccessRequest, before
 		q = q.Where("id < ?", before)
 	}
 	result := &FileCommentPage{Items: []models.FileComment{}, CanInternal: team}
+	result.TotalCount, err = visibleCommentCount(db, req, team)
+	if err != nil {
+		return nil, err
+	}
 	if err := q.Order("id DESC").Limit(commentPageSize + 1).Find(&result.Items).Error; err != nil {
 		return nil, err
 	}

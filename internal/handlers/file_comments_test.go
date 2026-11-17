@@ -20,6 +20,10 @@ func TestFileCommentsHTTPIsolationValidationAndLifecycle(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 404, resp.StatusCode)
 		resp.Body.Close()
+		resp, err = env.app.Test(jsonAuthRequest(http.MethodGet, base+"/count", token, nil))
+		require.NoError(t, err)
+		require.Equal(t, 404, resp.StatusCode)
+		resp.Body.Close()
 	}
 	req := jsonAuthRequest(http.MethodPost, base, env.clientToken, map[string]any{"body": "A question", "visibility": "shared"})
 	req.Header.Set("Idempotency-Key", "question")
@@ -30,6 +34,15 @@ func TestFileCommentsHTTPIsolationValidationAndLifecycle(t *testing.T) {
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&comment))
 	resp.Body.Close()
 	require.True(t, comment.CanEdit)
+	resp, err = env.app.Test(jsonAuthRequest(http.MethodGet, base+"/count", env.clientToken, nil))
+	require.NoError(t, err)
+	require.Equal(t, 200, resp.StatusCode)
+	var count struct {
+		Count int `json:"count"`
+	}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&count))
+	resp.Body.Close()
+	require.Equal(t, 1, count.Count)
 	require.NotEmpty(t, comment.AuthorName)
 	path := base + "/" + comment.ID
 	resp, err = env.app.Test(jsonAuthRequest(http.MethodPut, path, env.clientToken, map[string]any{"body": "Publish it", "version": 1, "visibility": "team"}))

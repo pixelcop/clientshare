@@ -18,6 +18,7 @@ func NewFileCommentsHandler(db *gorm.DB) *FileCommentsHandler {
 func RegisterFileCommentRoutes(router fiber.Router, db *gorm.DB) {
 	h := NewFileCommentsHandler(db)
 	router.Get("/files/:id/comments", middleware.AuthRequired, h.List)
+	router.Get("/files/:id/comments/count", middleware.AuthRequired, h.Count)
 	router.Post("/files/:id/comments", middleware.AuthRequired, h.Create)
 	router.Put("/files/:id/comments/:commentID", middleware.AuthRequired, h.Edit)
 	router.Delete("/files/:id/comments/:commentID", middleware.AuthRequired, h.Remove)
@@ -46,6 +47,11 @@ func commentRequest(c fiber.Ctx) services.AccessRequest {
 func (h *FileCommentsHandler) List(c fiber.Ctx) error {
 	page, err := h.service.List(c.Context(), commentRequest(c), c.Query("before"))
 	return commentResponse(c, page, err, 200)
+}
+
+func (h *FileCommentsHandler) Count(c fiber.Ctx) error {
+	count, err := h.service.Count(c.Context(), commentRequest(c))
+	return commentResponse(c, fiber.Map{"count": count}, err, 200)
 }
 
 func (h *FileCommentsHandler) Create(c fiber.Ctx) error {
