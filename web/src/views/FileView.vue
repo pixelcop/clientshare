@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useEventListener } from '@vueuse/core';
+import { useEventListener, useMediaQuery } from '@vueuse/core';
 import axios from 'axios';
 
 import FileComments from '@/components/FileComments.vue';
@@ -31,6 +31,7 @@ const file = ref<FileItem | null>(null);
 const loading = ref(false);
 const showShare = ref(false);
 const showComments = ref(false);
+const desktop = useMediaQuery('(min-width: 1024px)');
 const commentsVisited = ref(false);
 const commentCount = ref<number | null>(null);
 let countVersion = 0;
@@ -167,6 +168,14 @@ async function loadFile() {
     const current = await fileManager.fetchFile(fileId);
     if (version === requestVersion) {
       file.value = current;
+      // Apply the responsive default once per file, not on resize: an explicit
+      // choice to hide comments must not be undone while reading a document.
+      showComments.value =
+        desktop.value &&
+        !!current.capabilities?.can_read &&
+        !!auth.user &&
+        auth.user.role !== 'link';
+      commentsVisited.value = showComments.value;
       void refreshCommentCount();
     }
   } catch {

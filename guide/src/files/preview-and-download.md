@@ -38,9 +38,10 @@ Downloading creates a copy on your device. Later changes to the portal document 
 
 ## Discuss a file
 
-Open a file and select **Comments**. On a wide screen, the conversation appears
-beside the preview; on a narrow screen, select **Comments** again to return to the
-document. The button shows a count and uses color when there are comments you can
+On wide screens, files open with the conversation beside the preview. Select
+**Comments** to hide or restore it when you need more document space. On narrow
+screens, comments start closed; the same button switches between the conversation
+and the document. The button shows a count and uses color when there are comments you can
 read. Counts exclude removed comments and team notes you are not allowed to see.
 Select **Add comment** to open the editor. **Hide editor** collapses it without
 discarding your draft. Closing the panel also keeps your draft while you remain

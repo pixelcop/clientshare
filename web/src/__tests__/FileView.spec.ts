@@ -2,7 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils';
 import axios from 'axios';
 import OpenVue from 'openvue/config';
 import { createPinia, setActivePinia } from 'pinia';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMemoryHistory, createRouter } from 'vue-router';
 
 import FileComments from '@/components/FileComments.vue';
@@ -21,6 +21,18 @@ const file = {
   uploaded_at: '2026-11-13T12:00:00Z',
   capabilities: { can_read: true, can_share: true },
 } as FileItem;
+
+function viewport(wide: boolean) {
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn((query: string) => ({
+      matches: wide && query === '(min-width: 1024px)',
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })),
+  );
+}
 
 async function render(previous?: string) {
   const router = createRouter({
@@ -76,10 +88,14 @@ async function render(previous?: string) {
 describe('file page', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    viewport(false);
     setActivePinia(createPinia());
     useAuthStore().user = { id: 'admin', role: 'admin' } as User;
     vi.spyOn(axios, 'get').mockResolvedValue({ data: [] });
     vi.spyOn(useFileManagerStore(), 'fetchFile').mockResolvedValue(file);
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it('shows metadata, sharing, and an explicit download fallback for unsupported types', async () => {
@@ -150,7 +166,7 @@ describe('file page', () => {
     wrapper.unmount();
   });
 
-  it('opens comments on demand, preserves the panel on close, and lets Escape close it before navigating', async () => {
+  it('opens comments on demand on narrow screens, preserves the panel on close, and lets Escape close it before navigating', async () => {
     const { wrapper, router } = await render();
     expect(wrapper.find('file-comments-stub').exists()).toBe(false);
     await wrapper.get('#file-comments-toggle').trigger('click');
@@ -164,7 +180,37 @@ describe('file page', () => {
     wrapper.unmount();
   });
 
+  it('opens comments by default on desktop and lets the user hide and restore them', async () => {
+    viewport(true);
+    const { wrapper } = await render();
+    const toggle = wrapper.get('#file-comments-toggle');
+    expect(toggle.attributes('aria-expanded')).toBe('true');
+    expect(wrapper.findComponent(FileComments).exists()).toBe(true);
+    expect(wrapper.get('#file-comments-pane').isVisible()).toBe(true);
+    await toggle.trigger('click');
+    expect(toggle.attributes('aria-expanded')).toBe('false');
+    expect(wrapper.get('#file-comments-pane').attributes('style')).toContain('display: none');
+    await toggle.trigger('click');
+    expect(wrapper.get('#file-comments-pane').attributes('style') || '').not.toContain(
+      'display: none',
+    );
+    wrapper.unmount();
+  });
+
+  it('does not automatically show comments for an unreadable file even on desktop', async () => {
+    viewport(true);
+    vi.mocked(useFileManagerStore().fetchFile).mockResolvedValueOnce({
+      ...file,
+      capabilities: { ...file.capabilities!, can_read: false },
+    });
+    const { wrapper } = await render();
+    expect(wrapper.findComponent(FileComments).exists()).toBe(false);
+    expect(wrapper.find('#file-comments-toggle').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
   it('never offers conversations to anonymous link sessions, even for readable files', async () => {
+    viewport(true);
     useAuthStore().user = { role: 'link' } as User;
     const { wrapper } = await render();
     expect(wrapper.find('#file-comments-toggle').exists()).toBe(false);
