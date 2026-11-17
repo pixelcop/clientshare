@@ -20,9 +20,9 @@ const contact = {
   current_client: true,
   workspace_access: true,
 };
-function picker() {
+function picker(autofocus = false) {
   return mount(RecipientPicker, {
-    props: { inputId: 'recipient', clientId: 'client', modelValue: '', required: true },
+    props: { inputId: 'recipient', clientId: 'client', modelValue: '', required: true, autofocus },
     global: { plugins: [OpenVue] },
     attachTo: document.body,
   });
@@ -60,6 +60,49 @@ describe('recipient picker', () => {
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['alex@example.test']);
     expect(wrapper.text()).toContain('Selecting a contact does not change access');
     expect(post).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it('keeps initial autofocus quiet but opens suggestions when typing', async () => {
+    vi.useFakeTimers();
+    const wrapper = picker(true);
+    try {
+      const input = wrapper.get('input');
+      (input.element as HTMLInputElement).focus();
+      await flushPromises();
+      expect(document.activeElement).toBe(input.element);
+      expect(axios.get).not.toHaveBeenCalled();
+      expect(wrapper.find('[role="listbox"]').exists()).toBe(false);
+      await input.setValue('alex');
+      await vi.advanceTimersByTimeAsync(250);
+      await flushPromises();
+      expect(axios.get).toHaveBeenCalledWith(
+        '/api/recipients',
+        expect.objectContaining({
+          params: { client_id: 'client', scope: 'client', search: 'alex' },
+        }),
+      );
+      expect(wrapper.find('[role="listbox"]').exists()).toBe(true);
+    } finally {
+      wrapper.unmount();
+      vi.useRealTimers();
+    }
+  });
+
+  it('offers contacts when the user returns to an initially autofocused field', async () => {
+    const wrapper = picker(true);
+    const input = wrapper.get('input');
+    await input.trigger('focus');
+    await flushPromises();
+    expect(axios.get).not.toHaveBeenCalled();
+    await input.trigger('blur');
+    await input.trigger('focus');
+    await flushPromises();
+    expect(axios.get).toHaveBeenCalledWith(
+      '/api/recipients',
+      expect.objectContaining({ params: { client_id: 'client', scope: 'client', search: '' } }),
+    );
+    expect(wrapper.find('[role="listbox"]').exists()).toBe(true);
     wrapper.unmount();
   });
 

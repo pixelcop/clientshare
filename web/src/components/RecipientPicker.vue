@@ -20,6 +20,8 @@ const props = withDefaults(
   { clientId: '', label: 'Recipient', placeholder: 'Name or email address' },
 );
 const email = defineModel<string>({ required: true });
+// Keep dialog autofocus quiet; typing and subsequent focus still offer contacts.
+const initialAutofocusPending = ref(props.autofocus);
 const auth = useAuthStore();
 const enabled = computed(() => ['admin', 'manager'].includes(auth.user?.role || ''));
 const { contacts, across, loading, error, available, search, invalidate } = useRecipientSearch(
@@ -80,7 +82,7 @@ function toggleScope() {
         :loading="loading"
         :minLength="0"
         :delay="250"
-        :completeOnFocus="enabled"
+        :completeOnFocus="enabled && !initialAutofocusPending"
         :autoOptionFocus="false"
         :forceSelection="false"
         :showEmptyMessage="enabled && available"
@@ -98,6 +100,7 @@ function toggleScope() {
         fluid
         @update:modelValue="update"
         @complete="search($event.query)"
+        @focus="initialAutofocusPending = false"
       >
         <template #option="{ option }">
           <div class="recipient-option">
