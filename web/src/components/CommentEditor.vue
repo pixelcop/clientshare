@@ -29,7 +29,7 @@ const people = ref<Person[]>([]);
 const selected = ref(0);
 const searching = ref(false);
 const mentionError = ref('');
-let range: { start: number; end: number; query: string } | null = null;
+let range: { start: number; end: number; query: string; source: string } | null = null;
 let timer: ReturnType<typeof setTimeout> | undefined;
 let generation = 0;
 let mentionGeneration = 0;
@@ -65,7 +65,11 @@ watch(
     controller?.abort();
     html.value = '';
     busy.value = false;
-    clearMentions();
+    // The parent echoes native input after its event handler. Keep the lookup
+    // for that exact source; external draft changes still invalidate it.
+    if (body.value !== range?.source) {
+      clearMentions();
+    }
   },
   { flush: 'sync' },
 );
@@ -122,11 +126,11 @@ function findMention(event: Event) {
     return;
   }
   const end = input.selectionStart;
-  const match = /(?:^|[\s(])@([^\s@()[\]`]{1,80})$/u.exec(input.value.slice(0, end));
+  const match = /(?:^|[\s(])@([^\s@()[\]`]{0,80})$/u.exec(input.value.slice(0, end));
   if (!match) {
     return;
   }
-  range = { start: end - match[1]!.length - 1, end, query: match[1]! };
+  range = { start: end - match[1]!.length - 1, end, query: match[1]!, source: input.value };
   const current = mentionGeneration;
   const query = range.query;
   searching.value = true;
@@ -141,6 +145,10 @@ function findMention(event: Event) {
         people.value = data;
         selected.value = 0;
         mentionError.value = data.length ? '' : 'No people available for this mention.';
+        await nextTick();
+        if (current === mentionGeneration && data.length) {
+          document.getElementById(`${props.id}-mentions`)?.scrollIntoView?.({ block: 'nearest' });
+        }
       }
     } catch (cause) {
       if (current === mentionGeneration && !axios.isCancel(cause)) {
@@ -184,6 +192,11 @@ function keydown(event: KeyboardEvent) {
       selected.value =
         (selected.value + (event.key === 'ArrowDown' ? 1 : -1) + people.value.length) %
         people.value.length;
+      void nextTick(() => {
+        document.getElementById(`${props.id}-mention-${selected.value}`)?.scrollIntoView?.({
+          block: 'nearest',
+        });
+      });
     }
   }
 }
@@ -248,31 +261,32 @@ function keydown(event: KeyboardEvent) {
         <p v-else-if="!body.trim()">Nothing to preview.</p>
         <CommentBody v-else :body="body" :html="html" />
       </div>
+      <ul
+        v-if="people.length"
+        :id="`${id}-mentions`"
+        class="mention-options"
+        role="listbox"
+        aria-label="Mention suggestions"
+      >
+        <li
+          v-for="(person, index) in people"
+          :id="`${id}-mention-${index}`"
+          :key="person.id"
+          role="option"
+          :aria-selected="index === selected"
+          @pointermove="selected = index"
+        >
+          <button type="button" tabindex="-1" @mousedown.prevent @click="choose(person)">
+            <strong>@{{ person.name }}</strong>
+            <span v-if="person.email" class="mention-email">{{ person.email }}</span>
+          </button>
+        </li>
+      </ul>
     </div>
     <div class="editor-meta">
       <slot name="metadata" />
       <small :id="`${id}-length`" class="editor-length">{{ Array.from(body).length }}/4000</small>
     </div>
-    <ul
-      v-if="people.length"
-      :id="`${id}-mentions`"
-      class="mention-options"
-      role="listbox"
-      aria-label="Mention suggestions"
-    >
-      <li
-        v-for="(person, index) in people"
-        :id="`${id}-mention-${index}`"
-        :key="person.id"
-        role="option"
-        :aria-selected="index === selected"
-      >
-        <button type="button" @mousedown.prevent @click="choose(person)">
-          <strong>@{{ person.name }}</strong
-          ><small v-if="person.email">{{ person.email }}</small>
-        </button>
-      </li>
-    </ul>
     <small v-if="searching || mentionError" role="status">{{
       searching ? 'Finding people…' : mentionError
     }}</small>
@@ -340,16 +354,26 @@ textarea {
   min-width: 0;
 }
 .mention-options {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 4px);
+  inset-inline-start: 0;
+  width: min(320px, 100%);
+  box-sizing: border-box;
   list-style: none;
   padding: 4px;
-  margin: 4px 0;
-  max-height: 160px;
+  margin: 0;
+  max-height: 208px;
   overflow: auto;
   border: 1px solid var(--p-content-border-color);
-  border-radius: var(--p-border-radius-sm);
+  border-radius: var(--p-border-radius-md);
+  background: var(--p-content-background);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 12%);
 }
 .mention-options button {
-  display: grid;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
   width: 100%;
   text-align: start;
   font: inherit;
@@ -359,12 +383,20 @@ textarea {
   border: 0;
   background: transparent;
   color: var(--p-text-color);
-  overflow-wrap: anywhere;
   cursor: pointer;
 }
-.mention-options [aria-selected='true'] button,
-.mention-options button:hover {
-  background: var(--p-surface-100);
+.mention-options strong,
+.mention-email {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mention-email {
+  font-size: 12px;
+}
+.mention-options [aria-selected='true'] button {
+  background: var(--p-highlight-background);
+  color: var(--p-highlight-color);
 }
 small {
   color: var(--p-text-muted-color);

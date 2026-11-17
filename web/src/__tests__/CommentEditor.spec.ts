@@ -27,7 +27,6 @@ async function search(wrapper: ReturnType<typeof render>, value: string) {
   const input = wrapper.get('textarea');
   await input.setValue(value);
   (input.element as HTMLTextAreaElement).setSelectionRange(value.length, value.length);
-  await input.trigger('input');
   await vi.advanceTimersByTimeAsync(200);
   await flushPromises();
 }
@@ -114,6 +113,65 @@ describe('Markdown comments editor', () => {
     expect(wrapper.get('[role="option"]').text()).toBe('@Chetan');
     await wrapper.get('textarea').trigger('keydown', { key: 'Enter' });
     expect(wrapper.props('modelValue')).toBe('Hello [@Chetan](mention:user-id) ');
+    expect(wrapper.find('[role="listbox"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('opens a compact dropdown on bare @ and filters as the name is typed', async () => {
+    const get = vi.spyOn(axios, 'get').mockResolvedValue({
+      data: [
+        { id: 'alex', name: 'Alex', email: 'alex@example.test' },
+        { id: 'chetan', name: 'Chetan', email: 'chetan@example.test' },
+      ],
+    });
+    const wrapper = render('');
+    await search(wrapper, '@');
+    expect(get).toHaveBeenLastCalledWith(
+      '/api/files/file/comments/mentions',
+      expect.objectContaining({ params: { search: '', visibility: 'shared' } }),
+    );
+    expect(wrapper.get('.editor-surface [role="listbox"]').exists()).toBe(true);
+    expect(wrapper.findAll('[role="option"]')).toHaveLength(2);
+    expect(wrapper.get('textarea').attributes('aria-activedescendant')).toBe('editor-mention-0');
+    expect(wrapper.get('[aria-selected="true"]').text()).toContain('@Alex');
+    await wrapper.get('textarea').trigger('keydown', { key: 'ArrowDown' });
+    expect(wrapper.get('[aria-selected="true"]').text()).toContain('@Chetan');
+    expect(wrapper.get('textarea').attributes('aria-activedescendant')).toBe('editor-mention-1');
+    await search(wrapper, '@chet');
+    expect(get).toHaveBeenLastCalledWith(
+      '/api/files/file/comments/mentions',
+      expect.objectContaining({ params: { search: 'chet', visibility: 'shared' } }),
+    );
+    await wrapper.get('textarea').trigger('keydown', { key: 'ArrowDown' });
+    await wrapper.get('textarea').trigger('keydown', { key: 'Enter' });
+    expect(wrapper.props('modelValue')).toBe('[@Chetan](mention:chetan) ');
+    expect(wrapper.find('[role="listbox"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('opens after a single native input event without needing a second click or keystroke', async () => {
+    vi.spyOn(axios, 'get').mockResolvedValue({ data: [{ id: 'user', name: 'Chetan' }] });
+    const wrapper = render('');
+    (wrapper.get('textarea').element as HTMLTextAreaElement).focus();
+    await wrapper.get('textarea').setValue('@');
+    await vi.advanceTimersByTimeAsync(200);
+    await flushPromises();
+    expect(wrapper.get('[role="option"]').text()).toContain('@Chetan');
+    wrapper.unmount();
+  });
+
+  it('lets a pointer choose a person and dismisses suggestions when the mention ends', async () => {
+    const get = vi.spyOn(axios, 'get').mockResolvedValue({
+      data: [{ id: 'user', name: 'Chetan', email: 'chetan@example.test' }],
+    });
+    const wrapper = render('');
+    await search(wrapper, 'Hello @');
+    await wrapper.get('[role="option"] button').trigger('click');
+    expect(wrapper.props('modelValue')).toBe('Hello [@Chetan](mention:user) ');
+    expect(wrapper.get('textarea').element).toBe(document.activeElement);
+    get.mockClear();
+    await search(wrapper, 'Hello @ ');
+    expect(get).not.toHaveBeenCalled();
     expect(wrapper.find('[role="listbox"]').exists()).toBe(false);
     wrapper.unmount();
   });

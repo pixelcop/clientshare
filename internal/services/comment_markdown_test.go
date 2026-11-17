@@ -1,6 +1,7 @@
 package services
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -78,6 +79,9 @@ func TestCommentMentionsRespectAudienceAndDirectory(t *testing.T) {
 	people, err := s.Mentions(t.Context(), staff, "Person", CommentShared)
 	require.NoError(t, err)
 	require.NotEmpty(t, people)
+	initial, err := s.Mentions(t.Context(), staff, "", CommentShared)
+	require.NoError(t, err)
+	require.Equal(t, people, initial, "bare @ returns available people without broadening access")
 	for _, person := range people {
 		require.NotEmpty(t, person.Email)
 		require.NotEqual(t, "outsider", person.ID)
@@ -91,6 +95,9 @@ func TestCommentMentionsRespectAudienceAndDirectory(t *testing.T) {
 	people, err = s.Mentions(t.Context(), recipient, "Person", CommentShared)
 	require.NoError(t, err)
 	require.Len(t, people, 1, "item access does not expose the client directory")
+	initial, err = s.Mentions(t.Context(), recipient, "", CommentShared)
+	require.NoError(t, err)
+	require.Equal(t, people, initial, "bare @ must not expose the client directory")
 	require.Equal(t, "recipient", people[0].ID)
 	require.Empty(t, people[0].Email)
 	_, err = s.Create(t.Context(), staff, CommentInput{Body: "Hello", Visibility: CommentTeam}, "private-author")
@@ -116,4 +123,23 @@ func TestCommentMentionsRespectAudienceAndDirectory(t *testing.T) {
 	require.ErrorIs(t, err, ErrCommentMention)
 	_, err = s.Mentions(t.Context(), recipient, "Person", CommentShared)
 	require.ErrorIs(t, err, gorm.ErrRecordNotFound)
+}
+
+func TestCommentMentionInitialSuggestionsAreBoundedAndTenantScoped(t *testing.T) {
+	f, s := commentFixture(t)
+	for i := range 12 {
+		require.NoError(t, f.db.Create(&models.User{
+			ID: fmt.Sprintf("mention-admin-%02d", i), TenantID: "tenant",
+			Name: fmt.Sprintf("Admin %02d", i), Email: fmt.Sprintf("mention-%02d@example.test", i), Role: "admin",
+		}).Error)
+	}
+	require.NoError(t, f.db.Create(&models.User{
+		ID: "foreign-person", TenantID: "foreign", Name: "A Foreign person", Email: "foreign@example.test", Role: "admin",
+	}).Error)
+	people, err := s.Mentions(t.Context(), f.req("admin", "file", AccessRead), "", CommentTeam)
+	require.NoError(t, err)
+	require.Len(t, people, 8)
+	for _, person := range people {
+		require.NotEqual(t, "foreign-person", person.ID)
+	}
 }

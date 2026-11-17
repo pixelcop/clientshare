@@ -84,9 +84,6 @@ func (s *FileCommentService) Mentions(ctx context.Context, req AccessRequest, se
 	}
 	result := []CommentMention{}
 	search = strings.TrimSpace(search)
-	if search == "" {
-		return result, nil
-	}
 	if utf8.RuneCountInString(search) > 200 {
 		return nil, ErrCommentInput
 	}

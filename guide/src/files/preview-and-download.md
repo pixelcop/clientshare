@@ -60,8 +60,8 @@ posting or saving an edit. Select it again to return to editing. Editing always
 opens the original Markdown, not the rendered HTML.
 Raw HTML is not rendered; images appear as alt text.
 
-Type `@` followed by a name and choose a suggestion to mention someone. Use the
-arrow keys and Enter, or select a name. Suggestions include only people
+Type `@` to open the mention dropdown, then type a name to narrow the suggestions.
+Use the arrow keys and Enter, or select a name. Suggestions include only people
 available to you who can read the file and the chosen audience; team notes
 suggest staff only. Mentions do not grant access or send notifications.
 - Comments store Markdown source, up to 4,000 characters. They belong to the file, not
