@@ -53,6 +53,16 @@ on that file.
 - **Team-only notes** are visible only to staff who can read that file. Staff
   drafts start with **Team-only note** checked; uncheck it to post a shared
   comment. The checkbox title explains who can read the note.
+
+Comments support simple Markdown: emphasis, lists, links, quotes, and code.
+Use **Write** and **Preview** to check formatting before posting or saving an
+edit. Editing always opens the original Markdown, not the rendered HTML.
+Raw HTML is not rendered; images appear as alt text.
+
+Type `@` followed by a name and choose a suggestion to mention someone. Use the
+arrow keys and Enter, or select a name. Suggestions include only people
+available to you who can read the file and the chosen audience; team notes
+suggest staff only. Mentions do not grant access or send notifications.
 - Comments are plain text, up to 4,000 characters. They belong to the file, not
   to a PDF page, annotation, or folder.
 - Anonymous secure-link sessions cannot view or post comments. Sign in through

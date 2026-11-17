@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import axios from 'axios';
-import { Button, Checkbox, Textarea } from 'openvue';
+import { Button, Checkbox } from 'openvue';
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 
+import CommentBody from '@/components/CommentBody.vue';
+import CommentEditor from '@/components/CommentEditor.vue';
 import FileCommentCard from '@/components/FileCommentCard.vue';
 import { useFileComments } from '@/composables/useFileComments';
 import { useAuthStore } from '@/stores/auth';
@@ -141,7 +143,7 @@ async function send() {
   if (!draft.value.trim() || length.value > 4000 || teamDraftUnavailable.value) {
     return;
   }
-  if (await post(draft.value.trim(), visibility.value, draftKey.value)) {
+  if (await post(draft.value, visibility.value, draftKey.value)) {
     draft.value = '';
     composerOpen.value = false;
     emit('changed');
@@ -163,7 +165,7 @@ async function saveEdit() {
   if (!editing.value || !editBody.value.trim() || editLength.value > 4000) {
     return;
   }
-  if (await edit(editing.value, editBody.value.trim())) {
+  if (await edit(editing.value, editBody.value)) {
     editing.value = null;
     emit('changed');
     closeHistory();
@@ -223,15 +225,14 @@ onBeforeUnmount(closeHistory);
               <label :for="`${composerId}-edit`"
                 >Edit {{ comment.visibility === 'team' ? 'team note' : 'shared comment' }}</label
               >
-              <Textarea
+              <CommentEditor
                 :id="`${composerId}-edit`"
                 v-model="editBody"
-                rows="4"
-                fluid
-                :maxlength="8000"
+                :fileId="fileId"
+                :sessionKey="sessionKey"
+                :visibility="comment.visibility"
+                :rows="4"
                 :disabled="saving"
-                required
-                :invalid="editLength > 4000"
               />
               <small>{{ editLength }}/4000 · Audience stays unchanged</small>
               <div class="comment-actions">
@@ -252,9 +253,13 @@ onBeforeUnmount(closeHistory);
                 />
               </div>
             </form>
-            <p v-else class="comment-body" :class="{ removed: comment.deleted_at }">
-              {{ comment.deleted_at ? 'Comment removed' : comment.body }}
-            </p>
+            <p v-else-if="comment.deleted_at" class="comment-body removed">Comment removed</p>
+            <CommentBody
+              v-else
+              class="comment-body"
+              :body="comment.body"
+              :html="comment.body_html"
+            />
             <div
               v-if="removing === comment.id"
               class="comment-confirm"
@@ -293,9 +298,15 @@ onBeforeUnmount(closeHistory);
                     >Version {{ revision.version }} · {{ revision.action }} ·
                     {{ date(revision.created_at) }}</small
                   >
-                  <p class="comment-body">
-                    {{ revision.action === 'removed' ? 'Comment removed' : revision.body }}
+                  <p v-if="revision.action === 'removed'" class="comment-body removed">
+                    Comment removed
                   </p>
+                  <CommentBody
+                    v-else
+                    class="comment-body"
+                    :body="revision.body"
+                    :html="revision.body_html"
+                  />
                 </li>
               </ol>
               <Button
@@ -362,18 +373,15 @@ onBeforeUnmount(closeHistory);
             "
           />
         </p>
-        <Textarea
+        <CommentEditor
           :id="composerId"
           v-model="draft"
-          rows="3"
-          fluid
-          :maxlength="8000"
-          required
+          :fileId="fileId"
+          :sessionKey="sessionKey"
+          :visibility="visibility"
           :disabled="saving"
           :readonly="teamDraftUnavailable"
-          :invalid="length > 4000"
-          :aria-describedby="`${composerId}-length`"
-          placeholder="Write about this document…"
+          :describedby="`${composerId}-length`"
         />
         <label
           v-if="canInternal"
@@ -447,7 +455,6 @@ ol {
   margin-bottom: 12px;
 }
 .comment-body {
-  white-space: pre-wrap;
   overflow-wrap: anywhere;
   font-size: 14px;
   line-height: 1.6;
