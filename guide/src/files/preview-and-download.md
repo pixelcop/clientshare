@@ -35,3 +35,31 @@ shown. Open the downloaded ZIP on your device to access its contents. Large fold
 - **Expired link:** ask the sender for a replacement link.
 
 Downloading creates a copy on your device. Later changes to the portal document or link do not update or remove that copy.
+
+## Discuss a file
+
+Open a file and select **Comments**. On a wide screen, the conversation appears
+beside the preview; on a narrow screen, close the conversation to return to the
+document. Closing the panel keeps your draft while you remain on that file.
+
+- **Shared comments** are visible to signed-in people who can read the file,
+  including people subsequently given access. Reading permission also allows
+  these signed-in readers to comment; it does not allow them to edit the file.
+- **Team-only notes** are visible only to staff who can read that file. Staff
+  drafts start as team-only; choose **Shared with file readers** to post a shared
+  comment. Check the audience before posting.
+- Comments are plain text, up to 4,000 characters. They belong to the file, not
+  to a PDF page, annotation, or folder.
+- Anonymous secure-link sessions cannot view or post comments. Sign in through
+  your own account with file access to join the conversation.
+
+You can edit or remove your own comments. An edit cannot change the audience;
+post a new comment if you need a different audience. Removed comments leave a
+placeholder in the conversation. **History** lets you review your own earlier
+versions, including removed text, while you still have the required access.
+Other readers cannot browse your revision history.
+
+Comments do not send email notifications or create activity-feed notifications.
+Use **Refresh comments** to see new messages. Leaving the file discards an unsent
+draft. If access is removed or expires, the conversation and its history become
+unavailable to that person.
