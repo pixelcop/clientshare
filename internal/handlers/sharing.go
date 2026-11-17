@@ -12,6 +12,7 @@ import (
 // RegisterSharingReadRoutes exposes authorized discovery and management views.
 // Recipient navigation and management use distinct capability checks.
 func RegisterSharingReadRoutes(router fiber.Router, db *gorm.DB, baseURL string) {
+	RegisterRecipientRoutes(router, db)
 	handler := &SharingHandler{service: &services.SharingService{DB: db}, baseURL: baseURL}
 	router.Get("/shared-with-me", middleware.AuthRequired, sharingResponse(handler.SharedWithMe))
 	router.Get("/files/:id/access", middleware.AuthRequired, sharingResponse(handler.ItemAccess))
