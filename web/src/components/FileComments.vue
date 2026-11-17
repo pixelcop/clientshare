@@ -360,24 +360,27 @@ onBeforeUnmount(closeHistory);
             :label="visibility === 'team' ? 'Add a team note' : 'Add a shared comment'"
             :disabled="saving"
             :readonly="teamDraftUnavailable"
-          />
-          <label
-            v-if="canInternal"
-            :for="`${composerId}-team`"
-            class="team-note-toggle"
-            :title="teamNoteTitle"
           >
-            <Checkbox
-              v-model="visibility"
-              binary
-              trueValue="team"
-              falseValue="shared"
-              :inputId="`${composerId}-team`"
-              :disabled="saving"
-              :pt="{ input: { title: teamNoteTitle } }"
-            />
-            <span>Team-only note</span>
-          </label>
+            <template #metadata>
+              <label
+                v-if="canInternal"
+                :for="`${composerId}-team`"
+                class="team-note-toggle"
+                :title="teamNoteTitle"
+              >
+                <Checkbox
+                  v-model="visibility"
+                  binary
+                  trueValue="team"
+                  falseValue="shared"
+                  :inputId="`${composerId}-team`"
+                  :disabled="saving"
+                  :pt="{ input: { title: teamNoteTitle } }"
+                />
+                <span>Team-only note</span>
+              </label>
+            </template>
+          </CommentEditor>
           <div class="composer-actions">
             <Button
               type="button"
@@ -453,12 +456,11 @@ ol {
   gap: 8px;
   padding-block: 4px;
 }
-.comment-composer > .team-note-toggle {
+.team-note-toggle {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 40px;
-  padding-block: 8px;
+  min-height: 24px;
   font-size: 13px;
   font-weight: 400;
   cursor: pointer;

@@ -208,43 +208,51 @@ function keydown(event: KeyboardEvent) {
         @click="preview ? write() : showPreview()"
       />
     </div>
-    <div
-      v-if="preview"
-      :id="`${id}-preview`"
-      class="markdown-preview"
-      aria-label="Comment preview"
-      :aria-busy="busy"
-      role="region"
-      tabindex="0"
-    >
-      <p v-if="busy" role="status">Loading preview…</p>
-      <p v-else-if="error" role="alert">{{ error }}</p>
-      <p v-else-if="!body.trim()">Nothing to preview.</p>
-      <CommentBody v-else :body="body" :html="html" />
+    <div class="editor-surface">
+      <!-- Keep the textarea mounted and in flow so native resizing survives
+           preview toggles. The preview fills exactly the same box. -->
+      <Textarea
+        :id="id"
+        v-model="body"
+        :rows="rows || 3"
+        fluid
+        :maxlength="8000"
+        :disabled="disabled"
+        :readonly="readonly"
+        :invalid="Array.from(body).length > 4000"
+        :style="{ visibility: preview ? 'hidden' : undefined }"
+        :aria-hidden="preview || undefined"
+        :aria-describedby="`${id}-length`"
+        :aria-controls="people.length ? `${id}-mentions` : undefined"
+        :aria-activedescendant="people.length ? `${id}-mention-${selected}` : undefined"
+        aria-autocomplete="list"
+        placeholder="Write Markdown · type @name to mention"
+        @input="findMention"
+        @click="findMention"
+        @keyup.left="findMention"
+        @keyup.right="findMention"
+        @keydown="keydown"
+        @blur="clearMentions"
+      />
+      <div
+        v-if="preview"
+        :id="`${id}-preview`"
+        class="markdown-preview"
+        aria-label="Comment preview"
+        :aria-busy="busy"
+        role="region"
+        tabindex="0"
+      >
+        <p v-if="busy" role="status">Loading preview…</p>
+        <p v-else-if="error" role="alert">{{ error }}</p>
+        <p v-else-if="!body.trim()">Nothing to preview.</p>
+        <CommentBody v-else :body="body" :html="html" />
+      </div>
     </div>
-    <Textarea
-      v-else
-      :id="id"
-      v-model="body"
-      :rows="rows || 3"
-      fluid
-      :maxlength="8000"
-      :disabled="disabled"
-      :readonly="readonly"
-      :invalid="Array.from(body).length > 4000"
-      :aria-describedby="`${id}-length`"
-      :aria-controls="people.length ? `${id}-mentions` : undefined"
-      :aria-activedescendant="people.length ? `${id}-mention-${selected}` : undefined"
-      aria-autocomplete="list"
-      placeholder="Write Markdown · type @name to mention"
-      @input="findMention"
-      @click="findMention"
-      @keyup.left="findMention"
-      @keyup.right="findMention"
-      @keydown="keydown"
-      @blur="clearMentions"
-    />
-    <small :id="`${id}-length`" class="editor-length">{{ Array.from(body).length }}/4000</small>
+    <div class="editor-meta">
+      <slot name="metadata" />
+      <small :id="`${id}-length`" class="editor-length">{{ Array.from(body).length }}/4000</small>
+    </div>
     <ul
       v-if="people.length"
       :id="`${id}-mentions`"
@@ -295,17 +303,24 @@ function keydown(event: KeyboardEvent) {
 }
 .editor-length {
   display: block;
-  margin-top: 4px;
+  margin-inline-start: auto;
   text-align: end;
   font-variant-numeric: tabular-nums;
+}
+.editor-meta {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 4px;
 }
 .mention-options button:focus-visible {
   outline: 2px solid var(--p-primary-color);
   outline-offset: 2px;
 }
 .markdown-preview {
-  min-height: 100px;
-  max-height: 180px;
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
   overflow: auto;
   padding: 10px;
   border: 1px solid var(--p-content-border-color);
@@ -316,8 +331,13 @@ function keydown(event: KeyboardEvent) {
   font-size: 13px;
 }
 textarea {
+  display: block;
   resize: vertical;
   max-height: 180px;
+}
+.editor-surface {
+  position: relative;
+  min-width: 0;
 }
 .mention-options {
   list-style: none;

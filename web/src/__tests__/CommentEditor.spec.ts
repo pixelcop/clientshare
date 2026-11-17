@@ -57,7 +57,8 @@ describe('Markdown comments editor', () => {
       expect.any(Object),
     );
     expect(wrapper.get('.markdown-preview strong').text()).toBe('Ready');
-    expect(wrapper.find('textarea').exists()).toBe(false);
+    expect(wrapper.get('textarea').attributes('aria-hidden')).toBe('true');
+    expect(wrapper.get('textarea').attributes('style')).toContain('visibility: hidden');
     expect(wrapper.get('.preview-toggle').attributes('aria-pressed')).toBe('true');
     await wrapper.get('.preview-toggle').trigger('click');
     expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe(
@@ -127,10 +128,37 @@ describe('Markdown comments editor', () => {
     expect(wrapper.get('.preview-toggle').attributes('disabled')).toBeDefined();
     expect(wrapper.find('.editor-modes').exists()).toBe(false);
     expect(wrapper.get('textarea').attributes('aria-describedby')).toBe('editor-length');
-    expect(wrapper.get('textarea').element.nextElementSibling).toBe(
-      wrapper.get('.editor-length').element,
+    expect(wrapper.get('.editor-surface').element.nextElementSibling).toBe(
+      wrapper.get('.editor-meta').element,
     );
     expect(wrapper.get('.editor-length').text()).toBe('4001/4000');
+    wrapper.unmount();
+  });
+
+  it('keeps the same resized textarea through loading, rendered preview, and editing', async () => {
+    let resolve!: (result: unknown) => void;
+    vi.spyOn(axios, 'post').mockImplementation(
+      () =>
+        new Promise((done) => {
+          resolve = done;
+        }),
+    );
+    const wrapper = render();
+    const input = wrapper.get('textarea').element as HTMLTextAreaElement;
+    input.style.height = '170px';
+    await wrapper.get('.preview-toggle').trigger('click');
+    expect(wrapper.get('textarea').element).toBe(input);
+    expect(input.style.height).toBe('170px');
+    expect(wrapper.get('.markdown-preview').text()).toContain('Loading preview');
+    resolve({ data: { body_html: '<p><strong>Ready</strong></p>' } });
+    await flushPromises();
+    expect(input.style.height).toBe('170px');
+    await wrapper.get('.preview-toggle').trigger('click');
+    expect(wrapper.get('textarea').element).toBe(input);
+    expect(input.style.height).toBe('170px');
+    expect(input.style.visibility).toBe('');
+    expect(input.value).toBe('**Ready**');
+    expect(document.activeElement).toBe(input);
     wrapper.unmount();
   });
   it('cancels suggestions on Escape and discards stale session results', async () => {
