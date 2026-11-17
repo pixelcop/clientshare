@@ -51,8 +51,8 @@ on that file.
   including people subsequently given access. Reading permission also allows
   these signed-in readers to comment; it does not allow them to edit the file.
 - **Team-only notes** are visible only to staff who can read that file. Staff
-  drafts start as team-only; choose **Shared with file readers** to post a shared
-  comment. Check the audience before posting.
+  drafts start with **Team-only note** checked; uncheck it to post a shared
+  comment. The checkbox title explains who can read the note.
 - Comments are plain text, up to 4,000 characters. They belong to the file, not
   to a PDF page, annotation, or folder.
 - Anonymous secure-link sessions cannot view or post comments. Sign in through

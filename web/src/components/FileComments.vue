@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import axios from 'axios';
-import { Button, Select, Textarea } from 'openvue';
+import { Button, Checkbox, Textarea } from 'openvue';
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 
 import FileCommentCard from '@/components/FileCommentCard.vue';
@@ -46,10 +46,8 @@ const editLength = computed(() => Array.from(editBody.value).length);
 const teamDraftUnavailable = computed(
   () => ready.value && !canInternal.value && visibility.value === 'team',
 );
-const audiences = [
-  { label: 'Team only', value: 'team' },
-  { label: 'Shared with file readers', value: 'shared' },
-];
+const teamNoteTitle =
+  'Only staff with access to this file can read team-only notes. Uncheck to share with signed-in file readers.';
 let historyGeneration = 0;
 function closeHistory() {
   historyGeneration += 1;
@@ -351,23 +349,6 @@ onBeforeUnmount(closeHistory);
         <label :for="composerId">{{
           visibility === 'team' ? 'Add a team note' : 'Add a shared comment'
         }}</label>
-        <Select
-          v-if="canInternal"
-          v-model="visibility"
-          :options="audiences"
-          optionLabel="label"
-          optionValue="value"
-          ariaLabel="Comment audience"
-          :disabled="saving"
-          fluid
-        />
-        <p :id="`${composerId}-audience`" class="audience-help">
-          {{
-            visibility === 'team'
-              ? 'Only staff with access to this file can see this note.'
-              : 'Visible to signed-in people with access to this file.'
-          }}
-        </p>
         <p v-if="teamDraftUnavailable" role="status" class="audience-help">
           Team-note access changed. Copy your draft, or clear it before writing a shared comment.
           <Button
@@ -391,9 +372,26 @@ onBeforeUnmount(closeHistory);
           :disabled="saving"
           :readonly="teamDraftUnavailable"
           :invalid="length > 4000"
-          :aria-describedby="`${composerId}-audience ${composerId}-length`"
+          :aria-describedby="`${composerId}-length`"
           placeholder="Write about this document…"
         />
+        <label
+          v-if="canInternal"
+          :for="`${composerId}-team`"
+          class="team-note-toggle"
+          :title="teamNoteTitle"
+        >
+          <Checkbox
+            v-model="visibility"
+            binary
+            trueValue="team"
+            falseValue="shared"
+            :inputId="`${composerId}-team`"
+            :disabled="saving"
+            :pt="{ input: { title: teamNoteTitle } }"
+          />
+          <span>Team-only note</span>
+        </label>
         <div class="composer-actions">
           <small :id="`${composerId}-length`">{{ length }}/4000</small>
           <Button
@@ -485,6 +483,16 @@ ol {
 .comment-edit > label {
   font-size: 14px;
   font-weight: 500;
+}
+.comment-composer > .team-note-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding-block: 8px;
+  font-size: 13px;
+  font-weight: 400;
+  cursor: pointer;
 }
 .audience-help {
   margin: 0;

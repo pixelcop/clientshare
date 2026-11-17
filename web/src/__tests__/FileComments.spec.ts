@@ -1,6 +1,6 @@
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
 import axios from 'axios';
-import { Select } from 'openvue';
+import { Checkbox } from 'openvue';
 import OpenVue from 'openvue/config';
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -86,8 +86,11 @@ describe('file conversation', () => {
     expect(wrapper.text()).toContain('Shared');
     expect(wrapper.text()).toContain('<script>alert(1)</script>');
     expect(wrapper.find('script').exists()).toBe(false);
-    expect(wrapper.findComponent(Select).props('modelValue')).toBe('team');
-    expect(wrapper.text()).toContain('Only staff with access to this file');
+    expect(wrapper.findComponent(Checkbox).props('modelValue')).toBe('team');
+    expect(wrapper.get('input[type="checkbox"]').attributes('title')).toContain(
+      'Only staff with access to this file',
+    );
+    expect(wrapper.text()).not.toContain('Only staff with access to this file');
     expect(wrapper.text()).toContain('No email notifications');
     wrapper.unmount();
   });
@@ -126,12 +129,11 @@ describe('file conversation', () => {
       data: page([{ ...comment, can_edit: false, can_view_history: false }], false),
     });
     const wrapper = await render();
-    expect(wrapper.findComponent(Select).exists()).toBe(false);
+    expect(wrapper.findComponent(Checkbox).exists()).toBe(false);
     expect(wrapper.find('[aria-label="Edit comment"]').exists()).toBe(false);
     expect(wrapper.find('[aria-label="Comment actions"]').exists()).toBe(false);
     expect(wrapper.text()).not.toContain('History');
     expect(wrapper.text()).toContain('Add a shared comment');
-    expect(wrapper.text()).toContain('Visible to signed-in people with access to this file');
     wrapper.unmount();
   });
 
@@ -335,7 +337,7 @@ describe('file conversation', () => {
     await wrapper.get('.earlier-comments').trigger('click');
     await flushPromises();
     expect(wrapper.text()).not.toContain('Previously visible team note');
-    expect(wrapper.findComponent(Select).exists()).toBe(false);
+    expect(wrapper.findComponent(Checkbox).exists()).toBe(false);
     wrapper.unmount();
   });
 
@@ -355,6 +357,37 @@ describe('file conversation', () => {
     await toggle.trigger('click');
     expect((wrapper.get('.comment-composer textarea').element as HTMLTextAreaElement).value).toBe(
       'Keep this draft',
+    );
+    wrapper.unmount();
+  });
+
+  it('uses the team-only checkbox to choose the audience without changing the draft', async () => {
+    const post = vi.spyOn(axios, 'post').mockResolvedValue({
+      data: { ...comment, id: '02', body: 'Ready for the client' },
+    });
+    const wrapper = await render();
+    const checkbox = wrapper.get('input[type="checkbox"]');
+    expect((checkbox.element as HTMLInputElement).checked).toBe(true);
+    await wrapper.get('.comment-composer textarea').setValue('Ready for the client');
+    await checkbox.setValue(false);
+    expect(wrapper.text()).toContain('Post comment');
+    expect(wrapper.findComponent(Checkbox).props('modelValue')).toBe('shared');
+    expect((wrapper.get('.comment-composer textarea').element as HTMLTextAreaElement).value).toBe(
+      'Ready for the client',
+    );
+    await checkbox.setValue(true);
+    expect(wrapper.text()).toContain('Post team note');
+    expect(wrapper.findComponent(Checkbox).props('modelValue')).toBe('team');
+    await checkbox.setValue(false);
+    await wrapper.get('.comment-composer').trigger('submit');
+    await flushPromises();
+    expect(post).toHaveBeenCalledWith(
+      '/api/files/file/comments',
+      {
+        body: 'Ready for the client',
+        visibility: 'shared',
+      },
+      expect.any(Object),
     );
     wrapper.unmount();
   });
