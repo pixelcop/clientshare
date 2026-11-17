@@ -43,8 +43,8 @@ On wide screens, files open with the conversation beside the preview. Select
 screens, comments start closed; the same button switches between the conversation
 and the document. The button shows a count and uses color when there are comments you can
 read. Counts exclude removed comments and team notes you are not allowed to see.
-Select **Add comment** to open the editor. **Hide editor** collapses it without
-discarding your draft. Closing the panel also keeps your draft while you remain
+Select **Add comment** below the conversation to open the editor. **Cancel** closes
+it without discarding your draft. Closing the panel also keeps your draft while you remain
 on that file.
 
 - **Shared comments** are visible to signed-in people who can read the file,
@@ -55,15 +55,16 @@ on that file.
   comment. The checkbox title explains who can read the note.
 
 Comments support simple Markdown: emphasis, lists, links, quotes, and code.
-Use **Write** and **Preview** to check formatting before posting or saving an
-edit. Editing always opens the original Markdown, not the rendered HTML.
+Use the eye-icon **Preview** button above the editor to check formatting before
+posting or saving an edit. Select it again to return to editing. Editing always
+opens the original Markdown, not the rendered HTML.
 Raw HTML is not rendered; images appear as alt text.
 
 Type `@` followed by a name and choose a suggestion to mention someone. Use the
 arrow keys and Enter, or select a name. Suggestions include only people
 available to you who can read the file and the chosen audience; team notes
 suggest staff only. Mentions do not grant access or send notifications.
-- Comments are plain text, up to 4,000 characters. They belong to the file, not
+- Comments store Markdown source, up to 4,000 characters. They belong to the file, not
   to a PDF page, annotation, or folder.
 - Anonymous secure-link sessions cannot view or post comments. Sign in through
   your own account with file access to join the conversation.
@@ -76,6 +77,6 @@ versions, including removed text, while you still have the required access.
 Other readers cannot browse your revision history.
 
 Comments do not send email notifications or create activity-feed notifications.
-Use **Refresh comments** to see new messages. Leaving the file discards an unsent
+Reopen the file to see new messages. Leaving the file discards an unsent
 draft. If access is removed or expires, the conversation and its history become
 unavailable to that person.

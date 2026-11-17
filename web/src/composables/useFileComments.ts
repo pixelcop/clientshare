@@ -44,7 +44,8 @@ export function useFileComments(context: () => { fileId: string; sessionKey: str
       reset();
       error.value = 'This conversation is unavailable. File access may have changed.';
     } else if (axios.isAxiosError(cause) && cause.response?.status === 409) {
-      error.value = 'This comment changed elsewhere. Cancel any edit, refresh, and try again.';
+      error.value =
+        'This comment changed elsewhere. Cancel the edit, reopen the file, and try again.';
     } else if (axios.isAxiosError(cause) && cause.response?.status === 400) {
       error.value =
         'Check the comment length and mentions. Mentioned people must be available for this audience. Your draft has been kept.';

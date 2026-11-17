@@ -46,7 +46,7 @@ describe('Markdown comments editor', () => {
       .spyOn(axios, 'post')
       .mockResolvedValue({ data: { body_html: '<p><strong>Ready</strong></p>' } });
     const wrapper = render('    code\n\n**Ready**\n');
-    await wrapper.get('button[aria-pressed="false"]').trigger('click');
+    await wrapper.get('.preview-toggle').trigger('click');
     await flushPromises();
     expect(post).toHaveBeenCalledWith(
       '/api/files/file/comments/preview',
@@ -58,7 +58,8 @@ describe('Markdown comments editor', () => {
     );
     expect(wrapper.get('.markdown-preview strong').text()).toBe('Ready');
     expect(wrapper.find('textarea').exists()).toBe(false);
-    await wrapper.get('button[aria-pressed="false"]').trigger('click');
+    expect(wrapper.get('.preview-toggle').attributes('aria-pressed')).toBe('true');
+    await wrapper.get('.preview-toggle').trigger('click');
     expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe(
       '    code\n\n**Ready**\n',
     );
@@ -67,15 +68,15 @@ describe('Markdown comments editor', () => {
   it('has empty, loading and failed preview states without losing the draft', async () => {
     const wrapper = render('');
     const post = vi.spyOn(axios, 'post').mockRejectedValue(new Error('offline'));
-    await wrapper.findAll('button')[1].trigger('click');
+    await wrapper.get('.preview-toggle').trigger('click');
     expect(wrapper.text()).toContain('Nothing to preview');
     expect(post).not.toHaveBeenCalled();
-    await wrapper.findAll('button')[0].trigger('click');
+    await wrapper.get('.preview-toggle').trigger('click');
     await wrapper.get('textarea').setValue('Keep this');
-    await wrapper.findAll('button')[1].trigger('click');
+    await wrapper.get('.preview-toggle').trigger('click');
     await flushPromises();
     expect(wrapper.get('[role="alert"]').text()).toContain('Preview unavailable');
-    await wrapper.findAll('button')[0].trigger('click');
+    await wrapper.get('.preview-toggle').trigger('click');
     expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe('Keep this');
     wrapper.unmount();
   });
@@ -88,7 +89,7 @@ describe('Markdown comments editor', () => {
         }),
     );
     const wrapper = render();
-    await wrapper.findAll('button')[1].trigger('click');
+    await wrapper.get('.preview-toggle').trigger('click');
     expect(wrapper.text()).toContain('Loading preview');
     await wrapper.setProps({ visibility: 'team' });
     resolve({ data: { body_html: '<p>Old shared content</p>' } });
@@ -113,6 +114,23 @@ describe('Markdown comments editor', () => {
     await wrapper.get('textarea').trigger('keydown', { key: 'Enter' });
     expect(wrapper.props('modelValue')).toBe('Hello [@Chetan](mention:user-id) ');
     expect(wrapper.find('[role="listbox"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('has one eye-icon Preview control beside the label and a right-aligned count under the input', async () => {
+    const wrapper = render('界'.repeat(4001));
+    await wrapper.setProps({ label: 'Add a shared comment' });
+    expect(wrapper.get('.editor-heading label').text()).toBe('Add a shared comment');
+    expect(wrapper.findAll('button')).toHaveLength(1);
+    expect(wrapper.get('.preview-toggle').text()).toBe('Preview');
+    expect(wrapper.get('.preview-toggle .oi-eye').exists()).toBe(true);
+    expect(wrapper.get('.preview-toggle').attributes('disabled')).toBeDefined();
+    expect(wrapper.find('.editor-modes').exists()).toBe(false);
+    expect(wrapper.get('textarea').attributes('aria-describedby')).toBe('editor-length');
+    expect(wrapper.get('textarea').element.nextElementSibling).toBe(
+      wrapper.get('.editor-length').element,
+    );
+    expect(wrapper.get('.editor-length').text()).toBe('4001/4000');
     wrapper.unmount();
   });
   it('cancels suggestions on Escape and discards stale session results', async () => {

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import axios from 'axios';
-import { Textarea } from 'openvue';
+import { Button, Textarea } from 'openvue';
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue';
 
 import CommentBody from '@/components/CommentBody.vue';
@@ -12,7 +12,7 @@ const props = defineProps<{
   visibility: string;
   disabled?: boolean;
   readonly?: boolean;
-  describedby?: string;
+  label?: string;
   rows?: number;
 }>();
 const body = defineModel<string>({ required: true });
@@ -76,7 +76,9 @@ async function showPreview() {
   preview.value = true;
   html.value = '';
   error.value = '';
-  if (!body.value.trim()) {return;}
+  if (!body.value.trim()) {
+    return;
+  }
   const current = ++generation;
   controller?.abort();
   controller = new AbortController();
@@ -87,13 +89,17 @@ async function showPreview() {
       { body: body.value, visibility: props.visibility },
       { signal: controller.signal },
     );
-    if (current === generation) {html.value = data.body_html;}
+    if (current === generation) {
+      html.value = data.body_html;
+    }
   } catch (cause) {
     if (current === generation && !axios.isCancel(cause)) {
-      error.value = 'Preview unavailable. Return to Write to keep editing, or try Preview again.';
+      error.value = 'Preview unavailable. Turn off Preview to keep editing, or try again.';
     }
   } finally {
-    if (current === generation) {busy.value = false;}
+    if (current === generation) {
+      busy.value = false;
+    }
   }
 }
 async function write() {
@@ -108,13 +114,18 @@ function findMention(event: Event) {
     props.readonly ||
     props.disabled ||
     (event instanceof InputEvent && event.isComposing)
-  )
-    {return;}
+  ) {
+    return;
+  }
   const input = event.target as HTMLTextAreaElement;
-  if (input.selectionStart !== input.selectionEnd) {return;}
+  if (input.selectionStart !== input.selectionEnd) {
+    return;
+  }
   const end = input.selectionStart;
   const match = /(?:^|[\s(])@([^\s@()[\]`]{1,80})$/u.exec(input.value.slice(0, end));
-  if (!match) {return;}
+  if (!match) {
+    return;
+  }
   range = { start: end - match[1]!.length - 1, end, query: match[1]! };
   const current = mentionGeneration;
   const query = range.query;
@@ -132,15 +143,20 @@ function findMention(event: Event) {
         mentionError.value = data.length ? '' : 'No people available for this mention.';
       }
     } catch (cause) {
-      if (current === mentionGeneration && !axios.isCancel(cause))
-        {mentionError.value = 'Mention search unavailable. Try typing the name again.';}
+      if (current === mentionGeneration && !axios.isCancel(cause)) {
+        mentionError.value = 'Mention search unavailable. Try typing the name again.';
+      }
     } finally {
-      if (current === mentionGeneration) {searching.value = false;}
+      if (current === mentionGeneration) {
+        searching.value = false;
+      }
     }
   }, 200);
 }
 async function choose(person: Person) {
-  if (!range) {return;}
+  if (!range) {
+    return;
+  }
   const label = person.name.replace(/[\\`*_[\]<>]/g, '\\$&').replace(/[\r\n]/g, ' ');
   const insertion = `[@${label}](mention:${person.id}) `;
   const cursor = range.start + insertion.length;
@@ -152,7 +168,9 @@ async function choose(person: Person) {
   input?.setSelectionRange(cursor, cursor);
 }
 function keydown(event: KeyboardEvent) {
-  if (!range || event.isComposing) {return;}
+  if (!range || event.isComposing) {
+    return;
+  }
   if (event.key === 'Escape') {
     event.preventDefault();
     event.stopPropagation();
@@ -160,32 +178,39 @@ function keydown(event: KeyboardEvent) {
   } else if (people.value.length && ['ArrowDown', 'ArrowUp', 'Enter'].includes(event.key)) {
     event.preventDefault();
     event.stopPropagation();
-    if (event.key === 'Enter') {void choose(people.value[selected.value]!);}
-    else
-      {selected.value =
+    if (event.key === 'Enter') {
+      void choose(people.value[selected.value]!);
+    } else {
+      selected.value =
         (selected.value + (event.key === 'ArrowDown' ? 1 : -1) + people.value.length) %
-        people.value.length;}
+        people.value.length;
+    }
   }
 }
 </script>
 
 <template>
   <div class="markdown-editor">
-    <div class="editor-modes" role="group" aria-label="Comment editor mode">
-      <button type="button" :aria-pressed="!preview" :disabled="disabled" @click="write">
-        Write
-      </button>
-      <button
+    <div class="editor-heading">
+      <label :for="id">{{ label || 'Comment' }}</label>
+      <Button
         type="button"
+        class="preview-toggle"
+        label="Preview"
+        icon="oi oi-eye"
+        size="small"
+        severity="secondary"
+        variant="text"
+        :title="preview ? 'Return to editing' : 'Preview comment'"
         :aria-pressed="preview"
+        :aria-controls="preview ? `${id}-preview` : id"
         :disabled="disabled || readonly || Array.from(body).length > 4000"
-        @click="showPreview"
-      >
-        Preview
-      </button>
+        @click="preview ? write() : showPreview()"
+      />
     </div>
     <div
       v-if="preview"
+      :id="`${id}-preview`"
       class="markdown-preview"
       aria-label="Comment preview"
       :aria-busy="busy"
@@ -207,7 +232,7 @@ function keydown(event: KeyboardEvent) {
       :disabled="disabled"
       :readonly="readonly"
       :invalid="Array.from(body).length > 4000"
-      :aria-describedby="describedby"
+      :aria-describedby="`${id}-length`"
       :aria-controls="people.length ? `${id}-mentions` : undefined"
       :aria-activedescendant="people.length ? `${id}-mention-${selected}` : undefined"
       aria-autocomplete="list"
@@ -219,6 +244,7 @@ function keydown(event: KeyboardEvent) {
       @keydown="keydown"
       @blur="clearMentions"
     />
+    <small :id="`${id}-length`" class="editor-length">{{ Array.from(body).length }}/4000</small>
     <ul
       v-if="people.length"
       :id="`${id}-mentions`"
@@ -249,32 +275,31 @@ function keydown(event: KeyboardEvent) {
 .markdown-editor {
   min-width: 0;
 }
-.editor-modes {
+.editor-heading {
   display: flex;
-  gap: 4px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   margin-bottom: 8px;
 }
-.editor-modes button {
-  font: inherit;
-  font-size: 13px;
-  color: var(--p-text-muted-color);
-  background: transparent;
-  border: 0;
-  border-bottom: 1px solid transparent;
-  padding: 8px 12px;
+.editor-heading label {
+  font-size: 14px;
+  font-weight: 500;
+}
+.preview-toggle {
+  flex-shrink: 0;
   min-height: 40px;
-  cursor: pointer;
 }
-.editor-modes button[aria-pressed='true'] {
-  color: var(--p-text-color);
-  border-color: var(--p-primary-color);
-  font-weight: 600;
+.preview-toggle[aria-pressed='true'] {
+  background: var(--p-surface-100);
 }
-.editor-modes button:disabled {
-  opacity: 0.6;
-  cursor: default;
+.editor-length {
+  display: block;
+  margin-top: 4px;
+  text-align: end;
+  font-variant-numeric: tabular-nums;
 }
-button:focus-visible {
+.mention-options button:focus-visible {
   outline: 2px solid var(--p-primary-color);
   outline-offset: 2px;
 }

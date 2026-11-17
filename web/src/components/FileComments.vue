@@ -197,9 +197,6 @@ onBeforeUnmount(closeHistory);
   >
     <div ref="list" class="comments-list" :aria-busy="loading">
       <p v-if="loading && !ready" role="status" class="comment-state">Loading conversation…</p>
-      <p v-else-if="ready && !comments.length" class="comment-state">
-        No comments yet. Start a conversation about this file.
-      </p>
       <Button
         v-if="nextCursor"
         label="Load earlier comments"
@@ -222,27 +219,17 @@ onBeforeUnmount(closeHistory);
             @history="showHistory(comment)"
           >
             <form v-if="editing?.id === comment.id" class="comment-edit" @submit.prevent="saveEdit">
-              <label :for="`${composerId}-edit`"
-                >Edit {{ comment.visibility === 'team' ? 'team note' : 'shared comment' }}</label
-              >
               <CommentEditor
                 :id="`${composerId}-edit`"
                 v-model="editBody"
                 :fileId="fileId"
                 :sessionKey="sessionKey"
                 :visibility="comment.visibility"
+                :label="`Edit ${comment.visibility === 'team' ? 'team note' : 'shared comment'}`"
                 :rows="4"
                 :disabled="saving"
               />
-              <small>{{ editLength }}/4000 · Audience stays unchanged</small>
-              <div class="comment-actions">
-                <Button
-                  type="submit"
-                  label="Save edit"
-                  size="small"
-                  :loading="saving"
-                  :disabled="!editBody.trim() || editLength > 4000"
-                />
+              <div class="composer-actions">
                 <Button
                   label="Cancel edit"
                   severity="secondary"
@@ -250,6 +237,13 @@ onBeforeUnmount(closeHistory);
                   size="small"
                   :disabled="saving"
                   @click="editing = null"
+                />
+                <Button
+                  type="submit"
+                  label="Save edit"
+                  size="small"
+                  :loading="saving"
+                  :disabled="!editBody.trim() || editLength > 4000"
                 />
               </div>
             </form>
@@ -322,97 +316,87 @@ onBeforeUnmount(closeHistory);
           </FileCommentCard>
         </li>
       </ol>
-    </div>
-    <p v-if="error" role="alert" class="comment-error">{{ error }}</p>
-    <div class="comment-footer">
-      <div class="comment-toolbar">
+      <p v-if="error" role="alert" class="comment-error">{{ error }}</p>
+      <div class="comment-entry">
         <Button
-          v-if="ready"
+          v-if="ready && !composerOpen && !editing"
           :id="`${composerId}-toggle`"
-          :label="composerOpen ? 'Hide editor' : 'Add comment'"
-          :icon="composerOpen ? 'oi oi-chevron-up' : 'oi oi-plus'"
+          label="Add comment"
+          icon="oi oi-plus"
           severity="secondary"
           variant="text"
           size="small"
           :disabled="saving"
-          :aria-expanded="composerOpen"
+          :aria-expanded="false"
           :aria-controls="`${composerId}-form`"
           @click="toggleComposer"
         />
-        <Button
-          icon="oi oi-refresh"
-          aria-label="Refresh comments"
-          title="Refresh comments"
-          severity="secondary"
-          variant="text"
-          class="comment-refresh"
-          :disabled="loading || saving"
-          @click="load()"
-        />
-      </div>
-      <form
-        v-if="ready && composerOpen"
-        :id="`${composerId}-form`"
-        class="comment-composer"
-        data-sentry-mask
-        @submit.prevent="send"
-      >
-        <label :for="composerId">{{
-          visibility === 'team' ? 'Add a team note' : 'Add a shared comment'
-        }}</label>
-        <p v-if="teamDraftUnavailable" role="status" class="audience-help">
-          Team-note access changed. Copy your draft, or clear it before writing a shared comment.
-          <Button
-            label="Clear team draft"
-            severity="secondary"
-            variant="text"
-            size="small"
-            @click="
-              draft = '';
-              visibility = 'shared';
-            "
-          />
-        </p>
-        <CommentEditor
-          :id="composerId"
-          v-model="draft"
-          :fileId="fileId"
-          :sessionKey="sessionKey"
-          :visibility="visibility"
-          :disabled="saving"
-          :readonly="teamDraftUnavailable"
-          :describedby="`${composerId}-length`"
-        />
-        <label
-          v-if="canInternal"
-          :for="`${composerId}-team`"
-          class="team-note-toggle"
-          :title="teamNoteTitle"
+        <form
+          v-if="ready && composerOpen"
+          :id="`${composerId}-form`"
+          class="comment-composer"
+          data-sentry-mask
+          @submit.prevent="send"
         >
-          <Checkbox
-            v-model="visibility"
-            binary
-            trueValue="team"
-            falseValue="shared"
-            :inputId="`${composerId}-team`"
+          <p v-if="teamDraftUnavailable" role="status" class="audience-help">
+            Team-note access changed. Copy your draft, or clear it before writing a shared comment.
+            <Button
+              label="Clear team draft"
+              severity="secondary"
+              variant="text"
+              size="small"
+              @click="
+                draft = '';
+                visibility = 'shared';
+              "
+            />
+          </p>
+          <CommentEditor
+            :id="composerId"
+            v-model="draft"
+            :fileId="fileId"
+            :sessionKey="sessionKey"
+            :visibility="visibility"
+            :label="visibility === 'team' ? 'Add a team note' : 'Add a shared comment'"
             :disabled="saving"
-            :pt="{ input: { title: teamNoteTitle } }"
+            :readonly="teamDraftUnavailable"
           />
-          <span>Team-only note</span>
-        </label>
-        <div class="composer-actions">
-          <small :id="`${composerId}-length`">{{ length }}/4000</small>
-          <Button
-            type="submit"
-            :label="visibility === 'team' ? 'Post team note' : 'Post comment'"
-            :loading="saving"
-            :disabled="!draft.trim() || length > 4000 || loading || teamDraftUnavailable"
-          />
-        </div>
-        <small class="notification-note"
-          >Comments stay on this file. No email notifications are sent.</small
-        >
-      </form>
+          <label
+            v-if="canInternal"
+            :for="`${composerId}-team`"
+            class="team-note-toggle"
+            :title="teamNoteTitle"
+          >
+            <Checkbox
+              v-model="visibility"
+              binary
+              trueValue="team"
+              falseValue="shared"
+              :inputId="`${composerId}-team`"
+              :disabled="saving"
+              :pt="{ input: { title: teamNoteTitle } }"
+            />
+            <span>Team-only note</span>
+          </label>
+          <div class="composer-actions">
+            <Button
+              type="button"
+              label="Cancel"
+              severity="secondary"
+              variant="text"
+              size="small"
+              :disabled="saving"
+              @click="toggleComposer"
+            />
+            <Button
+              type="submit"
+              :label="visibility === 'team' ? 'Post team note' : 'Post comment'"
+              :loading="saving"
+              :disabled="!draft.trim() || length > 4000 || loading || teamDraftUnavailable"
+            />
+          </div>
+        </form>
+      </div>
     </div>
   </section>
 </template>
@@ -425,16 +409,7 @@ onBeforeUnmount(closeHistory);
   min-height: 0;
   background: var(--p-content-background);
 }
-.comment-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 4px 8px;
-  min-height: 52px;
-}
 .audience-help,
-.notification-note,
 .comment-state,
 .comment-history small {
   color: var(--p-text-muted-color);
@@ -470,26 +445,13 @@ ol {
   align-items: center;
   gap: 4px;
 }
-.comment-refresh {
-  width: 40px;
-  height: 40px;
-  margin-inline-start: auto;
-}
-.comment-footer {
-  border-top: 1px solid var(--p-content-border-color);
-}
-.comment-toolbar :deep(.p-button) {
-  min-height: 40px;
+.comment-entry {
+  margin-top: 12px;
 }
 .comment-composer {
   display: grid;
   gap: 8px;
-  padding: 4px 12px 12px;
-}
-.comment-composer > label,
-.comment-edit > label {
-  font-size: 14px;
-  font-weight: 500;
+  padding-block: 4px;
 }
 .comment-composer > .team-note-toggle {
   display: flex;
@@ -510,15 +472,6 @@ ol {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-}
-.composer-actions small,
-.comment-edit small {
-  color: var(--p-text-muted-color);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-}
-.notification-note {
-  line-height: 1.5;
 }
 .comment-edit {
   display: grid;

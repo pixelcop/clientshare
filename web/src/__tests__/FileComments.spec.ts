@@ -91,7 +91,9 @@ describe('file conversation', () => {
       'Only staff with access to this file',
     );
     expect(wrapper.text()).not.toContain('Only staff with access to this file');
-    expect(wrapper.text()).toContain('No email notifications');
+    expect(wrapper.text()).not.toContain('Comments stay on this file');
+    expect(wrapper.find('[aria-label="Refresh comments"]').exists()).toBe(false);
+    expect(wrapper.text()).not.toContain('Hide editor');
     wrapper.unmount();
   });
 
@@ -211,7 +213,7 @@ describe('file conversation', () => {
     wrapper.unmount();
   });
 
-  it('keeps completed rows visible while refreshing, and prepends older pages', async () => {
+  it('keeps completed rows visible while loading and prepends older pages', async () => {
     vi.mocked(axios.get).mockResolvedValueOnce({ data: page([comment], true, '01') });
     const wrapper = await render();
     const existing = wrapper.get('.comment').element;
@@ -222,14 +224,11 @@ describe('file conversation', () => {
           resolve = done;
         }),
     );
-    await wrapper.get('[aria-label="Refresh comments"]').trigger('click');
+    await wrapper.get('.earlier-comments').trigger('click');
     expect(wrapper.get('.comment').element).toBe(existing);
-    resolve({ data: page([comment], true, '01') });
-    await flushPromises();
-    vi.mocked(axios.get).mockResolvedValueOnce({
+    resolve({
       data: page([{ ...comment, id: '00', body: 'Earlier comment' }]),
     });
-    await wrapper.get('.earlier-comments').trigger('click');
     await flushPromises();
     expect(wrapper.findAll('.comment')[0]?.text()).toContain('Earlier comment');
     expect(axios.get).toHaveBeenLastCalledWith(
@@ -240,6 +239,7 @@ describe('file conversation', () => {
   });
 
   it('clears conversations on revoked access and ignores responses from a previous file', async () => {
+    vi.mocked(axios.get).mockResolvedValueOnce({ data: page([comment], true, '01') });
     const wrapper = await render();
     let resolve!: (value: { data: ReturnType<typeof page> }) => void;
     vi.mocked(axios.get).mockImplementationOnce(
@@ -248,7 +248,7 @@ describe('file conversation', () => {
           resolve = done;
         }),
     );
-    await wrapper.get('[aria-label="Refresh comments"]').trigger('click');
+    await wrapper.get('.earlier-comments').trigger('click');
     vi.mocked(axios.get).mockRejectedValueOnce({ isAxiosError: true, response: { status: 404 } });
     await wrapper.setProps({ fileId: 'other-file' });
     await flushPromises();
@@ -283,10 +283,11 @@ describe('file conversation', () => {
 
   it('never converts a pending team draft into a shared comment after staff access changes', async () => {
     const post = vi.spyOn(axios, 'post');
+    vi.mocked(axios.get).mockResolvedValueOnce({ data: page([comment], true, '01') });
     const wrapper = await render();
     await wrapper.get('.comment-composer textarea').setValue('Private unfinished note');
     vi.mocked(axios.get).mockResolvedValueOnce({ data: page([comment], false) });
-    await wrapper.get('[aria-label="Refresh comments"]').trigger('click');
+    await wrapper.get('.earlier-comments').trigger('click');
     await flushPromises();
     expect(wrapper.text()).toContain('Team-note access changed');
     expect((wrapper.get('.comment-composer textarea').element as HTMLTextAreaElement).value).toBe(
@@ -297,7 +298,8 @@ describe('file conversation', () => {
     wrapper.unmount();
   });
 
-  it('does not let an older refresh overwrite a completed edit', async () => {
+  it('does not let an older page request overwrite a completed edit', async () => {
+    vi.mocked(axios.get).mockResolvedValueOnce({ data: page([comment], true, '01') });
     const wrapper = await render();
     let resolve!: (value: { data: ReturnType<typeof page> }) => void;
     vi.mocked(axios.get).mockImplementationOnce(
@@ -306,7 +308,7 @@ describe('file conversation', () => {
           resolve = done;
         }),
     );
-    await wrapper.get('[aria-label="Refresh comments"]').trigger('click');
+    await wrapper.get('.earlier-comments').trigger('click');
     vi.spyOn(axios, 'put').mockResolvedValue({
       data: { ...comment, body: 'Latest edit', version: 2 },
     });
@@ -352,12 +354,31 @@ describe('file conversation', () => {
     expect(toggle.attributes('aria-expanded')).toBe('false');
     await toggle.trigger('click');
     await wrapper.get('.comment-composer textarea').setValue('Keep this draft');
-    await toggle.trigger('click');
+    await wrapper.get('.comment-composer .composer-actions button').trigger('click');
     expect(wrapper.find('.comment-composer').exists()).toBe(false);
-    await toggle.trigger('click');
+    expect(document.activeElement).toBe(wrapper.get('[id$="-toggle"]').element);
+    await wrapper.get('[id$="-toggle"]').trigger('click');
     expect((wrapper.get('.comment-composer textarea').element as HTMLTextAreaElement).value).toBe(
       'Keep this draft',
     );
+    wrapper.unmount();
+  });
+
+  it('places Add comment and its editor directly after the conversation, including an empty list', async () => {
+    vi.mocked(axios.get).mockResolvedValueOnce({ data: page([]) });
+    const wrapper = await render(false);
+    const list = wrapper.get('.comments-list');
+    expect(list.find('[id$="-toggle"]').exists()).toBe(true);
+    expect(wrapper.find('.comment-footer').exists()).toBe(false);
+    expect(wrapper.find('.comment-toolbar').exists()).toBe(false);
+    expect(wrapper.get('.comment-entry').element.previousElementSibling).toBe(
+      list.get('ol').element,
+    );
+    await wrapper.get('[id$="-toggle"]').trigger('click');
+    expect(wrapper.find('[id$="-toggle"]').exists()).toBe(false);
+    expect(list.find('.comment-composer').exists()).toBe(true);
+    expect(wrapper.get('.editor-heading label').text()).toBe('Add a team note');
+    expect(wrapper.get('.composer-actions button').text()).toBe('Cancel');
     wrapper.unmount();
   });
 

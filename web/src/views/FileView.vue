@@ -532,7 +532,8 @@ h1 {
 .file-state :deep(.p-button) {
   min-height: 44px;
 }
-.file-detail :deep(:focus-visible) {
+.file-folder:focus-visible,
+.file-comments-pane :deep(.file-comments:focus-visible) {
   outline: 2px solid var(--p-primary-color);
   outline-offset: 3px;
 }
