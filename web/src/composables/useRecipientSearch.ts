@@ -16,18 +16,24 @@ export function useRecipientSearch(
   let controller: AbortController | undefined;
   let generation = 0;
 
-  function reset() {
+  // Cancel outdated work without redrawing the last completed suggestions.
+  function invalidate() {
     generation += 1;
     controller?.abort();
-    contacts.value = [];
     loading.value = false;
     error.value = '';
   }
 
+  function reset() {
+    invalidate();
+    contacts.value = [];
+  }
+
   async function search(query: string) {
-    reset();
+    invalidate();
     const current = context();
     if (!current.enabled || !available.value || (!current.clientId && !across.value)) {
+      contacts.value = [];
       return;
     }
     const request = generation;
@@ -50,6 +56,7 @@ export function useRecipientSearch(
         return;
       }
       if (axios.isAxiosError(cause) && [403, 404].includes(cause.response?.status || 0)) {
+        contacts.value = [];
         available.value = false;
       } else {
         error.value = 'Contacts could not be loaded. You can still enter an email address.';
@@ -72,5 +79,5 @@ export function useRecipientSearch(
   );
   watch(across, reset, { flush: 'sync' });
   onBeforeUnmount(reset);
-  return { contacts, across, loading, error, available, search, reset };
+  return { contacts, across, loading, error, available, search, invalidate };
 }

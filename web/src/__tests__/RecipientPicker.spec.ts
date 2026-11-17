@@ -77,6 +77,69 @@ describe('recipient picker', () => {
     wrapper.unmount();
   });
 
+  it('keeps the array stable while typing/loading and replaces it only with the latest response', async () => {
+    const wrapper = picker();
+    const autocomplete = wrapper.findComponent(AutoComplete);
+    autocomplete.vm.$emit('complete', { query: '' });
+    await flushPromises();
+    const previous = autocomplete.props('suggestions');
+    let resolveOlder!: (value: { data: (typeof contact)[] }) => void;
+    let resolveLatest!: (value: { data: (typeof contact)[] }) => void;
+    vi.mocked(axios.get)
+      .mockImplementationOnce(
+        () =>
+          new Promise((done) => {
+            resolveOlder = done;
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((done) => {
+            resolveLatest = done;
+          }),
+      );
+
+    autocomplete.vm.$emit('update:modelValue', 'al');
+    await flushPromises();
+    expect(autocomplete.props('suggestions')).toBe(previous);
+    autocomplete.vm.$emit('complete', { query: 'al' });
+    await flushPromises();
+    expect(autocomplete.props('loading')).toBe(true);
+    expect(autocomplete.props('suggestions')).toBe(previous);
+
+    // A new keystroke invalidates the old request before the next debounce.
+    autocomplete.vm.$emit('update:modelValue', 'alex');
+    resolveOlder({ data: [] });
+    await flushPromises();
+    expect(autocomplete.props('suggestions')).toBe(previous);
+    autocomplete.vm.$emit('complete', { query: 'alex' });
+    await flushPromises();
+    expect(autocomplete.props('suggestions')).toBe(previous);
+    const replacement = { ...contact, name: 'Alex Updated' };
+    resolveLatest({ data: [replacement] });
+    await flushPromises();
+    expect(autocomplete.props('suggestions')).not.toBe(previous);
+    expect(autocomplete.props('suggestions')).toEqual([replacement]);
+    expect(autocomplete.props('loading')).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('retains completed suggestions on a transient failure but clears them when scope changes', async () => {
+    const wrapper = picker();
+    const autocomplete = wrapper.findComponent(AutoComplete);
+    autocomplete.vm.$emit('complete', { query: '' });
+    await flushPromises();
+    const previous = autocomplete.props('suggestions');
+    vi.mocked(axios.get).mockRejectedValueOnce(new Error('offline'));
+    autocomplete.vm.$emit('complete', { query: 'alex' });
+    await flushPromises();
+    expect(autocomplete.props('suggestions')).toBe(previous);
+    expect(wrapper.text()).toContain('Contacts could not be loaded');
+    await wrapper.setProps({ clientId: 'another-client' });
+    expect(autocomplete.props('suggestions')).toEqual([]);
+    wrapper.unmount();
+  });
+
   it('discards an in-flight wider lookup when client context changes', async () => {
     let resolve!: (value: { data: (typeof contact)[] }) => void;
     vi.mocked(axios.get).mockImplementationOnce(

@@ -22,11 +22,13 @@ const props = withDefaults(
 const email = defineModel<string>({ required: true });
 const auth = useAuthStore();
 const enabled = computed(() => ['admin', 'manager'].includes(auth.user?.role || ''));
-const { contacts, across, loading, error, available, search, reset } = useRecipientSearch(() => ({
-  clientId: props.clientId,
-  enabled: enabled.value,
-  actorKey: `${auth.user?.tenant_id || ''}:${auth.user?.id || ''}`,
-}));
+const { contacts, across, loading, error, available, search, invalidate } = useRecipientSearch(
+  () => ({
+    clientId: props.clientId,
+    enabled: enabled.value,
+    actorKey: `${auth.user?.tenant_id || ''}:${auth.user?.id || ''}`,
+  }),
+);
 const selected = ref<RecipientContact | null>(null);
 watch(email, (value) => {
   if (selected.value?.email !== value) {
@@ -40,9 +42,7 @@ watch(
   },
 );
 function update(value: string | RecipientContact | null) {
-  if (!value || typeof value === 'string') {
-    reset();
-  }
+  invalidate();
   selected.value = value && typeof value === 'object' ? value : null;
   email.value = typeof value === 'string' ? value : value?.email || '';
 }
