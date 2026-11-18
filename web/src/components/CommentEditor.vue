@@ -3,6 +3,7 @@ import { shift } from '@floating-ui/dom';
 import { PluginKey } from '@tiptap/pm/state';
 import { exitSuggestion, type SuggestionProps } from '@tiptap/suggestion';
 import { EditorContent, useEditor } from '@tiptap/vue-3';
+import { useResizeObserver } from '@vueuse/core';
 import axios from 'axios';
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 
@@ -27,6 +28,7 @@ const mentionKey = new PluginKey(`comment-mentions-${props.id}`);
 const suggestion = shallowRef<SuggestionProps<CommentPerson, CommentMentionAttrs> | null>(null);
 const selected = ref(0);
 const popup = ref<HTMLUListElement | null>(null);
+const frame = ref<HTMLDivElement | null>(null);
 const mentionError = ref('');
 const empty = ref(!body.value.trim());
 const length = computed(() => Array.from(body.value).length);
@@ -179,6 +181,25 @@ const editor = useEditor({
   },
 });
 
+// Grow to fit the rendered document, not the serialized Markdown. Never shrink
+// a height the reader has already chosen with the resize handle.
+useResizeObserver(
+  computed(() => editor.value?.view.dom),
+  () => {
+    const container = frame.value;
+    const content = editor.value?.view.dom;
+    if (!container?.offsetHeight || !content) {
+      return;
+    }
+    const maxHeight = Number.parseFloat(getComputedStyle(container).maxHeight) || Infinity;
+    const border = container.offsetHeight - container.clientHeight;
+    const height = Math.min(content.scrollHeight + border, maxHeight);
+    if (height > container.offsetHeight) {
+      container.style.height = `${height}px`;
+    }
+  },
+);
+
 watch(body, (source) => {
   // Echoed input must not replace the document or move the caret. Opening an
   // existing comment does not rewrite its source; edits serialize to Markdown.
@@ -218,6 +239,7 @@ onBeforeUnmount(closePopup);
     <div :id="`${id}-heading`" class="editor-heading">{{ label || 'Comment' }}</div>
     <div class="editor-surface">
       <div
+        ref="frame"
         class="editor-frame"
         :class="{ 'editor-tall': rows === 4, invalid: length > 4000, disabled }"
       >
@@ -280,6 +302,7 @@ onBeforeUnmount(closePopup);
   min-width: 0;
 }
 .editor-frame {
+  box-sizing: border-box;
   position: relative;
   height: 80px;
   min-height: 80px;
