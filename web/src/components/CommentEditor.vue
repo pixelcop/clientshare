@@ -28,7 +28,11 @@ const mentions = props.mentionSearch ?? useMentionSearch(() => props);
 const body = defineModel<string>({ required: true });
 const mentionKey = new PluginKey(`comment-mentions-${props.id}`);
 const suggestion = shallowRef<SuggestionProps<CommentPerson, CommentMentionAttrs> | null>(null);
-const selected = ref(0);
+const keyboardId = ref<string | null>(null);
+const hoveredId = ref<string | null>(null);
+const selected = computed(() =>
+  Math.max(0, suggestion.value?.items.findIndex((person) => person.id === keyboardId.value) ?? -1),
+);
 const popup = ref<HTMLUListElement | null>(null);
 const frame = ref<HTMLDivElement | null>(null);
 const mentionError = ref('');
@@ -37,32 +41,49 @@ const length = computed(() => Array.from(body.value).length);
 let popupGeneration = 0;
 let unmountPopup: (() => void) | undefined;
 let emittedSource = body.value;
+let lastPointer: { x: number; y: number } | undefined;
 
 function closePopup() {
   popupGeneration++;
   unmountPopup?.();
   unmountPopup = undefined;
   suggestion.value = null;
+  keyboardId.value = null;
+  hoveredId.value = null;
+  lastPointer = undefined;
   mentionError.value = '';
 }
 function updateSuggestions(context: SuggestionProps<CommentPerson, CommentMentionAttrs>) {
   const previous = suggestion.value;
-  const highlighted = previous?.items[selected.value]?.id;
-  if (context.query !== previous?.query) {
+  const queryChanged = context.query !== previous?.query;
+  if (queryChanged) {
     mentionError.value = '';
   }
   const cached = context.loading ? mentions.peek(props.visibility, context.query) : undefined;
   const items = context.loading
     ? (cached ?? mentions.local(props.visibility, context.query))
     : context.items;
-  selected.value = Math.max(
-    0,
-    items.findIndex((person) => person.id === highlighted),
-  );
+  if (queryChanged || !items.some((person) => person.id === keyboardId.value)) {
+    keyboardId.value = null;
+  }
+  if (
+    queryChanged ||
+    items.length !== previous?.items.length ||
+    items.some((person, index) => person.id !== previous.items[index]?.id)
+  ) {
+    hoveredId.value = null;
+  }
   suggestion.value = { ...context, items, loading: context.loading && !cached };
 }
+function hoverPerson(event: PointerEvent, id: string) {
+  const { clientX: x, clientY: y } = event;
+  if (event.pointerType === 'touch' || (lastPointer?.x === x && lastPointer.y === y)) {
+    return;
+  }
+  lastPointer = { x, y };
+  hoveredId.value = id;
+}
 async function openPopup(context: SuggestionProps<CommentPerson, CommentMentionAttrs>) {
-  selected.value = 0;
   updateSuggestions(context);
   const current = ++popupGeneration;
   await nextTick();
@@ -159,8 +180,10 @@ const editor = useEditor({
         if (event.key === 'Enter') {
           choose(people[selected.value]!);
         } else {
-          selected.value =
+          const index =
             (selected.value + (event.key === 'ArrowDown' ? 1 : -1) + people.length) % people.length;
+          keyboardId.value = people[index]!.id;
+          hoveredId.value = null;
           void nextTick(() => {
             document
               .getElementById(`${props.id}-mention-${selected.value}`)
@@ -278,7 +301,9 @@ onBeforeUnmount(closePopup);
           :key="person.id"
           role="option"
           :aria-selected="index === selected"
-          @pointermove="selected = index"
+          :class="{ 'mention-hovered': person.id === hoveredId }"
+          @pointermove="hoverPerson($event, person.id)"
+          @pointerleave="hoveredId = null"
         >
           <button type="button" tabindex="-1" @mousedown.prevent @click="choose(person)">
             <strong>@{{ person.name }}</strong>
@@ -465,6 +490,9 @@ onBeforeUnmount(closePopup);
 .mention-options [aria-selected='true'] button {
   background: var(--p-highlight-background);
   color: var(--p-highlight-color);
+}
+.mention-options .mention-hovered:not([aria-selected='true']) button {
+  background: var(--p-content-hover-background);
 }
 .mention-state {
   padding: 8px;

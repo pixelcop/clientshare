@@ -36,6 +36,14 @@ async function mention(wrapper: Awaited<ReturnType<typeof render>>, text = '@') 
   await vi.advanceTimersByTimeAsync(250);
   await flushPromises();
 }
+async function movePointer(wrapper: Awaited<ReturnType<typeof render>>, index: number, y: number) {
+  wrapper
+    .findAll('[role="option"]')
+    [index].element.dispatchEvent(
+      new PointerEvent('pointermove', { pointerType: 'mouse', clientX: 20, clientY: y }),
+    );
+  await flushPromises();
+}
 describe('rich Markdown comment editor', () => {
   let restoreGeometry: () => void;
   beforeEach(() => {
@@ -164,6 +172,61 @@ describe('rich Markdown comment editor', () => {
     instance(wrapper).commands.insertContent('c');
     await vi.advanceTimersByTimeAsync(250);
     expect(wrapper.find('[role="listbox"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('clears pointer hover when typing and keeps Enter on the best match', async () => {
+    const alexa = { id: 'alexa', name: 'Alexa' };
+    const alex = { id: 'alex', name: 'Alex' };
+    vi.spyOn(axios, 'get')
+      .mockResolvedValueOnce({ data: [alexa, alex] })
+      .mockResolvedValueOnce({ data: [alex, alexa] });
+    const wrapper = await render();
+    await mention(wrapper);
+    await movePointer(wrapper, 0, 20);
+    expect(wrapper.get('.mention-hovered').text()).toBe('@Alexa');
+    instance(wrapper).commands.insertContent('alex');
+    await flushPromises();
+    expect(wrapper.find('.mention-hovered').exists()).toBe(false);
+    await movePointer(wrapper, 0, 20);
+    expect(wrapper.find('.mention-hovered').exists()).toBe(false);
+    await vi.advanceTimersByTimeAsync(250);
+    expect(wrapper.get('[aria-selected="true"]').text()).toBe('@Alex');
+    await movePointer(wrapper, 1, 38);
+    expect(wrapper.get('.mention-hovered').text()).toBe('@Alexa');
+    await wrapper.get('[role="textbox"]').trigger('keydown', { key: 'Enter' });
+    expect(wrapper.props('modelValue')).toContain('[@Alex](mention:alex)');
+    wrapper.unmount();
+  });
+
+  it('keeps a keyboard choice but clears hover when results reorder for the same query', async () => {
+    const alex = { id: 'alex', name: 'Alex' };
+    const alexa = { id: 'alexa', name: 'Alexa' };
+    const alexander = { id: 'alexander', name: 'Alexander' };
+    let finishSearch!: (result: { data: (typeof alex)[] }) => void;
+    vi.spyOn(axios, 'get')
+      .mockResolvedValueOnce({ data: [alex, alexa, alexander] })
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishSearch = resolve;
+          }),
+      );
+    const wrapper = await render();
+    await mention(wrapper);
+    instance(wrapper).commands.insertContent('ale');
+    await vi.advanceTimersByTimeAsync(250);
+    const textbox = wrapper.get('[role="textbox"]');
+    await textbox.trigger('keydown', { key: 'ArrowDown' });
+    await movePointer(wrapper, 2, 60);
+    expect(wrapper.get('[aria-selected="true"]').text()).toBe('@Alexa');
+    expect(wrapper.get('.mention-hovered').text()).toBe('@Alexander');
+    finishSearch({ data: [alexander, alex, alexa] });
+    await flushPromises();
+    expect(wrapper.find('.mention-hovered').exists()).toBe(false);
+    expect(wrapper.get('[aria-selected="true"]').text()).toBe('@Alexa');
+    await textbox.trigger('keydown', { key: 'Enter' });
+    expect(wrapper.props('modelValue')).toContain('[@Alexa](mention:alexa)');
     wrapper.unmount();
   });
 
