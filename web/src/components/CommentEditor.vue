@@ -75,7 +75,7 @@ function editorAttributes() {
     'aria-readonly': String(!!props.readonly),
     'aria-disabled': String(!!props.disabled),
     'aria-invalid': String(length.value > 4000),
-    'aria-describedby': `${props.id}-length`,
+    'aria-describedby': length.value > 4000 ? `${props.id}-limit` : '',
     'aria-autocomplete': 'list',
     'aria-controls': suggestion.value ? `${props.id}-mentions` : '',
     'aria-activedescendant': suggestion.value?.items.length
@@ -257,9 +257,11 @@ onBeforeUnmount(closePopup);
         </li>
       </ul>
     </div>
-    <div class="editor-meta">
+    <p v-if="length > 4000" :id="`${id}-limit`" class="editor-error" role="alert">
+      Comment is too long. The limit is 4,000 characters, including Markdown.
+    </p>
+    <div v-if="$slots.metadata" class="editor-meta">
       <slot name="metadata" />
-      <small :id="`${id}-length`" class="editor-length">{{ length }}/4000</small>
     </div>
   </div>
 </template>
@@ -379,12 +381,9 @@ onBeforeUnmount(closePopup);
   gap: 8px;
   margin-top: 4px;
 }
-.editor-length {
-  display: block;
-  margin-inline-start: auto;
-  text-align: end;
-  font-variant-numeric: tabular-nums;
-  color: var(--p-text-muted-color);
+.editor-error {
+  margin: 4px 0 0;
+  color: var(--p-red-700);
   font-size: 12px;
 }
 .mention-options {

@@ -178,16 +178,23 @@ describe('rich Markdown comment editor', () => {
     wrapper.unmount();
   });
 
-  it('counts the serialized Markdown and keeps manual sizing across editing', async () => {
+  it('hides the count, explains the actual limit only when exceeded, and keeps manual sizing', async () => {
     const wrapper = await render();
+    expect(wrapper.find('.editor-length').exists()).toBe(false);
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false);
     const frame = wrapper.get('.editor-frame').element as HTMLElement;
     frame.style.height = '170px';
     instance(wrapper).commands.setContent('界'.repeat(4001), { contentType: 'markdown' });
     await flushPromises();
     expect(wrapper.get('.editor-frame').element).toBe(frame);
     expect(frame.style.height).toBe('170px');
-    expect(wrapper.get('.editor-length').text()).toBe('4001/4000');
+    expect(wrapper.get('[role="alert"]').text()).toContain('4,000 characters, including Markdown');
+    expect(wrapper.get('[role="textbox"]').attributes('aria-describedby')).toBe('editor-limit');
     expect(wrapper.get('[role="textbox"]').attributes('aria-invalid')).toBe('true');
+    instance(wrapper).commands.setContent('Short enough', { contentType: 'markdown' });
+    await flushPromises();
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false);
+    expect(wrapper.get('[role="textbox"]').attributes('aria-invalid')).toBe('false');
     wrapper.unmount();
   });
 
