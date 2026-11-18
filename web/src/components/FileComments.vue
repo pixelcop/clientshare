@@ -1,14 +1,15 @@
 <script setup lang="ts">
 import axios from 'axios';
 import { Button, Checkbox, Panel } from 'openvue';
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 
 import CommentBody from '@/components/CommentBody.vue';
-import CommentEditor from '@/components/CommentEditor.vue';
 import FileCommentCard from '@/components/FileCommentCard.vue';
 import { useFileComments } from '@/composables/useFileComments';
 import { useAuthStore } from '@/stores/auth';
 import type { FileComment, FileCommentRevision } from '@/types/models';
+
+const CommentEditor = defineAsyncComponent(() => import('@/components/CommentEditor.vue'));
 
 const props = defineProps<{ fileId: string }>();
 const emit = defineEmits<{ count: [value: number | null]; changed: [] }>();

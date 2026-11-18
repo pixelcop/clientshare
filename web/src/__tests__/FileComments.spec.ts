@@ -1,3 +1,4 @@
+import { EditorContent } from '@tiptap/vue-3';
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
 import axios from 'axios';
 import { Checkbox } from 'openvue';
@@ -8,6 +9,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import FileComments from '@/components/FileComments.vue';
 import { useAuthStore } from '@/stores/auth';
 import type { FileComment, User } from '@/types/models';
+
+import { editorGeometry } from './editorGeometry';
 
 const comment: FileComment = {
   id: '01',
@@ -37,6 +40,8 @@ async function render(compose = true) {
   await flushPromises();
   if (compose && wrapper.find('[id$="-toggle"]').exists()) {
     await wrapper.get('[id$="-toggle"]').trigger('click');
+    await vi.dynamicImportSettled();
+    await flushPromises();
   }
   return wrapper;
 }
@@ -49,12 +54,24 @@ async function commentAction(wrapper: VueWrapper, label: string, index = 0) {
   const item = popup?.querySelector<HTMLElement>(`[role="menuitem"][aria-label="${label}"] a`);
   expect(item, `Menu action "${label}" should exist`).toBeTruthy();
   item!.click();
+  await vi.dynamicImportSettled();
+  await flushPromises();
+}
+
+async function fillEditor(wrapper: VueWrapper, selector: string, source: string) {
+  wrapper
+    .get(selector)
+    .findComponent(EditorContent)
+    .props('editor')!
+    .commands.setContent(source, { contentType: 'markdown' });
   await flushPromises();
 }
 
 describe('file conversation', () => {
+  let restoreGeometry: () => void;
   beforeEach(() => {
     vi.restoreAllMocks();
+    restoreGeometry = editorGeometry();
     vi.stubGlobal(
       'matchMedia',
       vi.fn(() => ({
@@ -70,6 +87,7 @@ describe('file conversation', () => {
     vi.spyOn(axios, 'get').mockResolvedValue({ data: page() });
   });
   afterEach(() => {
+    restoreGeometry();
     vi.unstubAllGlobals();
     document.body.replaceChildren();
   });
@@ -147,12 +165,10 @@ describe('file conversation', () => {
         data: { ...comment, id: '02', body: 'A note', visibility: 'team' },
       });
     const wrapper = await render();
-    await wrapper.get('.comment-composer textarea').setValue('A note');
+    await fillEditor(wrapper, '.comment-composer', 'A note');
     await wrapper.get('.comment-composer').trigger('submit');
     await flushPromises();
-    expect((wrapper.get('.comment-composer textarea').element as HTMLTextAreaElement).value).toBe(
-      'A note',
-    );
+    expect(wrapper.get('.comment-composer [role="textbox"]').text()).toBe('A note');
     expect(wrapper.get('[role="alert"]').text()).toContain('draft has been kept');
     await wrapper.get('.comment-composer').trigger('submit');
     await flushPromises();
@@ -180,7 +196,7 @@ describe('file conversation', () => {
     });
     const wrapper = await render();
     await commentAction(wrapper, 'Edit comment');
-    await wrapper.get('.comment-edit textarea').setValue('Updated');
+    await fillEditor(wrapper, '.comment-edit', 'Updated');
     await wrapper.get('.comment-edit').trigger('submit');
     await flushPromises();
     expect(put).toHaveBeenCalledWith('/api/files/file/comments/01', {
@@ -265,19 +281,17 @@ describe('file conversation', () => {
       .spyOn(axios, 'put')
       .mockRejectedValue({ isAxiosError: true, response: { status: 409 } });
     const wrapper = await render();
-    await wrapper.get('.comment-composer textarea').setValue('界'.repeat(4001));
+    await fillEditor(wrapper, '.comment-composer', '界'.repeat(4001));
     expect(
       wrapper.get('.comment-composer button[type="submit"]').attributes('disabled'),
     ).toBeDefined();
     await commentAction(wrapper, 'Edit comment');
-    await wrapper.get('.comment-edit textarea').setValue('My edit');
+    await fillEditor(wrapper, '.comment-edit', 'My edit');
     await wrapper.get('.comment-edit').trigger('submit');
     await flushPromises();
     expect(put).toHaveBeenCalledTimes(1);
     expect(wrapper.get('[role="alert"]').text()).toContain('changed elsewhere');
-    expect((wrapper.get('.comment-edit textarea').element as HTMLTextAreaElement).value).toBe(
-      'My edit',
-    );
+    expect(wrapper.get('.comment-edit [role="textbox"]').text()).toBe('My edit');
     wrapper.unmount();
   });
 
@@ -285,12 +299,12 @@ describe('file conversation', () => {
     const post = vi.spyOn(axios, 'post');
     vi.mocked(axios.get).mockResolvedValueOnce({ data: page([comment], true, '01') });
     const wrapper = await render();
-    await wrapper.get('.comment-composer textarea').setValue('Private unfinished note');
+    await fillEditor(wrapper, '.comment-composer', 'Private unfinished note');
     vi.mocked(axios.get).mockResolvedValueOnce({ data: page([comment], false) });
     await wrapper.get('.earlier-comments').trigger('click');
     await flushPromises();
     expect(wrapper.text()).toContain('Team-note access changed');
-    expect((wrapper.get('.comment-composer textarea').element as HTMLTextAreaElement).value).toBe(
+    expect(wrapper.get('.comment-composer [role="textbox"]').text()).toBe(
       'Private unfinished note',
     );
     await wrapper.get('.comment-composer').trigger('submit');
@@ -313,7 +327,7 @@ describe('file conversation', () => {
       data: { ...comment, body: 'Latest edit', version: 2 },
     });
     await commentAction(wrapper, 'Edit comment');
-    await wrapper.get('.comment-edit textarea').setValue('Latest edit');
+    await fillEditor(wrapper, '.comment-edit', 'Latest edit');
     await wrapper.get('.comment-edit').trigger('submit');
     await flushPromises();
     resolve({ data: page() });
@@ -353,14 +367,14 @@ describe('file conversation', () => {
     expect(toggle.text()).toBe('Add comment');
     expect(toggle.attributes('aria-expanded')).toBe('false');
     await toggle.trigger('click');
-    await wrapper.get('.comment-composer textarea').setValue('Keep this draft');
+    await flushPromises();
+    await fillEditor(wrapper, '.comment-composer', 'Keep this draft');
     await wrapper.get('.comment-composer .composer-actions button').trigger('click');
     expect(wrapper.find('.comment-composer').exists()).toBe(false);
     expect(document.activeElement).toBe(wrapper.get('[id$="-toggle"]').element);
     await wrapper.get('[id$="-toggle"]').trigger('click');
-    expect((wrapper.get('.comment-composer textarea').element as HTMLTextAreaElement).value).toBe(
-      'Keep this draft',
-    );
+    await flushPromises();
+    expect(wrapper.get('.comment-composer [role="textbox"]').text()).toBe('Keep this draft');
     wrapper.unmount();
   });
 
@@ -375,13 +389,14 @@ describe('file conversation', () => {
       list.get('ol').element,
     );
     await wrapper.get('[id$="-toggle"]').trigger('click');
+    await flushPromises();
     expect(wrapper.find('[id$="-toggle"]').exists()).toBe(false);
     expect(list.find('.comment-composer').exists()).toBe(true);
     expect(list.find('.comment-composer-panel .comment-composer').exists()).toBe(true);
-    expect(
-      wrapper.get('.comment-composer-panel [role="region"]').attributes('aria-label'),
-    ).toBe('Comment editor');
-    expect(wrapper.get('.editor-heading label').text()).toBe('Add a team note');
+    expect(wrapper.get('.comment-composer-panel [role="region"]').attributes('aria-label')).toBe(
+      'Comment editor',
+    );
+    expect(wrapper.get('.editor-heading').text()).toBe('Add a team note');
     expect(wrapper.get('.composer-actions button').text()).toBe('Cancel');
     wrapper.unmount();
   });
@@ -393,13 +408,11 @@ describe('file conversation', () => {
     const wrapper = await render();
     const checkbox = wrapper.get('input[type="checkbox"]');
     expect((checkbox.element as HTMLInputElement).checked).toBe(true);
-    await wrapper.get('.comment-composer textarea').setValue('Ready for the client');
+    await fillEditor(wrapper, '.comment-composer', 'Ready for the client');
     await checkbox.setValue(false);
     expect(wrapper.text()).toContain('Post comment');
     expect(wrapper.findComponent(Checkbox).props('modelValue')).toBe('shared');
-    expect((wrapper.get('.comment-composer textarea').element as HTMLTextAreaElement).value).toBe(
-      'Ready for the client',
-    );
+    expect(wrapper.get('.comment-composer [role="textbox"]').text()).toBe('Ready for the client');
     await checkbox.setValue(true);
     expect(wrapper.text()).toContain('Post team note');
     expect(wrapper.findComponent(Checkbox).props('modelValue')).toBe('team');

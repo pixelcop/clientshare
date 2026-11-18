@@ -55,9 +55,12 @@ on that file.
   comment. The checkbox title explains who can read the note.
 
 Comments support simple Markdown: emphasis, lists, links, quotes, and code.
-Use the eye-icon **Preview** button above the editor to check formatting before
-posting or saving an edit. Select it again to return to editing. Editing always
-opens the original Markdown, not the rendered HTML.
+The rich-text editor formats Markdown as you type: for example, `**bold**`,
+`*italic*`, and `- ` for a list. You can also paste Markdown. Selected mentions
+appear as inline tags while editing. There is no separate preview step.
+Comments are still saved as Markdown, not HTML. Reopening a comment restores its
+formatting and mentions; editing may normalize Markdown spacing and delimiters.
+Copy/paste uses Markdown or plain text rather than arbitrary HTML.
 Raw HTML is not rendered; images appear as alt text.
 
 Type `@` to open the mention dropdown, then type a name to narrow the suggestions.
