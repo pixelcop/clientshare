@@ -20,7 +20,7 @@
   width: 104px;
 }
 .file-table th:last-child {
-  width: 176px;
+  width: 132px;
   padding: 0;
 }
 .file-row {
@@ -73,6 +73,6 @@
 }
 @media (max-width: 480px) {
   .file-table th:last-child {
-    width: 88px;
+    width: 44px;
   }
 }

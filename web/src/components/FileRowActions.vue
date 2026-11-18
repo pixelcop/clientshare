@@ -97,15 +97,6 @@ watch(
     <div class="row-quick-actions">
       <Button
         v-if="canRead"
-        :icon="isFolder ? 'oi oi-folder-open' : 'oi oi-eye'"
-        :aria-label="`${primaryLabel} ${item.filename}`"
-        :title="primaryLabel"
-        severity="secondary"
-        variant="text"
-        @click.stop="open"
-      />
-      <Button
-        v-if="canRead"
         icon="oi oi-download"
         :aria-label="`Download ${item.filename}${isFolder ? ' as ZIP' : ''}`"
         :title="isFolder ? 'Download ZIP' : 'Download'"
@@ -167,7 +158,7 @@ watch(
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  width: 176px;
+  width: 132px;
 }
 .row-actions :deep(button) {
   width: 44px;
@@ -207,9 +198,9 @@ watch(
 }
 @media (max-width: 480px) {
   .row-actions {
-    width: 88px;
+    width: 44px;
   }
-  .row-quick-actions > :deep(button:nth-child(2)) {
+  .row-quick-actions {
     display: none;
   }
   .inline-share {

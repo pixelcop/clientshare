@@ -31,7 +31,7 @@ describe('file row actions', () => {
 
   it('opens a file exactly once and keeps Delete separate in More', async () => {
     const wrapper = mount(FileListItem, { props: { item }, global: { plugins: [OpenVue] } });
-    await wrapper.get('button[aria-label="Open report.txt"]').trigger('click');
+    await wrapper.get('.file-name').trigger('click');
     expect(wrapper.emitted('open')).toEqual([[item]]);
     const actions = wrapper.findComponent(Menu).props('model')!;
     expect(actions.map((action) => action.label || 'separator')).toEqual([
@@ -41,6 +41,8 @@ describe('file row actions', () => {
       'Delete',
     ]);
     expect(actions.some((action) => action.label === 'Share')).toBe(false);
+    expect(wrapper.find('.row-actions button[aria-label^="Open"]').exists()).toBe(false);
+    expect(wrapper.find('.row-actions .oi-eye').exists()).toBe(false);
     wrapper.unmount();
   });
 
@@ -53,7 +55,11 @@ describe('file row actions', () => {
       global: { plugins: [OpenVue] },
     });
     expect(wrapper.find('button[aria-label^="Preview"]').exists()).toBe(false);
-    await wrapper.get('button[aria-label="Open archive.zip"]').trigger('click');
+    const openAction = wrapper
+      .findComponent(Menu)
+      .props('model')!
+      .find((action) => action.label === 'Open')!;
+    openAction.command?.({ originalEvent: new Event('click'), item: openAction });
     expect(wrapper.emitted('open')).toEqual([[document]]);
     expect(download).not.toHaveBeenCalled();
     await wrapper.get('button[aria-label="Download archive.zip"]').trigger('click');
@@ -95,7 +101,8 @@ describe('file row actions', () => {
     });
     const actions = wrapper.findComponent(Menu).props('model')!;
     expect(actions.map((action) => action.label)).toEqual(['Open', 'Download ZIP']);
-    expect(wrapper.find('button[aria-label="Open Documents"]').exists()).toBe(true);
+    expect(wrapper.find('button[aria-label="Open Documents"]').exists()).toBe(false);
+    expect(wrapper.find('.row-quick-actions .oi-folder-open').exists()).toBe(false);
     wrapper.unmount();
   });
 });
