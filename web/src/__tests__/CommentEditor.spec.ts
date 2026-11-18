@@ -121,6 +121,40 @@ describe('rich Markdown comment editor', () => {
     edited.unmount();
   });
 
+  it('reuses bare @ and typed searches and offers fuzzy local matches while a search is pending', async () => {
+    const alex = { id: 'alex', name: 'Álex Smith' };
+    let finishSearch!: (result: { data: (typeof alex)[] }) => void;
+    const get = vi
+      .spyOn(axios, 'get')
+      .mockResolvedValueOnce({ data: [alex] })
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishSearch = resolve;
+          }),
+      );
+    const wrapper = await render();
+    await mention(wrapper);
+    const editor = instance(wrapper);
+    editor.commands.clearContent();
+    editor.commands.insertContent('@');
+    await flushPromises();
+    expect(wrapper.get('[role="option"]').text()).toBe('@Álex Smith');
+    await vi.advanceTimersByTimeAsync(250);
+    expect(get).toHaveBeenCalledTimes(1);
+    editor.commands.insertContent('alxe');
+    await flushPromises();
+    expect(wrapper.get('[role="option"]').text()).toBe('@Álex Smith');
+    await vi.advanceTimersByTimeAsync(250);
+    expect(get).toHaveBeenCalledTimes(2);
+    expect(wrapper.get('[role="option"]').text()).toBe('@Álex Smith');
+    finishSearch({ data: [alex] });
+    await flushPromises();
+    await mention(wrapper, '@alxe');
+    expect(get).toHaveBeenCalledTimes(2);
+    wrapper.unmount();
+  });
+
   it('dismisses on Escape without reopening in the same trigger context', async () => {
     vi.spyOn(axios, 'get').mockResolvedValue({ data: [{ id: 'user', name: 'Chetan' }] });
     const wrapper = await render();

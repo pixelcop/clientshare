@@ -384,6 +384,7 @@ onBeforeUnmount(() => {
         <FileComments
           :key="`${file.id}:${auth.user?.session_id}`"
           :fileId="file.id"
+          :visible="showComments"
           @count="setCommentCount"
           @changed="refreshCommentCount"
         />

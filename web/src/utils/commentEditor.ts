@@ -6,6 +6,7 @@ import StarterKit from '@tiptap/starter-kit';
 import type { SuggestionOptions } from '@tiptap/suggestion';
 
 export interface CommentPerson {
+  previously_mentioned?: boolean;
   id: string;
   name: string;
   email?: string;

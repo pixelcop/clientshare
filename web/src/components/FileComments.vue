@@ -6,15 +6,19 @@ import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, ref, watch }
 import CommentBody from '@/components/CommentBody.vue';
 import FileCommentCard from '@/components/FileCommentCard.vue';
 import { useFileComments } from '@/composables/useFileComments';
+import { useMentionSearch } from '@/composables/useMentionSearch';
 import { useAuthStore } from '@/stores/auth';
 import type { FileComment, FileCommentRevision } from '@/types/models';
 
 const CommentEditor = defineAsyncComponent(() => import('@/components/CommentEditor.vue'));
 
-const props = defineProps<{ fileId: string }>();
+const props = withDefaults(defineProps<{ fileId: string; visible?: boolean }>(), { visible: true });
 const emit = defineEmits<{ count: [value: number | null]; changed: [] }>();
 const auth = useAuthStore();
-const sessionKey = computed(() => `${auth.user?.session_id}:${auth.user?.id}:${auth.user?.role}`);
+const sessionKey = computed(
+  () => `${auth.user?.tenant_id}:${auth.user?.session_id}:${auth.user?.id}:${auth.user?.role}`,
+);
+const mentions = useMentionSearch(() => ({ fileId: props.fileId, sessionKey: sessionKey.value }));
 const {
   comments,
   loading,
@@ -95,8 +99,19 @@ watch(
 watch(ready, (value) => {
   if (!value) {
     closeHistory();
+    mentions.reset();
   }
 });
+function warmMentions() {
+  if (props.visible && ready.value && (visibility.value === 'shared' || canInternal.value)) {
+    mentions.warm(visibility.value);
+  }
+}
+watch([ready, visibility, () => props.visible], warmMentions);
+function refreshMentions() {
+  mentions.reset();
+  warmMentions();
+}
 
 function date(value: string) {
   return new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
@@ -145,6 +160,7 @@ async function send() {
     return;
   }
   if (await post(draft.value, visibility.value, draftKey.value)) {
+    refreshMentions();
     draft.value = '';
     composerOpen.value = false;
     emit('changed');
@@ -167,6 +183,7 @@ async function saveEdit() {
     return;
   }
   if (await edit(editing.value, editBody.value)) {
+    refreshMentions();
     editing.value = null;
     emit('changed');
     closeHistory();
@@ -174,6 +191,7 @@ async function saveEdit() {
 }
 async function confirmRemove(comment: FileComment) {
   if (await remove(comment)) {
+    refreshMentions();
     removing.value = '';
     emit('changed');
     closeHistory();
@@ -226,6 +244,7 @@ onBeforeUnmount(closeHistory);
                 :fileId="fileId"
                 :sessionKey="sessionKey"
                 :visibility="comment.visibility"
+                :mentionSearch="mentions"
                 :label="`Edit ${comment.visibility === 'team' ? 'team note' : 'shared comment'}`"
                 :rows="4"
                 :disabled="saving"
@@ -367,6 +386,7 @@ onBeforeUnmount(closeHistory);
               :fileId="fileId"
               :sessionKey="sessionKey"
               :visibility="visibility"
+              :mentionSearch="mentions"
               :label="visibility === 'team' ? 'Add a team note' : 'Add a shared comment'"
               :disabled="saving"
               :readonly="teamDraftUnavailable"

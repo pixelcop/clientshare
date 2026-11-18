@@ -4,9 +4,9 @@ import { PluginKey } from '@tiptap/pm/state';
 import { exitSuggestion, type SuggestionProps } from '@tiptap/suggestion';
 import { EditorContent, useEditor } from '@tiptap/vue-3';
 import { useResizeObserver } from '@vueuse/core';
-import axios from 'axios';
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 
+import { type MentionSearch, useMentionSearch } from '@/composables/useMentionSearch';
 import {
   commentExtensions,
   type CommentMentionAttrs,
@@ -22,7 +22,9 @@ const props = defineProps<{
   readonly?: boolean;
   label?: string;
   rows?: number;
+  mentionSearch?: MentionSearch;
 }>();
+const mentions = props.mentionSearch ?? useMentionSearch(() => props);
 const body = defineModel<string>({ required: true });
 const mentionKey = new PluginKey(`comment-mentions-${props.id}`);
 const suggestion = shallowRef<SuggestionProps<CommentPerson, CommentMentionAttrs> | null>(null);
@@ -43,9 +45,25 @@ function closePopup() {
   suggestion.value = null;
   mentionError.value = '';
 }
+function updateSuggestions(context: SuggestionProps<CommentPerson, CommentMentionAttrs>) {
+  const previous = suggestion.value;
+  const highlighted = previous?.items[selected.value]?.id;
+  if (context.query !== previous?.query) {
+    mentionError.value = '';
+  }
+  const cached = context.loading ? mentions.peek(props.visibility, context.query) : undefined;
+  const items = context.loading
+    ? (cached ?? mentions.local(props.visibility, context.query))
+    : context.items;
+  selected.value = Math.max(
+    0,
+    items.findIndex((person) => person.id === highlighted),
+  );
+  suggestion.value = { ...context, items, loading: context.loading && !cached };
+}
 async function openPopup(context: SuggestionProps<CommentPerson, CommentMentionAttrs>) {
-  suggestion.value = context;
   selected.value = 0;
+  updateSuggestions(context);
   const current = ++popupGeneration;
   await nextTick();
   if (current === popupGeneration && popup.value) {
@@ -95,22 +113,24 @@ const editor = useEditor({
     char: '@',
     allowedPrefixes: [' ', '(', '\n'],
     debounce: 200,
-    allow: ({ editor: current }) => !current.isActive('code') && !current.isActive('codeBlock'),
+    allow: ({ editor: current }) =>
+      !props.disabled &&
+      !props.readonly &&
+      !current.isActive('code') &&
+      !current.isActive('codeBlock'),
     floatingUi: { strategy: 'fixed', middleware: [shift({ padding: 12 })] },
     items: async ({ query, signal }) => {
-      mentionError.value = '';
-      if (props.disabled || props.readonly) {
+      if (signal.aborted || props.disabled || props.readonly) {
         return [];
       }
+      const visibility = props.visibility;
       try {
-        const { data } = await axios.get<CommentPerson[]>(
-          `/api/files/${props.fileId}/comments/mentions`,
-          { params: { search: query, visibility: props.visibility }, signal },
-        );
+        const data = await mentions.search(visibility, query);
         return signal.aborted ? [] : data;
-      } catch (cause) {
-        if (!signal.aborted && !axios.isCancel(cause)) {
+      } catch {
+        if (!signal.aborted) {
           mentionError.value = 'Mention search unavailable. Try typing the name again.';
+          return mentions.local(visibility, query);
         }
         return [];
       }
@@ -119,12 +139,7 @@ const editor = useEditor({
       onStart: (context) => {
         void openPopup(context);
       },
-      onUpdate: (context) => {
-        if (context.query !== suggestion.value?.query) {
-          selected.value = 0;
-        }
-        suggestion.value = context;
-      },
+      onUpdate: updateSuggestions,
       onKeyDown: ({ event, view }) => {
         if (event.isComposing) {
           return false;
