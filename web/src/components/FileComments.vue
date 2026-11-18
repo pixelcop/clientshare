@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import axios from 'axios';
-import { Button, Checkbox } from 'openvue';
+import { Button, Checkbox, Panel } from 'openvue';
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 
 import CommentBody from '@/components/CommentBody.vue';
@@ -331,74 +331,84 @@ onBeforeUnmount(closeHistory);
           :aria-controls="`${composerId}-form`"
           @click="toggleComposer"
         />
-        <form
+        <Panel
           v-if="ready && composerOpen"
-          :id="`${composerId}-form`"
-          class="comment-composer"
-          data-sentry-mask
-          @submit.prevent="send"
+          class="comment-composer-panel"
+          :pt="{
+            header: { style: { display: 'none' } },
+            content: { style: { padding: '12px' } },
+            contentContainer: { 'aria-labelledby': undefined, 'aria-label': 'Comment editor' },
+          }"
         >
-          <p v-if="teamDraftUnavailable" role="status" class="audience-help">
-            Team-note access changed. Copy your draft, or clear it before writing a shared comment.
-            <Button
-              label="Clear team draft"
-              severity="secondary"
-              variant="text"
-              size="small"
-              @click="
-                draft = '';
-                visibility = 'shared';
-              "
-            />
-          </p>
-          <CommentEditor
-            :id="composerId"
-            v-model="draft"
-            :fileId="fileId"
-            :sessionKey="sessionKey"
-            :visibility="visibility"
-            :label="visibility === 'team' ? 'Add a team note' : 'Add a shared comment'"
-            :disabled="saving"
-            :readonly="teamDraftUnavailable"
+          <form
+            :id="`${composerId}-form`"
+            class="comment-composer"
+            data-sentry-mask
+            @submit.prevent="send"
           >
-            <template #metadata>
-              <label
-                v-if="canInternal"
-                :for="`${composerId}-team`"
-                class="team-note-toggle"
-                :title="teamNoteTitle"
-              >
-                <Checkbox
-                  v-model="visibility"
-                  binary
-                  trueValue="team"
-                  falseValue="shared"
-                  :inputId="`${composerId}-team`"
-                  :disabled="saving"
-                  :pt="{ input: { title: teamNoteTitle } }"
-                />
-                <span>Team-only note</span>
-              </label>
-            </template>
-          </CommentEditor>
-          <div class="composer-actions">
-            <Button
-              type="button"
-              label="Cancel"
-              severity="secondary"
-              variant="text"
-              size="small"
+            <p v-if="teamDraftUnavailable" role="status" class="audience-help">
+              Team-note access changed. Copy your draft, or clear it before writing a shared
+              comment.
+              <Button
+                label="Clear team draft"
+                severity="secondary"
+                variant="text"
+                size="small"
+                @click="
+                  draft = '';
+                  visibility = 'shared';
+                "
+              />
+            </p>
+            <CommentEditor
+              :id="composerId"
+              v-model="draft"
+              :fileId="fileId"
+              :sessionKey="sessionKey"
+              :visibility="visibility"
+              :label="visibility === 'team' ? 'Add a team note' : 'Add a shared comment'"
               :disabled="saving"
-              @click="toggleComposer"
-            />
-            <Button
-              type="submit"
-              :label="visibility === 'team' ? 'Post team note' : 'Post comment'"
-              :loading="saving"
-              :disabled="!draft.trim() || length > 4000 || loading || teamDraftUnavailable"
-            />
-          </div>
-        </form>
+              :readonly="teamDraftUnavailable"
+            >
+              <template #metadata>
+                <label
+                  v-if="canInternal"
+                  :for="`${composerId}-team`"
+                  class="team-note-toggle"
+                  :title="teamNoteTitle"
+                >
+                  <Checkbox
+                    v-model="visibility"
+                    binary
+                    trueValue="team"
+                    falseValue="shared"
+                    :inputId="`${composerId}-team`"
+                    :disabled="saving"
+                    :pt="{ input: { title: teamNoteTitle } }"
+                  />
+                  <span>Team-only note</span>
+                </label>
+              </template>
+            </CommentEditor>
+            <div class="composer-actions">
+              <Button
+                type="button"
+                label="Cancel"
+                severity="secondary"
+                variant="text"
+                size="small"
+                :disabled="saving"
+                @click="toggleComposer"
+              />
+              <Button
+                type="submit"
+                :label="visibility === 'team' ? 'Post team note' : 'Post comment'"
+                :loading="saving"
+                :disabled="!draft.trim() || length > 4000 || loading || teamDraftUnavailable"
+              />
+            </div>
+          </form>
+        </Panel>
       </div>
     </div>
   </section>
@@ -454,7 +464,6 @@ ol {
 .comment-composer {
   display: grid;
   gap: 8px;
-  padding-block: 4px;
 }
 .team-note-toggle {
   display: flex;

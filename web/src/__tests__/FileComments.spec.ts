@@ -377,6 +377,10 @@ describe('file conversation', () => {
     await wrapper.get('[id$="-toggle"]').trigger('click');
     expect(wrapper.find('[id$="-toggle"]').exists()).toBe(false);
     expect(list.find('.comment-composer').exists()).toBe(true);
+    expect(list.find('.comment-composer-panel .comment-composer').exists()).toBe(true);
+    expect(
+      wrapper.get('.comment-composer-panel [role="region"]').attributes('aria-label'),
+    ).toBe('Comment editor');
     expect(wrapper.get('.editor-heading label').text()).toBe('Add a team note');
     expect(wrapper.get('.composer-actions button').text()).toBe('Cancel');
     wrapper.unmount();
