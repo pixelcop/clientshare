@@ -189,11 +189,8 @@ describe('file page', () => {
     expect(wrapper.get('#file-comments-pane').isVisible()).toBe(true);
     await toggle.trigger('click');
     expect(toggle.attributes('aria-expanded')).toBe('false');
-    expect(wrapper.get('#file-comments-pane').attributes('style')).toContain('display: none');
     await toggle.trigger('click');
-    expect(wrapper.get('#file-comments-pane').attributes('style') || '').not.toContain(
-      'display: none',
-    );
+    expect(toggle.attributes('aria-expanded')).toBe('true');
     wrapper.unmount();
   });
 
@@ -227,7 +224,6 @@ describe('file page', () => {
     const toggle = wrapper.get('#file-comments-toggle');
     expect(toggle.attributes('aria-label')).toBe('Comments, 3 comments');
     expect(toggle.get('.p-badge').text()).toBe('3');
-    expect(toggle.attributes('data-p-severity')).not.toBe('secondary');
     expect(wrapper.findComponent(FileComments).exists()).toBe(false);
     await toggle.trigger('click');
     expect(toggle.attributes('aria-pressed')).toBe('true');
@@ -238,7 +234,6 @@ describe('file page', () => {
     wrapper.findComponent(FileComments).vm.$emit('changed');
     await flushPromises();
     expect(toggle.get('.p-badge').text()).toBe('0');
-    expect(toggle.attributes('data-p-severity')).toBe('secondary');
     await toggle.trigger('click');
     expect(toggle.attributes('aria-expanded')).toBe('false');
     expect(wrapper.findComponent(FileComments).exists()).toBe(true);

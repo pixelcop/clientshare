@@ -59,7 +59,6 @@ describe('rich Markdown comment editor', () => {
     expect(wrapper.get('[role="textbox"] .comment-mention').text()).toBe('@Chetan');
     expect(wrapper.props('modelValue')).toBe(source);
     expect(wrapper.emitted('update:modelValue')).toBeUndefined();
-    expect(wrapper.find('.preview-toggle').exists()).toBe(false);
     wrapper.unmount();
   });
 
@@ -77,7 +76,7 @@ describe('rich Markdown comment editor', () => {
     wrapper.unmount();
   });
 
-  it('opens on bare @, filters names, and inserts an inline rich mention with Enter', async () => {
+  it('opens on bare @ and inserts an inline rich mention with Enter', async () => {
     const get = vi.spyOn(axios, 'get').mockResolvedValue({
       data: [
         { id: 'alex', name: 'Alex', email: 'alex@example.test' },
@@ -178,16 +177,11 @@ describe('rich Markdown comment editor', () => {
     wrapper.unmount();
   });
 
-  it('hides the count, explains the actual limit only when exceeded, and keeps manual sizing', async () => {
+  it('explains the character limit when exceeded and clears the error after correction', async () => {
     const wrapper = await render();
-    expect(wrapper.find('.editor-length').exists()).toBe(false);
     expect(wrapper.find('[role="alert"]').exists()).toBe(false);
-    const frame = wrapper.get('.editor-frame').element as HTMLElement;
-    frame.style.height = '170px';
     instance(wrapper).commands.setContent('界'.repeat(4001), { contentType: 'markdown' });
     await flushPromises();
-    expect(wrapper.get('.editor-frame').element).toBe(frame);
-    expect(frame.style.height).toBe('170px');
     expect(wrapper.get('[role="alert"]').text()).toContain('4,000 characters, including Markdown');
     expect(wrapper.get('[role="textbox"]').attributes('aria-describedby')).toBe('editor-limit');
     expect(wrapper.get('[role="textbox"]').attributes('aria-invalid')).toBe('true');

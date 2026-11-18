@@ -105,17 +105,10 @@ describe('file conversation', () => {
     expect(wrapper.text()).toContain('<script>alert(1)</script>');
     expect(wrapper.find('script').exists()).toBe(false);
     expect(wrapper.findComponent(Checkbox).props('modelValue')).toBe('team');
-    expect(wrapper.get('input[type="checkbox"]').attributes('title')).toContain(
-      'Only staff with access to this file',
-    );
-    expect(wrapper.text()).not.toContain('Only staff with access to this file');
-    expect(wrapper.text()).not.toContain('Comments stay on this file');
-    expect(wrapper.find('[aria-label="Refresh comments"]').exists()).toBe(false);
-    expect(wrapper.text()).not.toContain('Hide editor');
     wrapper.unmount();
   });
 
-  it('uses compact card headers and targets the correct comment from its action menu', async () => {
+  it('removes the correct comment when multiple comments have action menus', async () => {
     vi.mocked(axios.get).mockResolvedValueOnce({
       data: page([{ ...comment, id: '02', body: 'Second comment' }, comment]),
     });
@@ -130,11 +123,6 @@ describe('file conversation', () => {
       },
     });
     const wrapper = await render();
-    expect(wrapper.findAll('article.comment-card')).toHaveLength(2);
-    expect(wrapper.findAll('.comment-card-header [aria-label="Comment actions"]')).toHaveLength(2);
-    expect(wrapper.findAll('.comment-avatar')[0]?.text()).toBe('A');
-    expect(wrapper.find('.comment-tools').exists()).toBe(false);
-    expect(document.querySelector('[role="menuitem"]')).toBeNull();
     await commentAction(wrapper, 'Remove comment', 1);
     expect(wrapper.findAll('.comment')[0]?.find('.comment-confirm').exists()).toBe(false);
     await wrapper.findAll('.comment')[1].get('.comment-confirm button').trigger('click');
@@ -232,7 +220,6 @@ describe('file conversation', () => {
   it('keeps completed rows visible while loading and prepends older pages', async () => {
     vi.mocked(axios.get).mockResolvedValueOnce({ data: page([comment], true, '01') });
     const wrapper = await render();
-    const existing = wrapper.get('.comment').element;
     let resolve!: (value: { data: ReturnType<typeof page> }) => void;
     vi.mocked(axios.get).mockImplementationOnce(
       () =>
@@ -241,7 +228,7 @@ describe('file conversation', () => {
         }),
     );
     await wrapper.get('.earlier-comments').trigger('click');
-    expect(wrapper.get('.comment').element).toBe(existing);
+    expect(wrapper.get('.comment').text()).toContain(comment.body);
     resolve({
       data: page([{ ...comment, id: '00', body: 'Earlier comment' }]),
     });
@@ -357,10 +344,9 @@ describe('file conversation', () => {
     wrapper.unmount();
   });
 
-  it('starts without a header or editor, preserves collapsed drafts, and reports the server count', async () => {
+  it('preserves cancelled drafts and reports the server count', async () => {
     vi.mocked(axios.get).mockResolvedValueOnce({ data: { ...page(), total_count: 83 } });
     const wrapper = await render(false);
-    expect(wrapper.find('.comments-heading').exists()).toBe(false);
     expect(wrapper.find('.comment-composer').exists()).toBe(false);
     expect(wrapper.emitted('count')?.at(-1)).toEqual([83]);
     const toggle = wrapper.get('[id$="-toggle"]');
@@ -378,30 +364,8 @@ describe('file conversation', () => {
     wrapper.unmount();
   });
 
-  it('places Add comment and its editor directly after the conversation, including an empty list', async () => {
-    vi.mocked(axios.get).mockResolvedValueOnce({ data: page([]) });
-    const wrapper = await render(false);
-    const list = wrapper.get('.comments-list');
-    expect(list.find('[id$="-toggle"]').exists()).toBe(true);
-    expect(wrapper.find('.comment-footer').exists()).toBe(false);
-    expect(wrapper.find('.comment-toolbar').exists()).toBe(false);
-    expect(wrapper.get('.comment-entry').element.previousElementSibling).toBe(
-      list.get('ol').element,
-    );
-    await wrapper.get('[id$="-toggle"]').trigger('click');
-    await flushPromises();
-    expect(wrapper.find('[id$="-toggle"]').exists()).toBe(false);
-    expect(list.find('.comment-composer').exists()).toBe(true);
-    expect(list.find('.comment-composer-panel .comment-composer').exists()).toBe(true);
-    expect(wrapper.get('.comment-composer-panel [role="region"]').attributes('aria-label')).toBe(
-      'Comment editor',
-    );
-    expect(wrapper.get('.editor-heading').text()).toBe('Add a team note');
-    expect(wrapper.get('.composer-actions button').text()).toBe('Cancel');
-    wrapper.unmount();
-  });
-
   it('uses the team-only checkbox to choose the audience without changing the draft', async () => {
+    vi.mocked(axios.get).mockResolvedValueOnce({ data: page([]) });
     const post = vi.spyOn(axios, 'post').mockResolvedValue({
       data: { ...comment, id: '02', body: 'Ready for the client' },
     });

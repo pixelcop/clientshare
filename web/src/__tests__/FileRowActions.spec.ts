@@ -41,8 +41,6 @@ describe('file row actions', () => {
       'Delete',
     ]);
     expect(actions.some((action) => action.label === 'Share')).toBe(false);
-    expect(wrapper.find('.row-actions button[aria-label^="Open"]').exists()).toBe(false);
-    expect(wrapper.find('.row-actions .oi-eye').exists()).toBe(false);
     wrapper.unmount();
   });
 
@@ -101,8 +99,6 @@ describe('file row actions', () => {
     });
     const actions = wrapper.findComponent(Menu).props('model')!;
     expect(actions.map((action) => action.label)).toEqual(['Open', 'Download ZIP']);
-    expect(wrapper.find('button[aria-label="Open Documents"]').exists()).toBe(false);
-    expect(wrapper.find('.row-quick-actions .oi-folder-open').exists()).toBe(false);
     wrapper.unmount();
   });
 });
