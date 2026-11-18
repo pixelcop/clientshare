@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"sort"
 	"strings"
 	"unicode/utf8"
 
@@ -10,15 +11,16 @@ import (
 )
 
 type CommentMention struct {
-	ID    string `json:"id"`
-	Name  string `json:"name"`
-	Email string `json:"email,omitempty"`
+	ID                  string `json:"id"`
+	Name                string `json:"name"`
+	Email               string `json:"email,omitempty"`
+	PreviouslyMentioned bool   `json:"previously_mentioned,omitempty"`
 }
 
 // mentionQuery never makes file access into a tenant directory permission.
 // Staff with whole-client read authority can use that client's contacts; other
 // readers can mention themselves and people already visible in the conversation.
-func (s *FileCommentService) mentionQuery(ctx context.Context, req AccessRequest, actor models.User, visibility string) (*gorm.DB, bool, error) {
+func (s *FileCommentService) mentionQuery(ctx context.Context, req *AccessRequest, actor models.User, visibility string) (*gorm.DB, bool, error) {
 	if visibility != CommentShared && visibility != CommentTeam {
 		return nil, false, ErrCommentInput
 	}
@@ -34,6 +36,7 @@ func (s *FileCommentService) mentionQuery(ctx context.Context, req AccessRequest
 			return nil, false, err
 		}
 		clientID = file.ClientID
+		req.ClientID = clientID
 	}
 	directory := false
 	if staff {
@@ -54,7 +57,7 @@ func (s *FileCommentService) mentionQuery(ctx context.Context, req AccessRequest
 				(ra.user_id=users.id OR EXISTS (SELECT 1 FROM access_group_members gm WHERE gm.tenant_id=ra.tenant_id AND gm.group_id=ra.group_id AND gm.user_id=users.id))))`,
 			clientID, clientID, clientID)
 	} else {
-		authors := commentQuery(db, req, visibility == CommentTeam).Select("author_id")
+		authors := commentQuery(db, *req, visibility == CommentTeam).Select("author_id")
 		q = q.Where("(users.id = ? OR users.id IN (?))", actor.ID, authors)
 	}
 	if visibility == CommentTeam {
@@ -63,12 +66,8 @@ func (s *FileCommentService) mentionQuery(ctx context.Context, req AccessRequest
 	return q, directory, nil
 }
 
-func (s *FileCommentService) mentionCanRead(ctx context.Context, req AccessRequest, user models.User) (bool, error) {
-	var file models.File
-	if err := s.DB.WithContext(ctx).Select("client_id").Where("tenant_id = ? AND id = ?", req.TenantID, req.FileID).First(&file).Error; err != nil {
-		return false, err
-	}
-	req.ClientID, req.Actor, req.Operation = file.ClientID, AccessActor{UserID: user.ID}, AccessRead
+func (s *FileCommentService) mentionCanRead(ctx context.Context, req AccessRequest, userID string) (bool, error) {
+	req.Actor, req.Operation = AccessActor{UserID: userID}, AccessRead
 	decision, err := (&AccessService{DB: s.DB}).Resolve(ctx, req)
 	return decision.Allowed, err
 }
@@ -78,7 +77,7 @@ func (s *FileCommentService) Mentions(ctx context.Context, req AccessRequest, se
 	if err != nil {
 		return nil, err
 	}
-	q, directory, err := s.mentionQuery(ctx, req, actor, visibility)
+	q, directory, err := s.mentionQuery(ctx, &req, actor, visibility)
 	if err != nil {
 		return nil, err
 	}
@@ -87,36 +86,67 @@ func (s *FileCommentService) Mentions(ctx context.Context, req AccessRequest, se
 	if utf8.RuneCountInString(search) > 200 {
 		return nil, ErrCommentInput
 	}
-	search = strings.NewReplacer("!", "!!", "%", "!%", "_", "!_").Replace(strings.ToLower(search))
-	like := "%" + search + "%"
-	if directory {
-		q = q.Where("(LOWER(users.name) LIKE ? ESCAPE '!' OR LOWER(users.email) LIKE ? ESCAPE '!')", like, like)
-	} else {
-		q = q.Where("LOWER(users.name) LIKE ? ESCAPE '!'", like)
-	}
-	var users []models.User
-	// Bound permission work as well as response size. More specific text can
-	// narrow a crowded name match; this is an autocomplete, not a full roster.
-	if err := q.Order("LOWER(users.name), users.id").Limit(40).Find(&users).Error; err != nil {
+	query := normalizePeopleSearch(search)
+	var bodies []string
+	if err := commentQuery(s.DB.WithContext(ctx), req, visibility == CommentTeam).
+		Where("deleted_at IS NULL AND body LIKE ?", "%mention:%").Pluck("body", &bodies).Error; err != nil {
 		return nil, err
 	}
+	mentioned := make(map[string]bool)
+	for _, body := range bodies {
+		_, ids, err := RenderCommentMarkdown(body)
+		if err != nil {
+			return nil, err
+		}
+		for _, id := range ids {
+			mentioned[id] = true
+		}
+	}
+	var users []struct{ ID, Name, Email string }
+	if err := q.Select("users.id", "users.name", "users.email").Find(&users).Error; err != nil {
+		return nil, err
+	}
+	type match struct {
+		person CommentMention
+		rank   int
+		name   string
+	}
+	var matches []match
 	for _, user := range users {
-		allowed, err := s.mentionCanRead(ctx, req, user)
+		name := strings.TrimSpace(user.Name)
+		if name == "" {
+			name = "Portal user"
+		}
+		mention := CommentMention{ID: user.ID, Name: name, PreviouslyMentioned: mentioned[user.ID]}
+		if directory {
+			mention.Email = user.Email
+		}
+		if rank := peopleMatch(query, name, mention.Email); rank < noPeopleMatch {
+			matches = append(matches, match{mention, rank, normalizePeopleSearch(name)})
+		}
+	}
+	sort.Slice(matches, func(i, j int) bool {
+		a, b := matches[i], matches[j]
+		if a.rank != b.rank {
+			return a.rank < b.rank
+		}
+		if a.person.PreviouslyMentioned != b.person.PreviouslyMentioned {
+			return a.person.PreviouslyMentioned
+		}
+		if a.name != b.name {
+			return a.name < b.name
+		}
+		return a.person.ID < b.person.ID
+	})
+	for _, match := range matches {
+		allowed, err := s.mentionCanRead(ctx, req, match.person.ID)
 		if err != nil {
 			return nil, err
 		}
 		if !allowed {
 			continue
 		}
-		name := strings.TrimSpace(user.Name)
-		if name == "" {
-			name = "Portal user"
-		}
-		mention := CommentMention{ID: user.ID, Name: name}
-		if directory {
-			mention.Email = user.Email
-		}
-		result = append(result, mention)
+		result = append(result, match.person)
 		if len(result) == 8 {
 			break
 		}
@@ -135,7 +165,7 @@ func (s *FileCommentService) validateMentions(ctx context.Context, req AccessReq
 	if len(ids) > 20 {
 		return ErrCommentMention
 	}
-	q, _, err := s.mentionQuery(ctx, req, actor, visibility)
+	q, _, err := s.mentionQuery(ctx, &req, actor, visibility)
 	if err != nil {
 		return err
 	}
@@ -147,7 +177,7 @@ func (s *FileCommentService) validateMentions(ctx context.Context, req AccessReq
 		return ErrCommentMention
 	}
 	for _, user := range users {
-		allowed, err := s.mentionCanRead(ctx, req, user)
+		allowed, err := s.mentionCanRead(ctx, req, user.ID)
 		if err != nil {
 			return err
 		}

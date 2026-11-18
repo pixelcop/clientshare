@@ -127,7 +127,7 @@ func TestCommentMentionsRespectAudienceAndDirectory(t *testing.T) {
 
 func TestCommentMentionInitialSuggestionsAreBoundedAndTenantScoped(t *testing.T) {
 	f, s := commentFixture(t)
-	for i := range 12 {
+	for i := range 45 {
 		require.NoError(t, f.db.Create(&models.User{
 			ID: fmt.Sprintf("mention-admin-%02d", i), TenantID: "tenant",
 			Name: fmt.Sprintf("Admin %02d", i), Email: fmt.Sprintf("mention-%02d@example.test", i), Role: "admin",
@@ -142,4 +142,39 @@ func TestCommentMentionInitialSuggestionsAreBoundedAndTenantScoped(t *testing.T)
 	for _, person := range people {
 		require.NotEqual(t, "foreign-person", person.ID)
 	}
+}
+
+func TestCommentMentionRankingUsesVisibleCurrentCommentsAndMatchQuality(t *testing.T) {
+	f, s := commentFixture(t)
+	for _, name := range []string{"Alex", "Alexa", "Zoë"} {
+		id := map[string]string{"Alex": "alex", "Alexa": "alexa", "Zoë": "zoe"}[name]
+		require.NoError(t, f.db.Create(&models.User{
+			ID: id, Name: name, Email: id + "@example.test", TenantID: "tenant", Role: "admin",
+		}).Error)
+	}
+	req := f.req("admin", "file", AccessRead)
+	_, err := s.Create(t.Context(), req, CommentInput{Body: "[@Zoë](mention:zoe)", Visibility: CommentTeam}, "private-ranking")
+	require.NoError(t, err)
+	shared, err := s.Create(t.Context(), req, CommentInput{Body: "[@Alexa](mention:alexa)", Visibility: CommentShared}, "shared-ranking")
+	require.NoError(t, err)
+	people, err := s.Mentions(t.Context(), req, "", CommentShared)
+	require.NoError(t, err)
+	require.Equal(t, "alexa", people[0].ID)
+	people, err = s.Mentions(t.Context(), req, "zoe", CommentShared)
+	require.NoError(t, err)
+	require.Len(t, people, 1)
+	require.False(t, people[0].PreviouslyMentioned)
+	people, err = s.Mentions(t.Context(), req, "zoe", CommentTeam)
+	require.NoError(t, err)
+	require.True(t, people[0].PreviouslyMentioned)
+	people, err = s.Mentions(t.Context(), req, "alex", CommentShared)
+	require.NoError(t, err)
+	require.Equal(t, "alex", people[0].ID)
+	people, err = s.Mentions(t.Context(), req, "alxe", CommentShared)
+	require.NoError(t, err)
+	require.Equal(t, "alex", people[0].ID)
+	require.NoError(t, f.db.Model(&models.FileComment{}).Where("id = ?", shared.ID).Update("deleted_at", accessTestNow).Error)
+	people, err = s.Mentions(t.Context(), req, "alexa", CommentShared)
+	require.NoError(t, err)
+	require.False(t, people[0].PreviouslyMentioned)
 }

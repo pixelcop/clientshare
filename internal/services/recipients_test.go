@@ -90,6 +90,11 @@ func TestRecipientsSearchIsBoundedLiteralAndDeduplicated(t *testing.T) {
 	require.Equal(t, "member", contacts[0].ID)
 	require.True(t, contacts[0].WorkspaceAccess)
 	require.Len(t, contacts[0].Clients, 1)
+	require.NoError(t, f.db.Model(&models.User{}).Where("id = ?", "member").Update("name", "Álex Smith").Error)
+	contacts, err = s.Search(t.Context(), req, "alxe", false)
+	require.NoError(t, err)
+	require.NotEmpty(t, contacts)
+	require.Equal(t, "member", contacts[0].ID)
 	for i := range 25 {
 		require.NoError(t, f.db.Create(&models.User{
 			ID: fmt.Sprintf("extra-%02d", i), TenantID: "tenant",

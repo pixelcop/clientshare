@@ -2,7 +2,7 @@ package services
 
 import (
 	"context"
-	"strings"
+	"sort"
 	"time"
 
 	"github.com/pixelcop/clientshare/internal/models"
@@ -95,14 +95,25 @@ func (s *RecipientService) Search(ctx context.Context, req AccessRequest, search
 	} else {
 		q = q.Where("users.id IN (?)", current)
 	}
-	if search = strings.TrimSpace(search); search != "" {
-		// Escape wildcard characters; a name/email search is literal.
-		search = strings.NewReplacer("!", "!!", "%", "!%", "_", "!_").Replace(strings.ToLower(search))
-		q = q.Where("(LOWER(users.name) LIKE ? ESCAPE '!' OR LOWER(users.email) LIKE ? ESCAPE '!')", "%"+search+"%", "%"+search+"%")
+	query := normalizePeopleSearch(search)
+	q = q.Order(clause.OrderBy{Expression: gorm.Expr("CASE WHEN users.id IN (?) THEN 0 ELSE 1 END, LOWER(users.name), LOWER(users.email), users.id", current)})
+	if query == "" {
+		q = q.Limit(20)
 	}
-	q = q.Order(clause.OrderBy{Expression: gorm.Expr("CASE WHEN users.id IN (?) THEN 0 ELSE 1 END, LOWER(users.name), LOWER(users.email), users.id", current)}).Limit(20)
 	if err := q.Find(&contacts).Error; err != nil {
 		return nil, err
+	}
+	if query != "" {
+		ranks := make(map[string]int)
+		matches := contacts[:0]
+		for _, contact := range contacts {
+			if rank := peopleMatch(query, contact.Name, contact.Email); rank < noPeopleMatch {
+				ranks[contact.ID] = rank
+				matches = append(matches, contact)
+			}
+		}
+		sort.SliceStable(matches, func(i, j int) bool { return ranks[matches[i].ID] < ranks[matches[j].ID] })
+		contacts = matches[:min(len(matches), 20)]
 	}
 	userIDs := make([]string, 0, len(contacts))
 	for _, contact := range contacts {
