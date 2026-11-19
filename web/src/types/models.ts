@@ -195,6 +195,48 @@ export interface Client {
 }
 
 //////////
+// source: document_request.go
+
+export interface DocumentRequest {
+  ID: string;
+  TenantID: string;
+  ClientID: string;
+  FolderID: string;
+  Title: string;
+  CreatedBy: string;
+  CreatedAt: string;
+  ExpiresAt: string;
+  RevokedAt?: string;
+}
+export interface DocumentRequestItem {
+  ID: string;
+  RequestID: string;
+  Position: number /* int */;
+  Name: string;
+  Instructions: string;
+  Status: string;
+  Round: number /* int */;
+  Reason: string;
+  SubmittedAt?: string;
+}
+export interface DocumentRequestFile {
+  FileID: string;
+  ItemID: string;
+  Round: number /* int */;
+  Name: string;
+  CreatedAt: string;
+}
+export interface DocumentRequestReview {
+  ItemID: string;
+  Round: number /* int */;
+  Status: string;
+  Reason: string;
+  ReviewerID: string;
+  SubmittedAt: string;
+  CreatedAt: string;
+}
+
+//////////
 // source: feed_event.go
 
 export const FeedEventTypeFileUploaded = "file_uploaded";

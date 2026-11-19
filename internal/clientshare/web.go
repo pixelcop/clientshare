@@ -122,6 +122,7 @@ func NewWebApp(cfg *Config, db *gorm.DB, logger *zap.Logger, emailQueue emailpkg
 	// File endpoints (protected)
 	handlers.RegisterFileRoutes(api, db, store, emailQueue, cfg.Server.BaseURL, tenantSettingsService)
 	handlers.RegisterFileCommentRoutes(api, db, emailQueue != nil, cfg.Server.BaseURL)
+	handlers.RegisterDocumentRequestRoutes(insecure, api, db, store, cfg.SecureLinks.SigningKey)
 
 	// Secure link management (admin/manager)
 	handlers.RegisterLinkRoutes(app, db, cfg.SecureLinks.SigningKey, store, emailQueue, cfg.Server.BaseURL, tenantSettingsService)
