@@ -117,6 +117,19 @@ const router = createRouter({
       props: true,
     },
     {
+      path: '/document-request',
+      name: 'DocumentRequestRecipient',
+      component: () => import('../views/DocumentRequestRecipient.vue'),
+      meta: { public: true },
+    },
+    {
+      path: '/clients/:clientId/document-requests/:requestId?',
+      name: 'DocumentRequests',
+      component: () => import('../views/DocumentRequests.vue'),
+      props: true,
+      meta: { public: false, roles: ['admin', 'manager'] },
+    },
+    {
       path: '/clients/:id/links',
       name: 'SecureLinks',
       component: SecureLinks,
@@ -153,7 +166,10 @@ const router = createRouter({
 });
 
 let initialLoad = false;
-router.beforeEach(async (_to, _from) => {
+router.beforeEach(async (to, _from) => {
+  if (to.name === 'DocumentRequestRecipient') {
+    return;
+  }
   // Always try restoring the first session load from the auth cookie.
   if (!initialLoad) {
     try {

@@ -1,5 +1,41 @@
 # Request documents from a client
 
+Use a **document request** when you need specific files and want to review each
+item. For a one-off upload without a checklist, use an [Upload only link](#send-an-upload-link).
+
+## Create a checklist
+
+1. As an administrator or manager with access to manage the client, open the
+   workspace root and choose **Document requests**. On mobile, look in the
+   **Upload** menu.
+2. Choose **New request**, give it a title, and add the documents you need. Add
+   instructions where they help the recipient pick the right file.
+3. Choose **Create request**, then **Copy request link** and send it directly to
+   the recipient. ClientShare does not email this link automatically.
+
+The recipient can open the checklist without a portal account. They can add one
+or more files to an item and return with the same link later. **Submit for
+review** tells the team that an item is ready. Adding files alone does not
+submit the item.
+
+Anyone with the link can see the named checklist, filenames attached to the
+current submissions, and instructions or replacement reasons. The link does not
+let them download files or browse the workspace. It expires after 30 days; staff
+can revoke it sooner from the request.
+
+## Review the documents
+
+Open the request and use **Refresh** to check for submissions. Open a filename
+to preview it. For each submitted item, choose **Accept** or **Ask for
+replacement**. A replacement reason is visible to the recipient. Send them the
+same link so they can submit a correction; the other items keep their status.
+Staff can see earlier review decisions under **Review history**.
+
+The checklist is complete when all items are accepted. Revoking the link does
+not delete files already received in the workspace.
+
+## Collect files without a checklist
+
 **Who:** People with upload and create-sharing-links permissions in the client or folder.
 
 Use an **Upload only** secure link when you want a recipient to send documents without downloading material from the workspace.
