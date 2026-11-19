@@ -64,9 +64,14 @@ Copy/paste uses Markdown or plain text rather than arbitrary HTML.
 Raw HTML is not rendered; images appear as alt text.
 
 Type `@` to open the mention dropdown, then type a name to narrow the suggestions.
-Use the arrow keys and Enter, or select a name. Suggestions include only people
-available to you who can read the file and the chosen audience; team notes
-suggest staff only. Mentions do not grant access or send notifications.
+Use the arrow keys and Enter, or select a name. In a shared comment, you can
+mention people who can read the file. If you can share the file, searching can
+also show known address-book contacts marked **No file access**. Selecting one
+opens a file-only invitation. Until they have access, the text stays unlinked.
+In a team note, you can reference client contacts without sharing the file or
+the note. Mentions themselves do not grant access or send notifications.
+Live comments show a person's current name when it is visible to you. Revision
+history retains the name saved in the original Markdown.
 - Comments store Markdown source, up to 4,000 characters. They belong to the file, not
   to a PDF page, annotation, or folder.
 - Anonymous secure-link sessions cannot view or post comments. Sign in through

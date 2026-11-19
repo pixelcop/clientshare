@@ -8,7 +8,10 @@ import CommentEditor from '@/components/CommentEditor.vue';
 
 import { editorGeometry } from './editorGeometry';
 
-async function render(source = '') {
+async function render(
+  source = '',
+  extra: Partial<InstanceType<typeof CommentEditor>['$props']> = {},
+) {
   const wrapper = mount(CommentEditor, {
     props: {
       id: 'editor',
@@ -19,6 +22,7 @@ async function render(source = '') {
       'onUpdate:modelValue': (value: string) => {
         void wrapper.setProps({ modelValue: value });
       },
+      ...extra,
     },
     attachTo: document.body,
   });
@@ -81,6 +85,42 @@ describe('rich Markdown comment editor', () => {
       (wrapper.get('[role="textbox"] .comment-mention').element as HTMLElement).contentEditable,
     ).toBe('false');
     expect(wrapper.props('modelValue')).not.toContain('<');
+    wrapper.unmount();
+  });
+
+  it('shows the current name in the editor without rewriting the saved label', async () => {
+    const source = '[@Alex](mention:alex)';
+    const wrapper = await render(source, {
+      mentionHTML: '<span class="comment-mention" data-user-id="alex">@Alex Rivera</span>',
+    });
+    expect(wrapper.get('[role="textbox"] .comment-mention').text()).toBe('@Alex Rivera');
+    expect(instance(wrapper).getMarkdown()).toBe(source);
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined();
+    wrapper.unmount();
+  });
+
+  it('opens sharing for a known person without turning a pending invite into a mention', async () => {
+    vi.spyOn(axios, 'get').mockResolvedValue({
+      data: [{ id: 'alex', name: 'Alex', email: 'alex@example.test', action: 'share' }],
+    });
+    const sharing = vi.fn().mockResolvedValue(false);
+    const wrapper = await render('', { shareMention: sharing });
+    await mention(wrapper, '@alex');
+    expect(wrapper.get('[role="option"]').text()).toContain('No file access');
+    await wrapper.get('[role="option"] button').trigger('click');
+    await flushPromises();
+    expect(sharing).toHaveBeenCalledWith(expect.objectContaining({ id: 'alex' }));
+    expect(wrapper.props('modelValue')).toBe('@alex');
+    expect(wrapper.get('[role="textbox"]').find('.comment-mention').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('keeps other mentions intact when converting an unavailable mention to plain text', async () => {
+    const wrapper = await render('[@Alex](mention:alex) and [@Sam](mention:sam)');
+    await wrapper.setProps({ unavailableMentionIds: ['alex'] });
+    expect(wrapper.get('.comment-mention-unavailable').text()).toBe('@Alex');
+    await wrapper.get('.mention-recovery').trigger('click');
+    expect(wrapper.props('modelValue')).toBe('@Alex and [@Sam](mention:sam)');
     wrapper.unmount();
   });
 

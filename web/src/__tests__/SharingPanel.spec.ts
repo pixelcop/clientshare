@@ -97,6 +97,34 @@ describe('exact-scope sharing panel', () => {
     wrapper.unmount();
   });
 
+  it('prefills a locked contact and sends a file-only invitation bound to their ID', async () => {
+    const post = vi
+      .spyOn(axios, 'post')
+      .mockResolvedValue({ data: { id: 'invite', status: 'sent' } });
+    const wrapper = mount(SharingPanel, {
+      props: {
+        scope,
+        recipient: { id: 'alex', name: 'Alex', email: 'alex@example.test', userType: 'external' },
+      },
+      global: { plugins: [OpenVue] },
+    });
+    await flushPromises();
+    expect(wrapper.text()).toContain('This file only');
+    expect(wrapper.get('.recipient-identity').text()).toContain('Alex');
+    expect(wrapper.find('#item-file-email').exists()).toBe(false);
+    expect(wrapper.find('[aria-label="Sharing links"]').exists()).toBe(false);
+    await wrapper.get('[aria-label="Send invitation"]').trigger('click');
+    await flushPromises();
+    expect(post.mock.calls[0][0]).toBe('/api/files/file/invitations');
+    expect(post.mock.calls[0][1]).toMatchObject({
+      recipient_user_id: 'alex',
+      email: 'alex@example.test',
+      role_id: 'viewer',
+    });
+    expect(wrapper.emitted('invited')).toEqual([['Invitation email sent.']]);
+    wrapper.unmount();
+  });
+
   it('opens links separately without losing typed email, and resets for a new target', async () => {
     const wrapper = mount(SharingPanel, { props: { scope }, global: { plugins: [OpenVue] } });
     await flushPromises();

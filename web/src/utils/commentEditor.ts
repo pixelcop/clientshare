@@ -2,10 +2,14 @@ import { Extension, type JSONContent } from '@tiptap/core';
 import Link from '@tiptap/extension-link';
 import Mention, { type MentionNodeAttrs } from '@tiptap/extension-mention';
 import { Markdown } from '@tiptap/markdown';
+import { Plugin } from '@tiptap/pm/state';
+import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import StarterKit from '@tiptap/starter-kit';
 import type { SuggestionOptions } from '@tiptap/suggestion';
 
 export interface CommentPerson {
+  action?: 'share' | 'reference_team' | 'reference_no_access';
+  user_type?: 'external' | 'internal';
   previously_mentioned?: boolean;
   id: string;
   name: string;
@@ -74,7 +78,13 @@ const ImageAltText = Extension.create({
   },
 });
 
-export function commentExtensions(suggestion: CommentSuggestions) {
+export function commentExtensions(
+  suggestion: CommentSuggestions,
+  options: {
+    displayName?: (id: string) => string | undefined;
+    unavailableIds?: () => string[] | undefined;
+  } = {},
+) {
   return [
     StarterKit.configure({ link: false, underline: false, strike: false }),
     Link.configure({
@@ -86,7 +96,38 @@ export function commentExtensions(suggestion: CommentSuggestions) {
     CommentMention.configure({
       HTMLAttributes: { class: 'comment-mention' },
       deleteTriggerWithBackspace: true,
+      renderHTML: ({ node }) => [
+        'span',
+        { class: 'comment-mention' },
+        `@${options.displayName?.(node.attrs.id) || node.attrs.label || node.attrs.id}`,
+      ],
       suggestion,
+    }),
+    Extension.create({
+      name: 'commentMentionAvailability',
+      addProseMirrorPlugins: () => [
+        new Plugin({
+          props: {
+            decorations: ({ doc }) => {
+              const ids = options.unavailableIds?.();
+              if (!ids?.length) {
+                return DecorationSet.empty;
+              }
+              const marked: Decoration[] = [];
+              doc.descendants((node, pos) => {
+                if (node.type.name === 'mention' && ids.includes(node.attrs.id)) {
+                  marked.push(
+                    Decoration.node(pos, pos + node.nodeSize, {
+                      class: 'comment-mention-unavailable',
+                    }),
+                  );
+                }
+              });
+              return DecorationSet.create(doc, marked);
+            },
+          },
+        }),
+      ],
     }),
     LiteralHTML,
     ImageAltText,

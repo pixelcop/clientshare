@@ -64,11 +64,15 @@ const {
   canEdit,
   confirmRemove,
   openMobileManage,
+  fixedRecipient,
 } = session;
 </script>
 
 <template>
   <div v-if="view" :class="{ 'mobile-share-content': isMobile && mobileScreen === 'share' }">
+    <p v-if="fixedRecipient && (!canInvite || !roleOptions.length)" class="muted">
+      You don’t have permission to invite this person to view the file.
+    </p>
     <div v-if="drafts.length" class="draft-people" aria-label="People to invite">
       <div v-for="person in drafts" :key="person.id" class="draft-person">
         <div class="recipient-settings">
@@ -76,7 +80,11 @@ const {
             <span class="person-avatar" aria-hidden="true">{{
               person.email[0]?.toUpperCase()
             }}</span>
-            <strong>{{ person.email }}</strong>
+            <span v-if="fixedRecipient" class="recipient-label">
+              <strong>{{ fixedRecipient.name }}</strong>
+              <span class="muted">{{ person.email }}</span>
+            </span>
+            <strong v-else>{{ person.email }}</strong>
           </div>
           <div class="recipient-controls">
             <AccessSelect
@@ -85,6 +93,7 @@ const {
               :options="roleOptions"
               optionLabel="label"
               optionValue="value"
+              placeholder="Choose an access role"
               :disabled="busy"
               class="role-select"
               :labelStyle="{ display: 'flex', alignItems: 'center', textAlign: 'start' }"
@@ -99,6 +108,7 @@ const {
               @update:modelValue="updateDraft(person)"
             />
             <Button
+              v-if="!fixedRecipient"
               icon="oi oi-times"
               :aria-label="`Remove ${person.email}`"
               severity="secondary"
@@ -111,7 +121,7 @@ const {
       </div>
     </div>
     <form
-      v-if="canInvite && (!isMobile || mobileScreen === 'share')"
+      v-if="!fixedRecipient && canInvite && (!isMobile || mobileScreen === 'share')"
       class="add-person"
       @submit.prevent="addPerson"
     >
@@ -159,17 +169,17 @@ const {
         severity="secondary"
         variant="text"
         :disabled="busy"
-        @click="backToPeople()"
+        @click="fixedRecipient ? session.requestClose() : backToPeople()"
       />
       <Button
         label="Send invitation"
         :loading="busy"
-        :disabled="!!email.trim()"
+        :disabled="!!email.trim() || drafts.some((person) => !person.role)"
         @click="sendPeople"
       />
     </div>
     <section
-      v-if="!composing && (!isMobile || mobileScreen === 'manage')"
+      v-if="!fixedRecipient && !composing && (!isMobile || mobileScreen === 'manage')"
       aria-label="People with access"
       class="people-section"
     >
@@ -627,6 +637,13 @@ const {
 .recipient-identity {
   flex: 1;
   overflow-wrap: anywhere;
+}
+.recipient-label {
+  display: grid;
+  min-width: 0;
+}
+.recipient-label .muted {
+  font-size: 12px;
 }
 .person-avatar {
   display: grid;

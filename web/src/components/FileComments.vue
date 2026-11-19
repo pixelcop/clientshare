@@ -5,14 +5,19 @@ import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, ref, watch }
 
 import CommentBody from '@/components/CommentBody.vue';
 import FileCommentCard from '@/components/FileCommentCard.vue';
+import SharingDialog from '@/components/SharingDialog.vue';
 import { useFileComments } from '@/composables/useFileComments';
 import { useMentionSearch } from '@/composables/useMentionSearch';
 import { useAuthStore } from '@/stores/auth';
 import type { FileComment, FileCommentRevision } from '@/types/models';
+import type { SharingRecipient } from '@/types/sharing';
 
 const CommentEditor = defineAsyncComponent(() => import('@/components/CommentEditor.vue'));
 
-const props = withDefaults(defineProps<{ fileId: string; visible?: boolean }>(), { visible: true });
+const props = withDefaults(
+  defineProps<{ fileId: string; fileName?: string; visible?: boolean }>(),
+  { visible: true, fileName: 'File' },
+);
 const emit = defineEmits<{ count: [value: number | null]; changed: [] }>();
 const auth = useAuthStore();
 const sessionKey = computed(
@@ -28,6 +33,7 @@ const {
   canInternal,
   nextCursor,
   error,
+  unavailableMentionIds,
   load,
   post,
   edit,
@@ -40,6 +46,9 @@ const visibility = ref('shared');
 const draftKey = ref(crypto.randomUUID());
 const editing = ref<FileComment | null>(null);
 const editBody = ref('');
+const shareTarget = ref<SharingRecipient | null>(null);
+const shareStatus = ref('');
+let finishSharing: ((granted: boolean) => void) | undefined;
 const removing = ref('');
 const historyFor = ref('');
 const history = ref<FileCommentRevision[]>([]);
@@ -63,6 +72,61 @@ function closeHistory() {
   historyLoading.value = false;
   historyError.value = '';
   moreHistory.value = false;
+}
+function cancelSharing() {
+  shareTarget.value = null;
+  finishSharing?.(false);
+  finishSharing = undefined;
+}
+function shareMention(person: SharingRecipient): Promise<boolean> {
+  if (shareTarget.value) {
+    return Promise.resolve(false);
+  }
+  shareStatus.value = '';
+  shareTarget.value = person;
+  return new Promise((resolve) => {
+    finishSharing = resolve;
+  });
+}
+function warmMentions() {
+  if (props.visible && ready.value && (visibility.value === 'shared' || canInternal.value)) {
+    mentions.warm(visibility.value);
+  }
+}
+function refreshMentions() {
+  mentions.reset();
+  warmMentions();
+}
+async function invitationSaved(delivery: string) {
+  const target = shareTarget.value;
+  if (!target) {
+    return;
+  }
+  const fileId = props.fileId;
+  const session = sessionKey.value;
+  const resolve = finishSharing;
+  finishSharing = undefined;
+  shareTarget.value = null;
+  refreshMentions();
+  let granted = false;
+  // Existing file invitations are pending until accepted. A recheck is also
+  // useful if access was granted concurrently in another session.
+  try {
+    await axios.post(`/api/files/${fileId}/comments/preview`, {
+      body: `[@Person](mention:${target.id})`,
+      visibility: 'shared',
+    });
+    if (fileId === props.fileId && session === sessionKey.value) {
+      granted = true;
+      shareStatus.value = `${target.name} now has access.`;
+    }
+  } catch {
+    if (fileId === props.fileId && session === sessionKey.value) {
+      shareStatus.value = `${delivery} You can mention ${target.name} once they have access.`;
+    }
+  } finally {
+    resolve?.(granted);
+  }
 }
 watch(totalCount, (count) => emit('count', count));
 watch(error, (message) => {
@@ -93,6 +157,8 @@ watch(
     composerOpen.value = false;
     editing.value = null;
     removing.value = '';
+    shareStatus.value = '';
+    cancelSharing();
     closeHistory();
   },
 );
@@ -102,16 +168,15 @@ watch(ready, (value) => {
     mentions.reset();
   }
 });
-function warmMentions() {
-  if (props.visible && ready.value && (visibility.value === 'shared' || canInternal.value)) {
-    mentions.warm(visibility.value);
-  }
-}
 watch([ready, visibility, () => props.visible], warmMentions);
-function refreshMentions() {
-  mentions.reset();
-  warmMentions();
-}
+watch(unavailableMentionIds, (ids) => {
+  if (ids.length) {
+    refreshMentions();
+  }
+});
+watch(visibility, () => {
+  unavailableMentionIds.value = [];
+});
 
 function date(value: string) {
   return new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
@@ -171,6 +236,7 @@ async function send() {
   }
 }
 async function startEdit(comment: FileComment) {
+  unavailableMentionIds.value = [];
   composerOpen.value = false;
   editing.value = comment;
   editBody.value = comment.body;
@@ -205,6 +271,7 @@ async function toggleComposer() {
     ?.focus();
 }
 onBeforeUnmount(closeHistory);
+onBeforeUnmount(cancelSharing);
 </script>
 
 <template>
@@ -214,6 +281,7 @@ onBeforeUnmount(closeHistory);
     aria-label="File comments"
     tabindex="-1"
   >
+    <p v-if="shareStatus" role="status" class="comment-state" data-sentry-mask>{{ shareStatus }}</p>
     <div ref="list" class="comments-list" :aria-busy="loading">
       <p v-if="loading && !ready" role="status" class="comment-state">Loading conversation…</p>
       <Button
@@ -245,6 +313,10 @@ onBeforeUnmount(closeHistory);
                 :sessionKey="sessionKey"
                 :visibility="comment.visibility"
                 :mentionSearch="mentions"
+                :mentionHTML="comment.body_html"
+                :shareMention="shareMention"
+                :unavailableMentionIds="unavailableMentionIds"
+                @mentions-converted="unavailableMentionIds = []"
                 :label="`Edit ${comment.visibility === 'team' ? 'team note' : 'shared comment'}`"
                 :rows="4"
                 :disabled="saving"
@@ -387,6 +459,9 @@ onBeforeUnmount(closeHistory);
               :sessionKey="sessionKey"
               :visibility="visibility"
               :mentionSearch="mentions"
+              :shareMention="shareMention"
+              :unavailableMentionIds="unavailableMentionIds"
+              @mentions-converted="unavailableMentionIds = []"
               :label="visibility === 'team' ? 'Add a team note' : 'Add a shared comment'"
               :disabled="saving"
               :readonly="teamDraftUnavailable"
@@ -432,6 +507,14 @@ onBeforeUnmount(closeHistory);
         </Panel>
       </div>
     </div>
+    <SharingDialog
+      v-if="shareTarget"
+      visible
+      :scope="{ kind: 'item', id: fileId, name: fileName, itemType: 'file' }"
+      :recipient="shareTarget"
+      @close="cancelSharing"
+      @invited="invitationSaved"
+    />
   </section>
 </template>
 

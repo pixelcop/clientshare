@@ -13,7 +13,13 @@ import {
   tenantRoleLabel,
 } from '@/types/accessRoles';
 import type { AccessCapabilities, AccessInvitation, SecureLink } from '@/types/models';
-import type { GrantAccess, MemberAccess, SharingAccess, SharingScope } from '@/types/sharing';
+import type {
+  GrantAccess,
+  MemberAccess,
+  SharingAccess,
+  SharingRecipient,
+  SharingScope,
+} from '@/types/sharing';
 import { withinCeiling } from '@/types/sharingRoles';
 
 interface DraftPerson {
@@ -45,7 +51,12 @@ type Removal =
 type MobilePerson = Exclude<Removal, { kind: 'link' }>;
 
 // One session per panel: switching child panels must preserve drafts, edits and retry keys.
-export function useSharingPanel(getScope: () => SharingScope, close: () => void) {
+export function useSharingPanel(
+  getScope: () => SharingScope,
+  close: () => void,
+  fixedRecipient?: SharingRecipient,
+  onInvited?: (status: string) => void,
+) {
   const scope = toRef(getScope);
   const now = useTimestamp({ scheduler: (update) => useIntervalFn(update, 30_000) });
   const isFile = computed(() => scope.value.kind === 'item' && scope.value.itemType !== 'folder');
@@ -90,6 +101,7 @@ export function useSharingPanel(getScope: () => SharingScope, close: () => void)
       : 'This file only';
   });
   const composing = ref(false);
+  const selectedRoleId = ref('');
   const isMobile = useMediaQuery('(max-width: 639px)');
   const mobileScreen = ref<'share' | 'manage'>('share');
   const mobilePerson = ref<MobilePerson | null>(null);
@@ -193,7 +205,9 @@ export function useSharingPanel(getScope: () => SharingScope, close: () => void)
       pendingChanges.value ||
       (!view.value &&
         (Object.keys(memberEdits.value).length > 0 || Object.keys(grantEdits.value).length > 0)) ||
-      drafts.value.length > 0 ||
+      drafts.value.some(
+        (draft) => !fixedRecipient || draft.role !== selectedRoleId.value || draft.expiry,
+      ) ||
       !!email.value.trim(),
   );
   const discardAction = ref<(() => void) | null>(null);
@@ -251,7 +265,6 @@ export function useSharingPanel(getScope: () => SharingScope, close: () => void)
   const resultHeading = ref<HTMLElement | null>(null);
   let version = 0;
   let disposed = false;
-  const selectedRoleId = ref('');
   const roleLabel = (id?: string) => tenantRoleLabel(catalog.value, id);
   const canInvite = computed(() =>
     view.value?.capabilities.sharing
@@ -266,7 +279,8 @@ export function useSharingPanel(getScope: () => SharingScope, close: () => void)
     catalog.value
       .filter(
         (r) =>
-          applicableRole(r, 'external', roleTarget.value) &&
+          applicableRole(r, fixedRecipient?.userType || 'external', roleTarget.value) &&
+          (!fixedRecipient || roleCapabilities(r, isFile.value).can_read) &&
           withinCeiling(roleCapabilities(r, isFile.value), view.value?.capabilities || blank()),
       )
       .map((r) => ({
@@ -533,7 +547,8 @@ export function useSharingPanel(getScope: () => SharingScope, close: () => void)
       }
       catalog.value.push(...preserved.map((r) => r.data));
       const canLinks =
-        access.data.capabilities.sharing?.create_links ?? access.data.capabilities.can_share;
+        !fixedRecipient &&
+        (access.data.capabilities.sharing?.create_links ?? access.data.capabilities.can_share);
       links.value = canLinks ? (await axios.get<SecureLink[]>(`${base.value}/links`)).data : [];
       if (current !== version) {
         return;
@@ -640,7 +655,9 @@ export function useSharingPanel(getScope: () => SharingScope, close: () => void)
           return;
         }
         const tenantRole = catalog.value.find(
-          (r) => r.id === person.role && applicableRole(r, 'external', roleTarget.value),
+          (r) =>
+            r.id === person.role &&
+            applicableRole(r, fixedRecipient?.userType || 'external', roleTarget.value),
         );
         const role = tenantRole
           ? { capabilities: roleCapabilities(tenantRole, isFile.value) }
@@ -652,6 +669,10 @@ export function useSharingPanel(getScope: () => SharingScope, close: () => void)
           `${endpoint}/invitations`,
           {
             email: person.email,
+            ...(fixedRecipient && {
+              recipient_user_id: fixedRecipient.id,
+              user_type: fixedRecipient.userType,
+            }),
             role_id: person.role,
             capabilities: role.capabilities,
             expires_at: person.expiry?.toISOString() || null,
@@ -664,6 +685,10 @@ export function useSharingPanel(getScope: () => SharingScope, close: () => void)
         }
         messages.push(`${person.email}: ${status.value}`);
         drafts.value = drafts.value.filter((draft) => draft.id !== person.id);
+      }
+      if (fixedRecipient) {
+        onInvited?.(status.value);
+        return;
       }
       resetForm();
       await load();
@@ -684,6 +709,20 @@ export function useSharingPanel(getScope: () => SharingScope, close: () => void)
       }
     }
   }
+  watch([loading, canInvite, roleOptions], () => {
+    if (fixedRecipient && !loading.value && canInvite.value && !drafts.value.length) {
+      drafts.value = [
+        {
+          id: crypto.randomUUID(),
+          requestKey: crypto.randomUUID(),
+          email: fixedRecipient.email,
+          role: selectedRole.value,
+          expiry: null,
+        },
+      ];
+      composing.value = true;
+    }
+  });
   function canEdit(grant: EditableGrant) {
     const ceiling = view.value?.capabilities;
     return ceiling && grant.can_manage !== false && withinCeiling(grant, ceiling);
@@ -989,6 +1028,7 @@ export function useSharingPanel(getScope: () => SharingScope, close: () => void)
     linkExpiryPreset,
     result,
     recipient,
+    fixedRecipient,
     createLink,
     createAnotherLink,
     copy,

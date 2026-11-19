@@ -20,6 +20,7 @@ export function useFileComments(context: () => { fileId: string; sessionKey: str
   const canInternal = ref(false);
   const nextCursor = ref('');
   const error = ref('');
+  const unavailableMentionIds = ref<string[]>([]);
   const base = computed(() => `/api/files/${context().fileId}/comments`);
   let generation = 0;
   let listGeneration = 0;
@@ -37,6 +38,7 @@ export function useFileComments(context: () => { fileId: string; sessionKey: str
     canInternal.value = false;
     nextCursor.value = '';
     error.value = '';
+    unavailableMentionIds.value = [];
   }
 
   function failed(cause: unknown) {
@@ -47,6 +49,11 @@ export function useFileComments(context: () => { fileId: string; sessionKey: str
       error.value =
         'This comment changed elsewhere. Cancel the edit, reopen the file, and try again.';
     } else if (axios.isAxiosError(cause) && cause.response?.status === 400) {
+      const ids: unknown = cause.response.data?.unavailable_mention_ids;
+      if (Array.isArray(ids) && ids.length && ids.every((id) => typeof id === 'string')) {
+        unavailableMentionIds.value = ids;
+        return;
+      }
       error.value =
         'Check the comment length and mentions. Mentioned people must be available for this audience. Your draft has been kept.';
     } else {
@@ -99,6 +106,7 @@ export function useFileComments(context: () => { fileId: string; sessionKey: str
     const current = generation;
     saving.value = true;
     error.value = '';
+    unavailableMentionIds.value = [];
     // A list response started before this mutation cannot overwrite its result.
     controller?.abort();
     listGeneration += 1;
@@ -163,6 +171,7 @@ export function useFileComments(context: () => { fileId: string; sessionKey: str
     canInternal,
     nextCursor,
     error,
+    unavailableMentionIds,
     load,
     post,
     edit,

@@ -63,6 +63,7 @@ export function useMentionSearch(context: () => { fileId: string; sessionKey: st
       .filter(({ rank }) => rank < noPeopleMatch)
       .sort(
         (a, b) =>
+          Number(a.person.action === 'share') - Number(b.person.action === 'share') ||
           a.rank - b.rank ||
           Number(!!b.person.previously_mentioned) - Number(!!a.person.previously_mentioned) ||
           compare(a.name, b.name) ||

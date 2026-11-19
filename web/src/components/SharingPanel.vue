@@ -4,16 +4,18 @@ import '@/assets/sharing.css';
 import { Button, Checkbox, Dialog } from 'openvue';
 
 import { useSharingPanel } from '@/composables/useSharingPanel';
-import type { SharingScope } from '@/types/sharing';
+import type { SharingRecipient, SharingScope } from '@/types/sharing';
 
 import SharingLinks from './SharingLinks.vue';
 import SharingPeople from './SharingPeople.vue';
 
-const { scope } = defineProps<{ scope: SharingScope }>();
-const emit = defineEmits<{ close: [] }>();
+const { scope, recipient } = defineProps<{ scope: SharingScope; recipient?: SharingRecipient }>();
+const emit = defineEmits<{ close: []; invited: [status: string] }>();
 const session = useSharingPanel(
   () => scope,
   () => emit('close'),
+  recipient,
+  (status) => emit('invited', status),
 );
 const {
   key,
@@ -63,7 +65,8 @@ defineExpose({ requestClose });
         <small data-sentry-mask>{{ scope.name }}</small>
       </div>
     </header>
-    <p v-if="scope.kind === 'client' && !isMobile" class="scope-label muted">
+    <p v-if="recipient" class="scope-label muted">This file only</p>
+    <p v-else-if="scope.kind === 'client' && !isMobile" class="scope-label muted">
       Entire client workspace · all files and folders
     </p>
     <p v-if="loading" role="status">Loading access…</p>
@@ -84,7 +87,12 @@ defineExpose({ requestClose });
       <SharingLinks v-else :session="session" />
       <div v-if="!composing" class="sharing-footer">
         <Button
-          v-if="activeTab === 'people' && canCreateLinks && (!isMobile || mobileScreen === 'share')"
+          v-if="
+            !recipient &&
+            activeTab === 'people' &&
+            canCreateLinks &&
+            (!isMobile || mobileScreen === 'share')
+          "
           label="Sharing links"
           icon="oi oi-link"
           severity="secondary"

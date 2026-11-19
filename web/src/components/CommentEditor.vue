@@ -7,6 +7,7 @@ import { useResizeObserver } from '@vueuse/core';
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 
 import { type MentionSearch, useMentionSearch } from '@/composables/useMentionSearch';
+import type { SharingRecipient } from '@/types/sharing';
 import {
   commentExtensions,
   type CommentMentionAttrs,
@@ -23,7 +24,21 @@ const props = defineProps<{
   label?: string;
   rows?: number;
   mentionSearch?: MentionSearch;
+  mentionHTML?: string | null;
+  shareMention?: (person: SharingRecipient) => Promise<boolean>;
+  unavailableMentionIds?: string[];
 }>();
+const emit = defineEmits<{ 'mentions-converted': [] }>();
+const mentionNames = computed(() => {
+  const fragment = document.createElement('template');
+  fragment.innerHTML = props.mentionHTML || '';
+  return new Map(
+    Array.from(
+      fragment.content.querySelectorAll<HTMLElement>('.comment-mention[data-user-id]'),
+      (node) => [node.dataset.userId, node.textContent?.slice(1)],
+    ),
+  );
+});
 const mentions = props.mentionSearch ?? useMentionSearch(() => props);
 const body = defineModel<string>({ required: true });
 const mentionKey = new PluginKey(`comment-mentions-${props.id}`);
@@ -104,9 +119,50 @@ async function openPopup(context: SuggestionProps<CommentPerson, CommentMentionA
     });
   }
 }
-function choose(person: CommentPerson) {
-  suggestion.value?.command({ id: person.id, label: person.name });
+async function choose(person: CommentPerson) {
+  const active = suggestion.value;
+  if (!active) {
+    return;
+  }
+  const attrs = { id: person.id, label: person.name };
+  if (person.action !== 'share') {
+    active.command(attrs);
+    return;
+  }
+  const current = active.editor;
+  if (!props.shareMention || !person.email) {
+    return;
+  }
+  const { doc, selection } = current.state;
+  const { fileId, sessionKey, visibility } = props;
+  exitSuggestion(current.view, mentionKey);
+  const granted = await props.shareMention({
+    id: person.id,
+    name: person.name,
+    email: person.email,
+    userType: person.user_type,
+  });
+  if (
+    current.isDestroyed ||
+    props.fileId !== fileId ||
+    props.sessionKey !== sessionKey ||
+    props.visibility !== visibility ||
+    props.disabled ||
+    props.readonly
+  ) {
+    return;
+  }
+  if (granted && current.state.doc.eq(doc) && current.state.selection.eq(selection)) {
+    active.command(attrs);
+  } else {
+    current.commands.focus();
+  }
 }
+const mentionDetail = {
+  share: 'No file access · Share file…',
+  reference_team: 'Reference only · Can’t see this team note',
+  reference_no_access: 'Reference only · No file access',
+};
 function editorAttributes() {
   return {
     id: props.id,
@@ -129,72 +185,79 @@ const editor = useEditor({
   contentType: 'markdown',
   editable: !props.disabled && !props.readonly,
   autofocus: 'end',
-  extensions: commentExtensions({
-    pluginKey: mentionKey,
-    char: '@',
-    allowedPrefixes: [' ', '(', '\n'],
-    debounce: 200,
-    allow: ({ editor: current }) =>
-      !props.disabled &&
-      !props.readonly &&
-      !current.isActive('code') &&
-      !current.isActive('codeBlock'),
-    floatingUi: { strategy: 'fixed', middleware: [shift({ padding: 12 })] },
-    items: async ({ query, signal }) => {
-      if (signal.aborted || props.disabled || props.readonly) {
-        return [];
-      }
-      const visibility = props.visibility;
-      try {
-        const data = await mentions.search(visibility, query);
-        return signal.aborted ? [] : data;
-      } catch {
-        if (!signal.aborted) {
-          mentionError.value = 'Mention search unavailable. Try typing the name again.';
-          return mentions.local(visibility, query);
+  extensions: commentExtensions(
+    {
+      pluginKey: mentionKey,
+      char: '@',
+      allowedPrefixes: [' ', '(', '\n'],
+      debounce: 200,
+      allow: ({ editor: current }) =>
+        !props.disabled &&
+        !props.readonly &&
+        !current.isActive('code') &&
+        !current.isActive('codeBlock'),
+      floatingUi: { strategy: 'fixed', middleware: [shift({ padding: 12 })] },
+      items: async ({ query, signal }) => {
+        if (signal.aborted || props.disabled || props.readonly) {
+          return [];
         }
-        return [];
-      }
-    },
-    render: () => ({
-      onStart: (context) => {
-        void openPopup(context);
+        const visibility = props.visibility;
+        try {
+          const data = await mentions.search(visibility, query);
+          return signal.aborted ? [] : data;
+        } catch {
+          if (!signal.aborted) {
+            mentionError.value = 'Mention search unavailable. Try typing the name again.';
+            return mentions.local(visibility, query);
+          }
+          return [];
+        }
       },
-      onUpdate: updateSuggestions,
-      onKeyDown: ({ event, view }) => {
-        if (event.isComposing) {
-          return false;
-        }
-        if (event.key === 'Escape') {
+      render: () => ({
+        onStart: (context) => {
+          void openPopup(context);
+        },
+        onUpdate: updateSuggestions,
+        onKeyDown: ({ event, view }) => {
+          if (event.isComposing) {
+            return false;
+          }
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            event.stopPropagation();
+            exitSuggestion(view, mentionKey);
+            return true;
+          }
+          const people = suggestion.value?.items || [];
+          if (!people.length || !['ArrowDown', 'ArrowUp', 'Enter'].includes(event.key)) {
+            return false;
+          }
           event.preventDefault();
           event.stopPropagation();
-          exitSuggestion(view, mentionKey);
+          if (event.key === 'Enter') {
+            choose(people[selected.value]!);
+          } else {
+            const index =
+              (selected.value + (event.key === 'ArrowDown' ? 1 : -1) + people.length) %
+              people.length;
+            keyboardId.value = people[index]!.id;
+            hoveredId.value = null;
+            void nextTick(() => {
+              document
+                .getElementById(`${props.id}-mention-${selected.value}`)
+                ?.scrollIntoView?.({ block: 'nearest' });
+            });
+          }
           return true;
-        }
-        const people = suggestion.value?.items || [];
-        if (!people.length || !['ArrowDown', 'ArrowUp', 'Enter'].includes(event.key)) {
-          return false;
-        }
-        event.preventDefault();
-        event.stopPropagation();
-        if (event.key === 'Enter') {
-          choose(people[selected.value]!);
-        } else {
-          const index =
-            (selected.value + (event.key === 'ArrowDown' ? 1 : -1) + people.length) % people.length;
-          keyboardId.value = people[index]!.id;
-          hoveredId.value = null;
-          void nextTick(() => {
-            document
-              .getElementById(`${props.id}-mention-${selected.value}`)
-              ?.scrollIntoView?.({ block: 'nearest' });
-          });
-        }
-        return true;
-      },
-      onExit: closePopup,
-    }),
-  }),
+        },
+        onExit: closePopup,
+      }),
+    },
+    {
+      displayName: (id) => mentionNames.value.get(id),
+      unavailableIds: () => props.unavailableMentionIds,
+    },
+  ),
   editorProps: {
     attributes: editorAttributes,
     clipboardTextSerializer: (slice) =>
@@ -218,6 +281,27 @@ const editor = useEditor({
     body.value = emittedSource;
   },
 });
+
+function convertUnavailableMentions() {
+  const unavailable = new Set(props.unavailableMentionIds);
+  editor.value?.commands.command(({ state, tr }) => {
+    // Work from the end of the document so earlier positions stay valid.
+    const replacements: { from: number; to: number; text: string }[] = [];
+    state.doc.descendants((node, pos) => {
+      if (node.type.name === 'mention' && unavailable.has(node.attrs.id)) {
+        replacements.push({
+          from: pos,
+          to: pos + node.nodeSize,
+          text: `@${mentionNames.value.get(node.attrs.id) || node.attrs.label || node.attrs.id}`,
+        });
+      }
+    });
+    replacements.reverse().forEach(({ from, to, text }) => tr.insertText(text, from, to));
+    return !!replacements.length;
+  });
+  emit('mentions-converted');
+  editor.value?.commands.focus();
+}
 
 // Grow to fit the rendered document, not the serialized Markdown. Never shrink
 // a height the reader has already chosen with the resize handle.
@@ -259,7 +343,7 @@ watch(
   },
 );
 watch(
-  [suggestion, selected, () => props.label, length],
+  [suggestion, selected, () => props.label, length, () => props.unavailableMentionIds],
   () => {
     if (editor.value) {
       editor.value.setOptions({
@@ -306,8 +390,13 @@ onBeforeUnmount(closePopup);
           @pointerleave="hoveredId = null"
         >
           <button type="button" tabindex="-1" @mousedown.prevent @click="choose(person)">
-            <strong>@{{ person.name }}</strong>
-            <span v-if="person.email" class="mention-email">{{ person.email }}</span>
+            <span class="mention-person">
+              <strong>@{{ person.name }}</strong>
+              <span v-if="person.email" class="mention-email">{{ person.email }}</span>
+            </span>
+            <small v-if="person.action" class="mention-detail">{{
+              mentionDetail[person.action]
+            }}</small>
           </button>
         </li>
         <li v-if="!suggestion.items.length" class="mention-state" role="presentation">
@@ -322,6 +411,14 @@ onBeforeUnmount(closePopup);
     <p v-if="length > 4000" :id="`${id}-limit`" class="editor-error" role="alert">
       Comment is too long. The limit is 4,000 characters, including Markdown.
     </p>
+    <div v-if="unavailableMentionIds?.length" class="editor-error">
+      <p role="alert">
+        A mentioned person is no longer available for this audience. Your draft was kept.
+      </p>
+      <button type="button" class="mention-recovery" @click="convertUnavailableMentions">
+        Keep unavailable mentions as text
+      </button>
+    </div>
     <div v-if="$slots.metadata" class="editor-meta">
       <slot name="metadata" />
     </div>
@@ -449,6 +546,14 @@ onBeforeUnmount(closePopup);
   color: var(--p-red-700);
   font-size: 12px;
 }
+.mention-recovery {
+  text-decoration: underline;
+  cursor: pointer;
+}
+.rich-content :deep(.comment-mention-unavailable) {
+  text-decoration: underline wavy var(--p-red-700);
+  text-underline-offset: 3px;
+}
 .mention-options {
   z-index: 1100;
   width: min(320px, calc(100vw - 32px));
@@ -465,8 +570,9 @@ onBeforeUnmount(closePopup);
 }
 .mention-options button {
   display: flex;
-  align-items: baseline;
-  gap: 8px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
   width: 100%;
   text-align: start;
   font: inherit;
@@ -477,6 +583,15 @@ onBeforeUnmount(closePopup);
   background: transparent;
   color: var(--p-text-color);
   cursor: pointer;
+}
+.mention-person {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  max-width: 100%;
+}
+.mention-detail {
+  font-size: 12px;
 }
 .mention-options strong,
 .mention-email {

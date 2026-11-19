@@ -17,6 +17,12 @@ export interface AdditionalAccess extends RoleAssignment {
 export type SharingScope =
   | { kind: 'client'; id: string; name: string }
   | { kind: 'item'; id: string; name: string; itemType: string };
+export interface SharingRecipient {
+  id: string;
+  name: string;
+  email: string;
+  userType?: 'external' | 'internal';
+}
 // Go embeds these fields directly in the JSON response.
 export interface GrantAccess extends Omit<ItemGrant, 'AccessCapabilities'>, AccessCapabilities {
   recipient_name: string;

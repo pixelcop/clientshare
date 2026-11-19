@@ -2,11 +2,15 @@
 import { useMediaQuery } from '@vueuse/core';
 import { Dialog } from 'openvue';
 
-import type { SharingScope } from '@/types/sharing';
+import type { SharingRecipient, SharingScope } from '@/types/sharing';
 
 import SharingPanel from './SharingPanel.vue';
-const { visible, scope } = defineProps<{ visible: boolean; scope: SharingScope }>();
-const emit = defineEmits<{ close: [] }>();
+const { visible, scope, recipient } = defineProps<{
+  visible: boolean;
+  scope: SharingScope;
+  recipient?: SharingRecipient;
+}>();
+const emit = defineEmits<{ close: []; invited: [status: string] }>();
 const panel = ref<InstanceType<typeof SharingPanel> | null>(null);
 const isMobile = useMediaQuery('(max-width: 639px)');
 function requestClose() {
@@ -38,7 +42,9 @@ function requestClose() {
       ref="panel"
       :key="`${scope.kind}-${scope.id}`"
       :scope
+      :recipient
       @close="emit('close')"
+      @invited="emit('invited', $event)"
     />
   </Dialog>
 </template>
