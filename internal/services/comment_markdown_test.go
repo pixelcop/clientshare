@@ -89,7 +89,9 @@ func TestCommentMentionsRespectAudienceAndDirectory(t *testing.T) {
 	people, err = s.Mentions(t.Context(), staff, "Person", CommentTeam)
 	require.NoError(t, err)
 	for _, person := range people {
-		require.Contains(t, []string{"admin", "manager", "full"}, person.ID)
+		if person.ID == "member" {
+			require.Equal(t, "reference_team", person.Action)
+		}
 	}
 	recipient := f.req("recipient", "file", AccessRead)
 	people, err = s.Mentions(t.Context(), recipient, "Person", CommentShared)
@@ -116,13 +118,67 @@ func TestCommentMentionsRespectAudienceAndDirectory(t *testing.T) {
 		_, err = s.Create(t.Context(), staff, CommentInput{Body: "[@Person](mention:" + id + ")", Visibility: CommentShared}, "forged-"+id)
 		require.ErrorIs(t, err, ErrCommentMention)
 	}
-	_, err = s.Create(t.Context(), staff, CommentInput{Body: "[@Client](mention:member)", Visibility: CommentTeam}, "client-internal")
-	require.ErrorIs(t, err, ErrCommentMention)
+	note, err := s.Create(t.Context(), staff, CommentInput{Body: "[@Client](mention:member)", Visibility: CommentTeam}, "client-internal")
+	require.NoError(t, err)
+	require.Contains(t, *note.BodyHTML, "@Person")
+	memberComments, err := s.List(t.Context(), f.req("member", "file", AccessRead), "")
+	require.NoError(t, err)
+	for _, comment := range memberComments.Items {
+		require.NotEqual(t, note.ID, comment.ID)
+	}
 	require.NoError(t, f.db.Model(&models.ItemGrant{}).Where("user_id = ?", "recipient").Update("revoked_at", accessTestNow).Error)
 	_, err = s.Preview(t.Context(), staff, CommentInput{Body: "[@Recipient](mention:recipient)", Visibility: CommentShared})
 	require.ErrorIs(t, err, ErrCommentMention)
 	_, err = s.Mentions(t.Context(), recipient, "Person", CommentShared)
 	require.ErrorIs(t, err, gorm.ErrRecordNotFound)
+}
+
+func TestCommentShareSuggestionsDoNotGrantAccess(t *testing.T) {
+	f, s := commentFixture(t)
+	require.NoError(t, f.db.Create(&models.User{
+		ID: "outsider", TenantID: "tenant", Name: "Zelda Contact", Email: "zelda@example.test", Role: "client",
+	}).Error)
+	require.NoError(t, f.db.Create(&models.UserClient{TenantID: "tenant", ClientID: "other-client", UserID: "outsider"}).Error)
+	req := f.req("admin", "file", AccessRead)
+	people, err := s.Mentions(t.Context(), req, "Zelda", CommentShared)
+	require.NoError(t, err)
+	require.Len(t, people, 1)
+	require.Equal(t, "share", people[0].Action)
+	_, err = s.Create(t.Context(), req, CommentInput{Body: "[@Zelda](mention:outsider)", Visibility: CommentShared}, "unshared")
+	var unavailable *UnavailableCommentMentions
+	require.ErrorAs(t, err, &unavailable)
+	require.Equal(t, []string{"outsider"}, unavailable.IDs)
+	people, err = s.Mentions(t.Context(), f.req("member", "file", AccessRead), "Zelda", CommentShared)
+	require.NoError(t, err)
+	require.Empty(t, people)
+	people, err = s.Mentions(t.Context(), req, "Zelda", CommentTeam)
+	require.NoError(t, err)
+	require.Empty(t, people, "another client's contacts are not team references")
+	f.grant(t, "file", "outsider", models.AccessCapabilities{CanRead: true})
+	people, err = s.Mentions(t.Context(), req, "Zelda", CommentShared)
+	require.NoError(t, err)
+	require.Len(t, people, 1)
+	require.Empty(t, people[0].Action)
+}
+
+func TestLiveMentionNamesKeepMarkdownAndHistoryUnchanged(t *testing.T) {
+	f, s := commentFixture(t)
+	req := f.req("admin", "file", AccessRead)
+	body := "[@First](mention:member) and `[@First](mention:member)`"
+	comment, err := s.Create(t.Context(), req, CommentInput{Body: body, Visibility: CommentShared}, "rename")
+	require.NoError(t, err)
+	require.NoError(t, f.db.Model(&models.User{}).Where("id = ?", "member").Update("name", "First <Last>").Error)
+	page, err := s.List(t.Context(), req, "")
+	require.NoError(t, err)
+	require.Equal(t, body, page.Items[0].Body)
+	require.Contains(t, *page.Items[0].BodyHTML, "@First &lt;Last&gt;</span>")
+	require.Contains(t, *page.Items[0].BodyHTML, "<code>[@First](mention:member)</code>")
+	revisions, err := s.History(t.Context(), req, comment.ID, 0)
+	require.NoError(t, err)
+	require.Contains(t, *revisions[0].BodyHTML, "@First</span>")
+	reader, err := s.List(t.Context(), f.req("customer", "file", AccessRead), "")
+	require.NoError(t, err)
+	require.Contains(t, *reader.Items[0].BodyHTML, "@First</span>", "a reader without directory access does not learn a current profile name")
 }
 
 func TestCommentMentionInitialSuggestionsAreBoundedAndTenantScoped(t *testing.T) {

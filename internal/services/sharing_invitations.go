@@ -19,11 +19,12 @@ import (
 )
 
 type InvitationInput struct {
-	UserType       string                    `json:"user_type"`
-	RoleID         string                    `json:"role_id"`
-	Email          string                    `json:"email"`
-	Capabilities   models.AccessCapabilities `json:"capabilities"`
-	GrantExpiresAt *time.Time                `json:"expires_at"`
+	RecipientUserID string                    `json:"recipient_user_id,omitempty"`
+	UserType        string                    `json:"user_type"`
+	RoleID          string                    `json:"role_id"`
+	Email           string                    `json:"email"`
+	Capabilities    models.AccessCapabilities `json:"capabilities"`
+	GrantExpiresAt  *time.Time                `json:"expires_at"`
 }
 
 func sharingDigest(value any) string {
@@ -105,6 +106,9 @@ func (s *SharingService) CreateInvitation(ctx context.Context, req AccessRequest
 			return err
 		}
 		if len(recipient) > 1 {
+			return ErrSharingConflict
+		}
+		if input.RecipientUserID != "" && (req.FileID == "" || len(recipient) != 1 || recipient[0].ID != input.RecipientUserID) {
 			return ErrSharingConflict
 		}
 		if input.UserType != "" {

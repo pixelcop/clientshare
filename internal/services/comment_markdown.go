@@ -46,6 +46,12 @@ func (r *commentMentionRenderer) RegisterFuncs(register renderer.NodeRendererFun
 // unsafe links. Images become their alt text to avoid remote tracking requests.
 // Source remains untouched; the HTML is a read/preview projection only.
 func RenderCommentMarkdown(body string) (string, []string, error) {
+	render, ids := prepareCommentMarkdown(body)
+	rendered, err := render(nil)
+	return rendered, ids, err
+}
+
+func prepareCommentMarkdown(body string) (func(map[string]string) (string, error), []string) {
 	source := []byte(body)
 	markdown := goldmark.New(
 		goldmark.WithRendererOptions(goldhtml.WithHardWraps(),
@@ -70,13 +76,16 @@ func RenderCommentMarkdown(body string) (string, []string, error) {
 		return ast.WalkContinue, nil
 	})
 	ids, seen := []string{}, map[string]bool{}
+	var mentions []*commentMentionNode
 	for _, node := range replace {
 		label := html.UnescapeString(string(util.UnescapePunctuations(node.Text(source))))
 		var replacement ast.Node = ast.NewString([]byte(label))
 		if link, ok := node.(*ast.Link); ok {
 			id := strings.TrimPrefix(string(link.Destination), "mention:")
 			if mentionIDPattern.MatchString(id) && strings.HasPrefix(label, "@") && len(label) <= 200 {
-				replacement = &commentMentionNode{id: id, label: label}
+				mention := &commentMentionNode{id: id, label: label}
+				mentions = append(mentions, mention)
+				replacement = mention
 				if !seen[id] {
 					ids = append(ids, id)
 					seen[id] = true
@@ -85,9 +94,14 @@ func RenderCommentMarkdown(body string) (string, []string, error) {
 		}
 		node.Parent().ReplaceChild(node.Parent(), node, replacement)
 	}
-	var rendered bytes.Buffer
-	if err := markdown.Renderer().Render(&rendered, source, document); err != nil {
-		return "", nil, err
-	}
-	return rendered.String(), ids, nil
+	return func(names map[string]string) (string, error) {
+		for _, mention := range mentions {
+			if name := names[mention.id]; name != "" {
+				mention.label = "@" + name
+			}
+		}
+		var rendered bytes.Buffer
+		err := markdown.Renderer().Render(&rendered, source, document)
+		return rendered.String(), err
+	}, ids
 }

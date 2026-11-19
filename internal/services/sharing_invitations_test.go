@@ -10,6 +10,24 @@ import (
 	"gorm.io/gorm"
 )
 
+func TestFileInvitationCannotRetargetKnownRecipient(t *testing.T) {
+	f, service := sharingFixture(t)
+	req := f.req("admin", "file", AccessShare)
+	input := InvitationInput{
+		RecipientUserID: "recipient",
+		Email:           "member@example.test",
+		Capabilities:    models.AccessCapabilities{CanRead: true},
+	}
+	_, err := service.CreateInvitation(t.Context(), req, input, "known-contact")
+	require.ErrorIs(t, err, ErrSharingConflict)
+	input.Email = "recipient@example.test"
+	invite, err := service.CreateInvitation(t.Context(), req, input, "known-contact")
+	require.NoError(t, err)
+	require.Equal(t, "recipient", *invite.RecipientUserID)
+	require.Equal(t, "file", *invite.FileID)
+	f.check(t, f.req("recipient", "file", AccessRead), false)
+}
+
 func TestItemInvitationAcceptanceDoesNotCreateMembershipOrRestoreRevokedAccess(t *testing.T) {
 	f, service := sharingFixture(t)
 	input := InvitationInput{Email: "Recipient <RECIPIENT@example.test>", Capabilities: models.AccessCapabilities{CanRead: true}, GrantExpiresAt: accessPtr(accessTestNow.Add(time.Hour))}

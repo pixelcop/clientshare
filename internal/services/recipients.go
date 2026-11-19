@@ -28,6 +28,17 @@ type RecipientClient struct {
 
 type RecipientService struct{ DB *gorm.DB }
 
+func recipientAssociations(db *gorm.DB, tenantID string) *gorm.DB {
+	now := time.Now().UTC()
+	return db.Raw(`
+		SELECT user_id, client_id FROM user_clients WHERE tenant_id = ?
+		UNION SELECT user_id, client_id FROM item_grants WHERE tenant_id = ? AND user_id IS NOT NULL AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > ?)
+		UNION SELECT recipient_user_id AS user_id, client_id FROM access_invitations WHERE tenant_id = ? AND recipient_user_id IS NOT NULL AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > ?
+		UNION SELECT ra.user_id, ra.client_id FROM role_assignments ra WHERE ra.tenant_id = ? AND ra.user_id IS NOT NULL AND ra.revoked_at IS NULL AND (ra.expires_at IS NULL OR ra.expires_at > ?)
+		UNION SELECT gm.user_id, ra.client_id FROM role_assignments ra JOIN access_group_members gm ON gm.tenant_id = ra.tenant_id AND gm.group_id = ra.group_id WHERE ra.tenant_id = ? AND ra.revoked_at IS NULL AND (ra.expires_at IS NULL OR ra.expires_at > ?)`,
+		tenantID, tenantID, now, tenantID, now, tenantID, now, tenantID, now)
+}
+
 // Search reuses identities and existing relationships without mutating either.
 // Only staff with whole-workspace visibility may use the directory. Sharing as
 // a client or an anonymous recipient must not turn into directory discovery.
@@ -74,14 +85,7 @@ func (s *RecipientService) Search(ctx context.Context, req AccessRequest, search
 	}
 	// One row per identity/client association. Pending invitations and item-only
 	// access are contacts, but are never presented as workspace membership.
-	now := time.Now().UTC()
-	associations := db.Raw(`
-		SELECT user_id, client_id FROM user_clients WHERE tenant_id = ?
-		UNION SELECT user_id, client_id FROM item_grants WHERE tenant_id = ? AND user_id IS NOT NULL AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > ?)
-		UNION SELECT recipient_user_id AS user_id, client_id FROM access_invitations WHERE tenant_id = ? AND recipient_user_id IS NOT NULL AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > ?
-		UNION SELECT ra.user_id, ra.client_id FROM role_assignments ra WHERE ra.tenant_id = ? AND ra.user_id IS NOT NULL AND ra.revoked_at IS NULL AND (ra.expires_at IS NULL OR ra.expires_at > ?)
-		UNION SELECT gm.user_id, ra.client_id FROM role_assignments ra JOIN access_group_members gm ON gm.tenant_id = ra.tenant_id AND gm.group_id = ra.group_id WHERE ra.tenant_id = ? AND ra.revoked_at IS NULL AND (ra.expires_at IS NULL OR ra.expires_at > ?)`,
-		req.TenantID, req.TenantID, now, req.TenantID, now, req.TenantID, now, req.TenantID, now)
+	associations := recipientAssociations(db, req.TenantID)
 	// GORM embeds the union as a subquery so all filtering stays tenant-scoped
 	// and the result limit applies to identities, not association rows.
 	q := db.Table("users").Select("users.id, users.name, users.email").

@@ -28,6 +28,7 @@ func RegisterFileCommentRoutes(router fiber.Router, db *gorm.DB) {
 }
 
 func commentResponse(c fiber.Ctx, result any, err error, status int) error {
+	var unavailable *services.UnavailableCommentMentions
 	switch {
 	case errors.Is(err, gorm.ErrRecordNotFound):
 		return c.Status(404).JSON(fiber.Map{"error": "Not found"})
@@ -35,6 +36,8 @@ func commentResponse(c fiber.Ctx, result any, err error, status int) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Enter a comment of 1–4000 characters and choose a valid audience."})
 	case errors.Is(err, services.ErrCommentConflict):
 		return c.Status(409).JSON(fiber.Map{"error": "This comment changed. Refresh the conversation before saving again."})
+	case errors.As(err, &unavailable):
+		return c.Status(400).JSON(fiber.Map{"error": "A mentioned person is unavailable for this audience.", "unavailable_mention_ids": unavailable.IDs})
 	case errors.Is(err, services.ErrCommentMention):
 		return c.Status(400).JSON(fiber.Map{"error": "A mentioned person is unavailable for this audience. Choose people from the mention suggestions."})
 	case err != nil:

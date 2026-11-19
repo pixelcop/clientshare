@@ -120,13 +120,13 @@ func (s *FileCommentService) List(ctx context.Context, req AccessRequest, before
 		result.Items = result.Items[:commentPageSize]
 		result.NextCursor = result.Items[len(result.Items)-1].ID
 	}
-	if err := decorateComments(db, actor, result.Items); err != nil {
+	if err := decorateComments(db, req, actor, result.Items); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 
-func decorateComments(db *gorm.DB, actor models.User, comments []models.FileComment) error {
+func decorateComments(db *gorm.DB, req AccessRequest, actor models.User, comments []models.FileComment) error {
 	if len(comments) == 0 {
 		return nil
 	}
@@ -142,6 +142,8 @@ func decorateComments(db *gorm.DB, actor models.User, comments []models.FileComm
 	for _, user := range users {
 		names[user.ID] = strings.TrimSpace(user.Name)
 	}
+	renderers := make([]func(map[string]string) (string, error), len(comments))
+	byAudience := map[string]map[string]bool{}
 	for i := range comments {
 		c := &comments[i]
 		c.AuthorName = names[c.AuthorID]
@@ -151,7 +153,41 @@ func decorateComments(db *gorm.DB, actor models.User, comments []models.FileComm
 		c.CanViewHistory = c.AuthorID == actor.ID
 		c.CanEdit = c.CanViewHistory && c.DeletedAt == nil
 		if c.DeletedAt == nil {
-			rendered, _, err := RenderCommentMarkdown(c.Body)
+			render, ids := prepareCommentMarkdown(c.Body)
+			renderers[i] = render
+			if len(ids) != 0 {
+				if byAudience[c.Visibility] == nil {
+					byAudience[c.Visibility] = map[string]bool{}
+				}
+				for _, id := range ids {
+					byAudience[c.Visibility][id] = true
+				}
+			}
+		}
+	}
+	live := map[string]map[string]string{}
+	for audience, ids := range byAudience {
+		keys := make([]string, 0, len(ids))
+		for id := range ids {
+			keys = append(keys, id)
+		}
+		q, _, err := (&FileCommentService{DB: db}).mentionQuery(db.Statement.Context, &req, actor, audience)
+		if err != nil {
+			return err
+		}
+		var people []struct{ ID, Name string }
+		if err := q.Select("users.id", "users.name").Where("users.id IN ?", keys).Find(&people).Error; err != nil {
+			return err
+		}
+		live[audience] = make(map[string]string, len(people))
+		for _, person := range people {
+			live[audience][person.ID] = strings.TrimSpace(person.Name)
+		}
+	}
+	for i, render := range renderers {
+		if render != nil {
+			c := &comments[i]
+			rendered, err := render(live[c.Visibility])
 			if err != nil {
 				return err
 			}
@@ -206,7 +242,7 @@ func (s *FileCommentService) Create(ctx context.Context, req AccessRequest, inpu
 			}
 		}
 		rows := []models.FileComment{comment}
-		if err := decorateComments(tx, actor, rows); err != nil {
+		if err := decorateComments(tx, req, actor, rows); err != nil {
 			return err
 		}
 		comment = rows[0]
@@ -260,7 +296,7 @@ func (s *FileCommentService) Update(ctx context.Context, req AccessRequest, id, 
 			return err
 		}
 		rows := []models.FileComment{comment}
-		if err := decorateComments(tx, actor, rows); err != nil {
+		if err := decorateComments(tx, req, actor, rows); err != nil {
 			return err
 		}
 		comment = rows[0]
