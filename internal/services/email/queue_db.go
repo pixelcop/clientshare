@@ -294,7 +294,15 @@ func (q *DBEmailQueue) ProcessBatch() error {
 	}
 	now := q.now()
 	var items []models.QueuedEmail
-	if err := q.DB.Where("sent_at IS NULL AND canceled_at IS NULL AND scheduled_for <= ?", now).Order("scheduled_for ASC").Find(&items).Error; err != nil {
+	query := q.DB.Where("sent_at IS NULL AND canceled_at IS NULL")
+	if q.DB.Dialector.Name() == "sqlite" {
+		// SQLite stores these timestamps as text. Legacy jobs can use a local
+		// offset while new jobs use UTC, so compare their actual instants.
+		query = query.Where("julianday(scheduled_for) <= julianday(?)", now).Order("julianday(scheduled_for) ASC")
+	} else {
+		query = query.Where("scheduled_for <= ?", now).Order("scheduled_for ASC")
+	}
+	if err := query.Find(&items).Error; err != nil {
 		return err
 	}
 	return q.process(items, now)
