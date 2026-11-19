@@ -69,9 +69,17 @@ mention people who can read the file. If you can share the file, searching can
 also show known address-book contacts marked **No file access**. Selecting one
 opens a file-only invitation. Until they have access, the text stays unlinked.
 In a team note, you can reference client contacts without sharing the file or
-the note. Mentions themselves do not grant access or send notifications.
+the note. A mention never grants access.
 Live comments show a person's current name when it is visible to you. Revision
 history retains the name saved in the original Markdown.
+
+When email notifications are enabled, a new comment can notify eligible
+mentions and people who have participated in the same conversation audience.
+Shared comments can also notify the file uploader. Recipients must still be able
+to read the comment, and you won't get an email for your own comment. Naming a
+client in a team note doesn't email them. Select **View comment** in the email
+to open the file and highlight the comment. The email doesn't include the
+comment text or grant access.
 - Comments store Markdown source, up to 4,000 characters. They belong to the file, not
   to a PDF page, annotation, or folder.
 - Anonymous secure-link sessions cannot view or post comments. Sign in through
@@ -84,7 +92,8 @@ placeholder in the conversation. **History** lets you review your own earlier
 versions, including removed text, while you still have the required access.
 Other readers cannot browse your revision history.
 
-Comments do not send email notifications or create activity-feed notifications.
+Editing or removing a comment does not send another email. Comments do not
+create activity-feed notifications.
 Reopen the file to see new messages. Leaving the file discards an unsent
 draft. If access is removed or expires, the conversation and its history become
 unavailable to that person.

@@ -34,7 +34,7 @@ function viewport(wide: boolean) {
   );
 }
 
-async function render(previous?: string) {
+async function render(previous?: string, hash = '') {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -69,7 +69,7 @@ async function render(previous?: string) {
   if (previous) {
     await router.push(previous);
   }
-  await router.push('/files/file');
+  await router.push(`/files/file${hash}`);
   // Memory history does not maintain the browser history's `back` state.
   if (previous) {
     router.options.history.state.back = previous;
@@ -203,6 +203,16 @@ describe('file page', () => {
     const { wrapper } = await render();
     expect(wrapper.findComponent(FileComments).exists()).toBe(false);
     expect(wrapper.find('#file-comments-toggle').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('opens the comments pane on a narrow screen for a comment email link', async () => {
+    const commentId = '01M7T8TCNNDFWRGAVWRV25M66G';
+    const { wrapper } = await render(undefined, `#comment-${commentId}`);
+    const comments = wrapper.getComponent(FileComments);
+    expect(comments.props('focusId')).toBe(commentId);
+    expect(comments.props('visible')).toBe(true);
+    expect(wrapper.get('#file-comments-toggle').attributes('aria-expanded')).toBe('true');
     wrapper.unmount();
   });
 

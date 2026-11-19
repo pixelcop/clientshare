@@ -15,7 +15,7 @@ import type { SharingRecipient } from '@/types/sharing';
 const CommentEditor = defineAsyncComponent(() => import('@/components/CommentEditor.vue'));
 
 const props = withDefaults(
-  defineProps<{ fileId: string; fileName?: string; visible?: boolean }>(),
+  defineProps<{ fileId: string; fileName?: string; visible?: boolean; focusId?: string }>(),
   { visible: true, fileName: 'File' },
 );
 const emit = defineEmits<{ count: [value: number | null]; changed: [] }>();
@@ -33,13 +33,20 @@ const {
   canInternal,
   nextCursor,
   error,
+  focusUnavailable,
+  focusedWindow,
+  focusHasNewer,
   unavailableMentionIds,
   load,
   post,
   edit,
   remove,
   reportError,
-} = useFileComments(() => ({ fileId: props.fileId, sessionKey: sessionKey.value }));
+} = useFileComments(() => ({
+  fileId: props.fileId,
+  sessionKey: sessionKey.value,
+  focusId: props.focusId,
+}));
 const draft = ref('');
 const composerOpen = ref(false);
 const visibility = ref('shared');
@@ -56,6 +63,8 @@ const historyLoading = ref(false);
 const historyError = ref('');
 const moreHistory = ref(false);
 const list = ref<HTMLElement | null>(null);
+const highlighted = ref('');
+let highlightTimer: ReturnType<typeof setTimeout> | undefined;
 const composerId = computed(() => `file-comment-${props.fileId}`);
 const length = computed(() => Array.from(draft.value).length);
 const editLength = computed(() => Array.from(editBody.value).length);
@@ -145,11 +154,36 @@ watch(ready, async (value) => {
   if (value && !draft.value.trim()) {
     visibility.value = canInternal.value ? 'team' : 'shared';
   }
-  if (value) {
+  if (value && !props.focusId) {
     await nextTick();
     list.value?.scrollTo?.({ top: list.value.scrollHeight, behavior: 'instant' });
   }
 });
+watch([ready, focusedWindow, () => props.focusId], async ([loaded, focused, target]) => {
+  clearTimeout(highlightTimer);
+  highlighted.value = '';
+  if (!loaded || !focused || !target) {
+    return;
+  }
+  await nextTick();
+  if (!ready.value || !focusedWindow.value || target !== props.focusId) {
+    return;
+  }
+  const row = document.getElementById(`comment-${target}`);
+  if (row && list.value?.contains(row)) {
+    row.scrollIntoView?.({ block: 'nearest', behavior: 'instant' });
+    highlighted.value = target;
+    highlightTimer = setTimeout(() => {
+      highlighted.value = '';
+    }, 2200);
+  }
+});
+async function latestComments() {
+  await load();
+  if (!focusedWindow.value) {
+    list.value?.scrollTo?.({ top: list.value.scrollHeight, behavior: 'instant' });
+  }
+}
 watch(
   () => [props.fileId, sessionKey.value],
   () => {
@@ -272,6 +306,7 @@ async function toggleComposer() {
 }
 onBeforeUnmount(closeHistory);
 onBeforeUnmount(cancelSharing);
+onBeforeUnmount(() => clearTimeout(highlightTimer));
 </script>
 
 <template>
@@ -282,6 +317,18 @@ onBeforeUnmount(cancelSharing);
     tabindex="-1"
   >
     <p v-if="shareStatus" role="status" class="comment-state" data-sentry-mask>{{ shareStatus }}</p>
+    <p v-if="focusUnavailable" role="status" class="comment-state">
+      This comment is no longer available.
+    </p>
+    <button
+      v-if="focusHasNewer"
+      type="button"
+      class="latest-comments"
+      :disabled="loading || saving"
+      @click="latestComments"
+    >
+      View latest comments
+    </button>
     <div ref="list" class="comments-list" :aria-busy="loading">
       <p v-if="loading && !ready" role="status" class="comment-state">Loading conversation…</p>
       <Button
@@ -295,7 +342,13 @@ onBeforeUnmount(cancelSharing);
         @click="load(true)"
       />
       <ol aria-label="Comments" data-sentry-mask>
-        <li v-for="comment in comments" :key="comment.id" class="comment">
+        <li
+          v-for="comment in comments"
+          :id="`comment-${comment.id}`"
+          :key="comment.id"
+          class="comment"
+          :class="{ 'comment-highlighted': comment.id === highlighted }"
+        >
           <FileCommentCard
             :comment="comment"
             :disabled="saving"
@@ -545,6 +598,18 @@ ol {
 }
 .comment {
   margin-bottom: 12px;
+}
+.comment-highlighted :deep(.comment-card) {
+  background: var(--p-highlight-background);
+}
+.latest-comments {
+  align-self: flex-end;
+  margin: 4px 12px 0;
+  min-height: 28px;
+  color: var(--p-text-muted-color);
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
 }
 .comment-body {
   overflow-wrap: anywhere;

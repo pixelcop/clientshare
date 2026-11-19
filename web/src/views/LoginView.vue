@@ -11,6 +11,7 @@ import {
   passkeysSupported,
 } from '@/services/passkeys';
 import { useBrandingStore } from '@/stores/branding';
+import { rememberCommentLogin, takeCommentLogin } from '@/utils/commentLink';
 
 import { useAuthStore } from '../stores/auth';
 
@@ -30,11 +31,11 @@ const vFocus = {
   mounted: (element: HTMLElement) => element.focus(),
 };
 
-function redirectAfterLogin() {
+function redirectAfterLogin(handoffTarget = '') {
   const redirect =
     typeof router.currentRoute.value.query.redirect === 'string'
       ? router.currentRoute.value.query.redirect
-      : '';
+      : handoffTarget;
 
   if (redirect) {
     void router.push(redirect);
@@ -75,6 +76,7 @@ async function onEmailSubmit() {
   try {
     const response = await beginPasskeySignIn(email.value.trim());
     if (response.passkey && response.redirect_url) {
+      rememberCommentLogin(router.currentRoute.value.query.redirect);
       window.location.assign(response.redirect_url);
       return;
     }
@@ -121,6 +123,7 @@ onMounted(async () => {
   if (!handoff) {
     return;
   }
+  const handoffTarget = takeCommentLogin();
 
   loading.value = true;
   error.value = null;
@@ -133,7 +136,7 @@ onMounted(async () => {
   );
 
   if (ok && user.value) {
-    redirectAfterLogin();
+    redirectAfterLogin(handoffTarget);
     return;
   }
 

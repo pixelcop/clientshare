@@ -108,6 +108,42 @@ describe('file conversation', () => {
     wrapper.unmount();
   });
 
+  it('loads and highlights a linked comment without opening the composer', async () => {
+    const get = vi.mocked(axios.get).mockResolvedValueOnce({
+      data: { ...page([comment]), focus_has_newer: true },
+    });
+    const wrapper = mount(FileComments, {
+      props: { fileId: 'file', focusId: comment.id },
+      global: { plugins: [OpenVue] },
+      attachTo: document.body,
+    });
+    await flushPromises();
+    expect(get).toHaveBeenCalledWith(
+      '/api/files/file/comments',
+      expect.objectContaining({ params: { focus: comment.id } }),
+    );
+    expect(wrapper.get(`#comment-${comment.id}`).classes()).toContain('comment-highlighted');
+    expect(wrapper.find('[role="textbox"]').exists()).toBe(false);
+    await wrapper.get('.latest-comments').trigger('click');
+    await flushPromises();
+    expect(wrapper.find('.comment-highlighted').exists()).toBe(false);
+    expect(wrapper.find('.latest-comments').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('shows the conversation without highlighting an unavailable comment', async () => {
+    vi.mocked(axios.get).mockResolvedValueOnce({ data: { ...page(), focus_unavailable: true } });
+    const wrapper = mount(FileComments, {
+      props: { fileId: 'file', focusId: 'missing' },
+      global: { plugins: [OpenVue] },
+    });
+    await flushPromises();
+    expect(wrapper.get('[role="status"]').text()).toBe('This comment is no longer available.');
+    expect(wrapper.text()).toContain(comment.body);
+    expect(wrapper.find('.comment-highlighted').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
   it('removes the correct comment when multiple comments have action menus', async () => {
     vi.mocked(axios.get).mockResolvedValueOnce({
       data: page([{ ...comment, id: '02', body: 'Second comment' }, comment]),

@@ -8,10 +8,14 @@ interface CommentPage {
   next_cursor: string;
   can_internal: boolean;
   total_count: number;
+  focus_unavailable?: boolean;
+  focus_has_newer?: boolean;
 }
 
 // Conversation state belongs to the current file/session, never a shared cache.
-export function useFileComments(context: () => { fileId: string; sessionKey: string }) {
+export function useFileComments(
+  context: () => { fileId: string; sessionKey: string; focusId?: string },
+) {
   const comments = ref<FileComment[]>([]);
   const loading = ref(false);
   const saving = ref(false);
@@ -20,6 +24,9 @@ export function useFileComments(context: () => { fileId: string; sessionKey: str
   const canInternal = ref(false);
   const nextCursor = ref('');
   const error = ref('');
+  const focusUnavailable = ref(false);
+  const focusedWindow = ref(false);
+  const focusHasNewer = ref(false);
   const unavailableMentionIds = ref<string[]>([]);
   const base = computed(() => `/api/files/${context().fileId}/comments`);
   let generation = 0;
@@ -38,6 +45,9 @@ export function useFileComments(context: () => { fileId: string; sessionKey: str
     canInternal.value = false;
     nextCursor.value = '';
     error.value = '';
+    focusUnavailable.value = false;
+    focusedWindow.value = false;
+    focusHasNewer.value = false;
     unavailableMentionIds.value = [];
   }
 
@@ -61,7 +71,7 @@ export function useFileComments(context: () => { fileId: string; sessionKey: str
     }
   }
 
-  async function load(older = false) {
+  async function load(older = false, focusId = '') {
     if (loading.value || saving.value) {
       return;
     }
@@ -73,13 +83,18 @@ export function useFileComments(context: () => { fileId: string; sessionKey: str
     error.value = '';
     try {
       const { data } = await axios.get<CommentPage>(base.value, {
-        params: older ? { before: nextCursor.value } : {},
+        params: older ? { before: nextCursor.value } : { ...(focusId && { focus: focusId }) },
         signal: controller.signal,
       });
       if (current !== generation || request !== listGeneration) {
         return;
       }
       const rows = [...data.items].reverse();
+      if (!older) {
+        focusUnavailable.value = !!data.focus_unavailable;
+        focusedWindow.value = !!focusId && !data.focus_unavailable;
+        focusHasNewer.value = !!data.focus_has_newer;
+      }
       const existing = data.can_internal
         ? comments.value
         : comments.value.filter((comment) => comment.visibility === 'shared');
@@ -154,10 +169,10 @@ export function useFileComments(context: () => { fileId: string; sessionKey: str
   }
 
   watch(
-    () => [context().fileId, context().sessionKey],
+    () => [context().fileId, context().sessionKey, context().focusId],
     () => {
       reset();
-      void load();
+      void load(false, context().focusId);
     },
     { immediate: true, flush: 'sync' },
   );
@@ -171,6 +186,9 @@ export function useFileComments(context: () => { fileId: string; sessionKey: str
     canInternal,
     nextCursor,
     error,
+    focusUnavailable,
+    focusedWindow,
+    focusHasNewer,
     unavailableMentionIds,
     load,
     post,

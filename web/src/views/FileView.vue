@@ -18,6 +18,7 @@ import {
   getFileURL,
   getFileViewURL,
 } from '@/types/util';
+import { commentIdFromHash } from '@/utils/commentLink';
 
 const { fileId } = defineProps<{
   fileId: string;
@@ -25,6 +26,7 @@ const { fileId } = defineProps<{
 
 const auth = useAuthStore();
 const router = useRouter();
+const commentTarget = computed(() => commentIdFromHash(router.currentRoute.value.hash));
 const fileManager = useFileManagerStore();
 const brandingStore = useBrandingStore();
 const file = ref<FileItem | null>(null);
@@ -171,7 +173,7 @@ async function loadFile() {
       // Apply the responsive default once per file, not on resize: an explicit
       // choice to hide comments must not be undone while reading a document.
       showComments.value =
-        desktop.value &&
+        (desktop.value || !!commentTarget.value) &&
         !!current.capabilities?.can_read &&
         !!auth.user &&
         auth.user.role !== 'link';
@@ -244,6 +246,12 @@ watch(
   loadFile,
   { immediate: true },
 );
+watch(commentTarget, (target) => {
+  if (target && file.value?.capabilities?.can_read && auth.user && auth.user.role !== 'link') {
+    commentsVisited.value = true;
+    showComments.value = true;
+  }
+});
 onBeforeUnmount(() => {
   requestVersion += 1;
   countVersion += 1;
@@ -386,6 +394,7 @@ onBeforeUnmount(() => {
           :fileId="file.id"
           :fileName="file.filename"
           :visible="showComments"
+          :focusId="commentTarget"
           @count="setCommentCount"
           @changed="refreshCommentCount"
         />
