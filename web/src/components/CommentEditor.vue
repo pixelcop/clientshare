@@ -4,6 +4,7 @@ import { PluginKey } from '@tiptap/pm/state';
 import { exitSuggestion, type SuggestionProps } from '@tiptap/suggestion';
 import { EditorContent, useEditor } from '@tiptap/vue-3';
 import { useResizeObserver } from '@vueuse/core';
+import { Popover } from 'openvue';
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 
 import { type MentionSearch, useMentionSearch } from '@/composables/useMentionSearch';
@@ -50,6 +51,7 @@ const selected = computed(() =>
 );
 const popup = ref<HTMLUListElement | null>(null);
 const frame = ref<HTMLDivElement | null>(null);
+const markdownHelp = ref<InstanceType<typeof Popover> | null>(null);
 const mentionError = ref('');
 const empty = ref(!body.value.trim());
 const length = computed(() => Array.from(body.value).length);
@@ -366,9 +368,7 @@ onBeforeUnmount(closePopup);
         :class="{ 'editor-tall': rows === 4, invalid: length > 4000, disabled }"
       >
         <EditorContent :editor="editor" class="rich-content" />
-        <span v-if="empty" class="editor-placeholder" aria-hidden="true"
-          >Write a comment · type @ to mention</span
-        >
+        <span v-if="empty" class="editor-placeholder" aria-hidden="true">Write a comment</span>
       </div>
       <ul
         v-if="suggestion"
@@ -419,8 +419,28 @@ onBeforeUnmount(closePopup);
         Keep unavailable mentions as text
       </button>
     </div>
-    <div v-if="$slots.metadata" class="editor-meta">
+    <div class="editor-meta">
       <slot name="metadata" />
+      <button
+        type="button"
+        class="markdown-help-trigger"
+        aria-label="Markdown and @mention help"
+        @click="markdownHelp?.toggle($event)"
+      >
+        Markdown · @mentions
+      </button>
+      <Popover ref="markdownHelp" aria-label="Markdown and @mention quick reference">
+        <dl class="markdown-help">
+          <dt>Bold</dt>
+          <dd><code>**text**</code></dd>
+          <dt>Italic</dt>
+          <dd><code>*text*</code></dd>
+          <dt>Link</dt>
+          <dd><code>[text](https://…)</code></dd>
+          <dt>Mention</dt>
+          <dd>Type <code>@</code> and choose a name.</dd>
+        </dl>
+      </Popover>
     </div>
   </div>
 </template>
@@ -537,9 +557,35 @@ onBeforeUnmount(closePopup);
 }
 .editor-meta {
   display: flex;
-  align-items: flex-start;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
   margin-top: 4px;
+}
+.markdown-help-trigger {
+  margin-inline-start: auto;
+  min-height: 24px;
+  padding-inline: 2px;
+  font-size: 12px;
+  color: var(--p-text-muted-color);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.markdown-help {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px 12px;
+  max-width: min(250px, calc(100vw - 56px));
+  margin: 0;
+  font-size: 13px;
+}
+.markdown-help dt {
+  font-weight: 600;
+}
+.markdown-help dd {
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 .editor-error {
   margin: 4px 0 0;
