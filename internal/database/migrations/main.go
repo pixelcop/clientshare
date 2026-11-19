@@ -36,6 +36,7 @@ func main() {
 		migration.NewGoMigration(58, upBindPendingInvitationContacts, downBindPendingInvitationContacts),
 		migration.NewGoMigration(59, upAddReplayRequests, downAddReplayRequests),
 		migration.NewGoMigration(60, upAddFileComments, downAddFileComments),
+		migration.NewGoMigration(61, upCommentNotifications, downCommentNotifications),
 	}
 
 	migration.Run(goMigrations, func(path string) (db.DatabaseConfig, error) {

@@ -28,13 +28,18 @@ var (
 	ErrCommentMention  = errors.New("unavailable comment mention")
 )
 
-type FileCommentService struct{ DB *gorm.DB }
+type FileCommentService struct {
+	DB                  *gorm.DB
+	NotificationBaseURL string
+}
 
 type FileCommentPage struct {
-	Items       []models.FileComment `json:"items"`
-	NextCursor  string               `json:"next_cursor"`
-	CanInternal bool                 `json:"can_internal"`
-	TotalCount  int64                `json:"total_count"`
+	Items            []models.FileComment `json:"items"`
+	NextCursor       string               `json:"next_cursor"`
+	CanInternal      bool                 `json:"can_internal"`
+	TotalCount       int64                `json:"total_count"`
+	FocusUnavailable bool                 `json:"focus_unavailable,omitempty"`
+	FocusHasNewer    bool                 `json:"focus_has_newer,omitempty"`
 }
 
 // Count includes only live comments visible to the actor, not removed
@@ -96,30 +101,64 @@ func commentQuery(db *gorm.DB, req AccessRequest, team bool) *gorm.DB {
 }
 
 func (s *FileCommentService) List(ctx context.Context, req AccessRequest, before string) (*FileCommentPage, error) {
+	return s.ListAround(ctx, req, before, "")
+}
+
+// ListAround reads a bounded window of visible comments, using the same
+// audience filter for the anchor and its neighbors.
+func (s *FileCommentService) ListAround(ctx context.Context, req AccessRequest, before, focus string) (*FileCommentPage, error) {
 	actor, team, err := s.authorize(ctx, req)
 	if err != nil {
 		return nil, err
 	}
-	if len(before) > 26 {
+	if len(before) > 26 || len(focus) > 26 || (before != "" && focus != "") {
 		return nil, ErrCommentInput
 	}
 	db := s.DB.WithContext(ctx)
-	q := commentQuery(db, req, team)
-	if before != "" {
-		q = q.Where("id < ?", before)
-	}
+	base := func() *gorm.DB { return commentQuery(db, req, team) }
 	result := &FileCommentPage{Items: []models.FileComment{}, CanInternal: team}
 	result.TotalCount, err = visibleCommentCount(db, req, team)
 	if err != nil {
 		return nil, err
 	}
-	if err := q.Order("id DESC").Limit(commentPageSize + 1).Find(&result.Items).Error; err != nil {
+	if focus != "" {
+		var anchor models.FileComment
+		err := base().Where("id = ? AND deleted_at IS NULL", focus).First(&anchor).Error
+		if err == nil {
+			const newerLimit = 15
+			var newer []models.FileComment
+			if err := base().Where("id > ?", anchor.ID).Order("id ASC").Limit(newerLimit + 1).Find(&newer).Error; err != nil {
+				return nil, err
+			}
+			if len(newer) > newerLimit {
+				result.FocusHasNewer = true
+				newer = newer[:newerLimit]
+			}
+			for i := len(newer) - 1; i >= 0; i-- {
+				result.Items = append(result.Items, newer[i])
+			}
+			before = anchor.ID
+			result.Items = append(result.Items, anchor)
+		} else if errors.Is(err, gorm.ErrRecordNotFound) {
+			result.FocusUnavailable = true
+		} else {
+			return nil, err
+		}
+	}
+	remaining := commentPageSize - len(result.Items)
+	q := base()
+	if before != "" {
+		q = q.Where("id < ?", before)
+	}
+	var older []models.FileComment
+	if err := q.Order("id DESC").Limit(remaining + 1).Find(&older).Error; err != nil {
 		return nil, err
 	}
-	if len(result.Items) > commentPageSize {
-		result.Items = result.Items[:commentPageSize]
-		result.NextCursor = result.Items[len(result.Items)-1].ID
+	if len(older) > remaining {
+		older = older[:remaining]
+		result.NextCursor = older[len(older)-1].ID
 	}
+	result.Items = append(result.Items, older...)
 	if err := decorateComments(db, req, actor, result.Items); err != nil {
 		return nil, err
 	}
@@ -240,6 +279,9 @@ func (s *FileCommentService) Create(ctx context.Context, req AccessRequest, inpu
 			if err := recordCommentRevision(tx, comment, "created"); err != nil {
 				return err
 			}
+			if err := recordCommentParticipation(ctx, tx, comment, s.NotificationBaseURL); err != nil {
+				return err
+			}
 		}
 		rows := []models.FileComment{comment}
 		if err := decorateComments(tx, req, actor, rows); err != nil {
@@ -293,6 +335,9 @@ func (s *FileCommentService) Update(ctx context.Context, req AccessRequest, id, 
 			return ErrCommentConflict
 		}
 		if err := recordCommentRevision(tx, comment, action); err != nil {
+			return err
+		}
+		if err := pruneCommentParticipation(tx, comment); err != nil {
 			return err
 		}
 		rows := []models.FileComment{comment}

@@ -28,8 +28,11 @@ internal/static/dist:
 internal/static/dist/index.html:
 	cd web && make build-web
 
-internal/services/email/generated/password_reset.html:
+internal/services/email/generated/comment_notification.html: web/emails/comment-notification-email.vue web/scripts/build-email-templates.ts
 	cd web && make build-emails
+
+internal/services/email/generated/password_reset.html: internal/services/email/generated/comment_notification.html
+	test -f $@ || $(MAKE) -C web build-emails
 
 run: internal/static/dist internal/static/guide/dist/index.html internal/services/email/generated/password_reset.html
 	export DEBUG=1; \

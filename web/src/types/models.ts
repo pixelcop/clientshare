@@ -324,6 +324,19 @@ export interface FileCommentRevision {
 }
 
 //////////
+// source: file_comment_participant.go
+
+/**
+ * FileCommentParticipant records an eligible mention, not a subscription.
+ * References to people who could not read the comment are never recorded.
+ */
+export interface FileCommentParticipant {
+  TenantID: string;
+  CommentID: string;
+  UserID: string;
+}
+
+//////////
 // source: hosted_email_token.go
 
 /**

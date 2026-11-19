@@ -37,7 +37,7 @@ func (q *DBEmailQueue) Queue(email Email, sendAt *time.Time) (*models.QueuedEmai
 	// look for existing queued email for the same client
 	if email.DeduplicationKey == "" && email.ClientID != nil && email.HideRecipients {
 		var existing models.QueuedEmail
-		query := q.DB.Where("client_id = ? AND sent_at IS NULL AND canceled_at IS NULL AND hide_recipients = ? AND reply_to = ?", *email.ClientID, true, email.ReplyTo)
+		query := q.DB.Where("client_id = ? AND file_comment_id IS NULL AND sent_at IS NULL AND canceled_at IS NULL AND hide_recipients = ? AND reply_to = ?", *email.ClientID, true, email.ReplyTo)
 		if email.FileIDsCSV != "" || email.RecipientUserID != nil || email.RecipientLinkID != nil {
 			query = query.Where("recipient = ?", email.To)
 		}
@@ -161,7 +161,7 @@ func (q *DBEmailQueue) Update(tenantID, id, recipient, subject, body string) err
 		"subject":   subject,
 		"body":      body,
 	}
-	query := q.DB.Model(&models.QueuedEmail{}).Where("id = ? AND sent_at IS NULL AND canceled_at IS NULL", id)
+	query := q.DB.Model(&models.QueuedEmail{}).Where("id = ? AND file_comment_id IS NULL AND sent_at IS NULL AND canceled_at IS NULL", id)
 	if strings.TrimSpace(tenantID) != "" {
 		query = query.Where("tenant_id = ?", strings.TrimSpace(tenantID))
 	}
@@ -185,6 +185,15 @@ func (q *DBEmailQueue) send(item models.QueuedEmail) error {
 		return err
 	}
 	item = current
+	if item.FileCommentID != nil {
+		valid, err := q.revalidateCommentNotification(&item)
+		if err != nil {
+			return err
+		}
+		if !valid {
+			return q.DB.Model(&models.QueuedEmail{}).Where("tenant_id = ? AND id = ? AND sent_at IS NULL", item.TenantID, item.ID).Update("canceled_at", q.now()).Error
+		}
+	}
 	if item.AccessInvitationID != nil || item.IdentityInviteID != nil {
 		valid, err := q.accessInvitationDeliveryValid(item)
 		if err != nil {

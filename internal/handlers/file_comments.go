@@ -6,17 +6,23 @@ import (
 	"github.com/gofiber/fiber/v3"
 	"github.com/pixelcop/clientshare/internal/middleware"
 	"github.com/pixelcop/clientshare/internal/services"
+	"github.com/pixelcop/clientshare/internal/tenant"
 	"gorm.io/gorm"
 )
 
-type FileCommentsHandler struct{ service *services.FileCommentService }
+type FileCommentsHandler struct {
+	service *services.FileCommentService
+	notify  bool
+	baseURL string
+}
 
 func NewFileCommentsHandler(db *gorm.DB) *FileCommentsHandler {
 	return &FileCommentsHandler{service: &services.FileCommentService{DB: db}}
 }
 
-func RegisterFileCommentRoutes(router fiber.Router, db *gorm.DB) {
+func RegisterFileCommentRoutes(router fiber.Router, db *gorm.DB, notify bool, baseURL string) {
 	h := NewFileCommentsHandler(db)
+	h.notify, h.baseURL = notify, baseURL
 	router.Get("/files/:id/comments", middleware.AuthRequired, h.List)
 	router.Get("/files/:id/comments/count", middleware.AuthRequired, h.Count)
 	router.Get("/files/:id/comments/mentions", middleware.AuthRequired, h.Mentions)
@@ -66,7 +72,7 @@ func commentRequest(c fiber.Ctx) services.AccessRequest {
 }
 
 func (h *FileCommentsHandler) List(c fiber.Ctx) error {
-	page, err := h.service.List(c.Context(), commentRequest(c), c.Query("before"))
+	page, err := h.service.ListAround(c.Context(), commentRequest(c), c.Query("before"), c.Query("focus"))
 	return commentResponse(c, page, err, 200)
 }
 
@@ -80,7 +86,21 @@ func (h *FileCommentsHandler) Create(c fiber.Ctx) error {
 	if len(c.Body()) > 32*1024 || c.Bind().Body(&input) != nil {
 		return commentResponse(c, nil, services.ErrCommentInput, 400)
 	}
-	comment, err := h.service.Create(c.Context(), commentRequest(c), input, c.Get("Idempotency-Key"))
+	service := *h.service
+	if h.notify {
+		service.NotificationBaseURL = normalizeAbsoluteURL(h.baseURL)
+		if resolved, ok := tenant.FromFiber(c); ok {
+			switch {
+			case normalizeAbsoluteURL(resolved.PublicBaseURL) != "":
+				service.NotificationBaseURL = normalizeAbsoluteURL(resolved.PublicBaseURL)
+			case resolved.Resolution == "hostname" || resolved.Resolution == "subdomain":
+				// The tenant resolver verified this hostname. Never use the
+				// request's Host header as an email URL in single-tenant mode.
+				service.NotificationBaseURL = normalizeAbsoluteURL(c.Scheme() + "://" + resolved.Hostname)
+			}
+		}
+	}
+	comment, err := service.Create(c.Context(), commentRequest(c), input, c.Get("Idempotency-Key"))
 	return commentResponse(c, comment, err, 201)
 }
 

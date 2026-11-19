@@ -19,15 +19,47 @@ import (
 var templateFS embed.FS
 
 var (
-	passwordResetHTMLTemplate      = html.Must(html.ParseFS(templateFS, "generated/password_reset.html"))
-	passwordResetTextTemplate      = template.Must(template.ParseFS(templateFS, "generated/password_reset.txt"))
-	uploadNotificationHTMLTemplate = html.Must(html.ParseFS(templateFS, "generated/upload_notification.html"))
-	uploadNotificationTextTemplate = template.Must(template.ParseFS(templateFS, "generated/upload_notification.txt"))
-	secureLinkHTMLTemplate         = html.Must(html.ParseFS(templateFS, "generated/secure_link.html"))
-	secureLinkTextTemplate         = template.Must(template.ParseFS(templateFS, "generated/secure_link.txt"))
-	userInviteHTMLTemplate         = html.Must(html.ParseFS(templateFS, "generated/user_invite.html"))
-	userInviteTextTemplate         = template.Must(template.ParseFS(templateFS, "generated/user_invite.txt"))
+	passwordResetHTMLTemplate       = html.Must(html.ParseFS(templateFS, "generated/password_reset.html"))
+	passwordResetTextTemplate       = template.Must(template.ParseFS(templateFS, "generated/password_reset.txt"))
+	uploadNotificationHTMLTemplate  = html.Must(html.ParseFS(templateFS, "generated/upload_notification.html"))
+	uploadNotificationTextTemplate  = template.Must(template.ParseFS(templateFS, "generated/upload_notification.txt"))
+	commentNotificationHTMLTemplate = html.Must(html.ParseFS(templateFS, "generated/comment_notification.html"))
+	commentNotificationTextTemplate = template.Must(template.ParseFS(templateFS, "generated/comment_notification.txt"))
+	secureLinkHTMLTemplate          = html.Must(html.ParseFS(templateFS, "generated/secure_link.html"))
+	secureLinkTextTemplate          = template.Must(template.ParseFS(templateFS, "generated/secure_link.txt"))
+	userInviteHTMLTemplate          = html.Must(html.ParseFS(templateFS, "generated/user_invite.html"))
+	userInviteTextTemplate          = template.Must(template.ParseFS(templateFS, "generated/user_invite.txt"))
 )
+
+func renderCommentNotification(author, fileName, commentURL string, team, mentioned bool) (string, string, string, error) {
+	author = strings.Join(strings.Fields(author), " ")
+	if author == "" {
+		author = "Someone"
+	}
+	heading := author + " commented"
+	subject := "New file comment"
+	if team {
+		heading, subject = author+" added a team note", "New team note"
+	}
+	if mentioned {
+		heading, subject = author+" mentioned you", "You were mentioned in a file comment"
+		if team {
+			heading, subject = heading+" in a team note", "You were mentioned in a team note"
+		}
+	}
+	if team {
+		heading = "Team only: " + heading
+	}
+	data := struct{ Heading, FileName, CommentURL string }{heading, fileName, commentURL}
+	var textBody, htmlBody bytes.Buffer
+	if err := commentNotificationTextTemplate.Execute(&textBody, data); err != nil {
+		return "", "", "", err
+	}
+	if err := commentNotificationHTMLTemplate.Execute(&htmlBody, data); err != nil {
+		return "", "", "", err
+	}
+	return subject, textBody.String(), htmlBody.String(), nil
+}
 
 type uploadNotificationTemplateData struct {
 	ClientName  string

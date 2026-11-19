@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import { plainTextSelectors, render } from '@vue-email/render';
 
+import CommentNotificationEmail from '../emails/comment-notification-email.vue';
 import PasswordResetEmail from '../emails/password-reset-email.vue';
 import SecureLinkEmail from '../emails/secure-link-email.vue';
 import UploadNotificationEmail from '../emails/upload-notification-email.vue';
@@ -57,6 +58,12 @@ await renderEmail('upload_notification', UploadNotificationEmail, {
   clientName: '{{.ClientName}}',
   fileName: '',
   productName: '{{.ProductName}}',
+});
+
+await renderEmail('comment_notification', CommentNotificationEmail, {
+  heading: '{{.Heading}}',
+  fileName: '{{.FileName}}',
+  commentUrl: '{{.CommentURL}}',
 });
 
 await renderEmail('secure_link', SecureLinkEmail, {

@@ -12,7 +12,7 @@ import (
 
 func TestFileCommentsHTTPIsolationValidationAndLifecycle(t *testing.T) {
 	env := setupFileTestEnv(t)
-	require.NoError(t, env.db.AutoMigrate(&models.FileComment{}, &models.FileCommentRevision{}))
+	require.NoError(t, env.db.AutoMigrate(&models.FileComment{}, &models.FileCommentRevision{}, &models.FileCommentParticipant{}))
 	file := createFileRecord(t, env, env.rootFolder, "discussion.txt", "test")
 	base := "/api/files/" + file.ID + "/comments"
 	for _, token := range []string{env.otherToken, env.linkToken} {

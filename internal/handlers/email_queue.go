@@ -56,7 +56,7 @@ func (h *emailQueueHandler) visiblePending(c fiber.Ctx, clientID string) ([]*mod
 		// Target-aware invitations are email-possession credentials. Even an
 		// administrator who sent the invitation must not recover its setup or
 		// acceptance URL through the generic queue inspection surface.
-		if item.AccessInvitationID != nil || item.IdentityInviteID != nil {
+		if item.AccessInvitationID != nil || item.IdentityInviteID != nil || item.FileCommentID != nil {
 			continue
 		}
 		// Account invitation/reset messages contain identity credentials, not

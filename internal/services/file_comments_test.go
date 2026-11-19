@@ -14,7 +14,7 @@ import (
 func commentFixture(t *testing.T) (accessFixture, *FileCommentService) {
 	t.Helper()
 	f, _ := sharingFixture(t)
-	require.NoError(t, f.db.AutoMigrate(&models.FileComment{}, &models.FileCommentRevision{}))
+	require.NoError(t, f.db.AutoMigrate(&models.FileComment{}, &models.FileCommentRevision{}, &models.FileCommentParticipant{}))
 	return f, &FileCommentService{DB: f.db}
 }
 
