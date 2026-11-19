@@ -4,6 +4,7 @@ import Button from 'openvue/button';
 import { computed, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 
+import RecipientPicker from '@/components/RecipientPicker.vue';
 import {
   type DocumentRequest,
   type DocumentRequestItem,
@@ -23,6 +24,14 @@ const error = ref('');
 const notice = ref('');
 const creating = ref(false);
 const title = ref('');
+const recipientEmail = ref('');
+const folderOverride = ref<string | null>(null);
+const folderName = computed({
+  get: () => folderOverride.value ?? title.value,
+  set: (value: string) => {
+    folderOverride.value = value;
+  },
+});
 let nextRow = 0;
 const newRow = () => ({ key: nextRow++, name: '', instructions: '' });
 const draft = ref([newRow()]);
@@ -91,13 +100,24 @@ async function create() {
   try {
     const { data } = await axios.post<DocumentRequest>(endpoint.value, {
       title: title.value,
+      folder_name: folderName.value,
+      recipient_email: recipientEmail.value,
       items: draft.value.map(({ name, instructions }) => ({ name, instructions })),
     });
     title.value = '';
+    recipientEmail.value = '';
+    folderOverride.value = null;
     draft.value = [newRow()];
     await router.push(requestRoute(data.id));
-  } catch {
-    error.value = 'Could not create the request. Check the title and item names, then try again.';
+    if (data.email_status === 'queued') {
+      notice.value = 'Request created. Email queued for the recipient.';
+    } else if (data.email_status === 'unavailable') {
+      notice.value = 'Request created. Email is unavailable; copy and share the request link.';
+    }
+  } catch (failure) {
+    error.value =
+      (axios.isAxiosError<{ error?: string }>(failure) && failure.response?.data?.error) ||
+      'Could not create the request. Check the title and item names, then try again.';
   } finally {
     saving.value = false;
   }
@@ -199,6 +219,36 @@ async function revoke() {
           placeholder="e.g. October close"
         />
       </label>
+      <label class="block space-y-1">
+        <span class="font-medium">Destination folder</span>
+        <input
+          v-model="folderName"
+          :class="inputClass"
+          maxlength="160"
+          aria-describedby="request-folder-help"
+        />
+      </label>
+      <p id="request-folder-help" class="text-sm text-muted-color">
+        Files go into this new folder in the client workspace. It uses the request title unless you
+        change it.
+      </p>
+      <div class="space-y-1">
+        <label for="request-recipient" class="font-medium"
+          >Email a client user <span class="text-muted-color">(optional)</span></label
+        >
+        <RecipientPicker
+          v-model="recipientEmail"
+          input-id="request-recipient"
+          :client-id="clientId"
+          current-client-only
+          label="Email a client user"
+          :disabled="saving"
+        />
+        <p class="text-sm text-muted-color">
+          Choose an existing user from this workspace to email the link on creation, or leave this
+          blank to share it yourself.
+        </p>
+      </div>
       <fieldset
         v-for="(item, index) in draft"
         :key="item.key"
@@ -275,6 +325,15 @@ async function revoke() {
     </template>
 
     <template v-if="request">
+      <p v-if="request.folder_id" class="text-sm text-muted-color">
+        Destination folder:
+        <RouterLink
+          :to="{ name: 'FolderView', params: { folderId: request.folder_id } }"
+          class="text-primary underline"
+        >
+          {{ request.folder_name }}
+        </RouterLink>
+      </p>
       <div class="flex flex-wrap items-center gap-2">
         <Button v-if="request.link" label="Copy request link" type="button" @click="copyLink" />
         <Button

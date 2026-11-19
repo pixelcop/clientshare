@@ -4,6 +4,7 @@ import Button from 'openvue/button';
 import { computed, nextTick, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 
+import { useAuthStore } from '@/stores/auth';
 import { defaultBrandingTitle, useBrandingStore } from '@/stores/branding';
 import {
   type DocumentRequestItem,
@@ -13,6 +14,7 @@ import {
 
 const token = new URLSearchParams(useRoute().hash.slice(1)).get('token');
 const branding = useBrandingStore();
+const auth = useAuthStore();
 const logoUnavailable = ref(false);
 const endpoint = '/api/document-request';
 const config = { headers: { 'X-Document-Request': token ?? '' } };
@@ -115,8 +117,11 @@ onMounted(load);
 </script>
 
 <template>
-  <div class="min-h-dvh bg-slate-50 text-slate-950">
-    <header class="border-b border-slate-200 bg-white">
+  <div :class="{ 'min-h-dvh bg-surface-50 dark:bg-surface-950': !auth.user }">
+    <header
+      v-if="!auth.user"
+      class="border-b border-surface-200 bg-surface-0 dark:border-surface-700 dark:bg-surface-900"
+    >
       <div class="mx-auto flex max-w-3xl items-center gap-3 px-4 py-4 font-semibold sm:px-8">
         <img
           v-if="branding.branding.logo && !logoUnavailable"
@@ -128,11 +133,14 @@ onMounted(load);
         <span class="wrap-anywhere">{{ branding.branding.title || defaultBrandingTitle }}</span>
       </div>
     </header>
-    <main class="mx-auto max-w-3xl px-4 pt-7 pb-10 leading-normal sm:px-8 sm:pt-12">
+    <main
+      class="mx-auto max-w-3xl pb-10 leading-normal"
+      :class="auth.user ? 'pt-4' : 'px-4 pt-7 sm:px-8 sm:pt-12'"
+    >
       <p v-if="loading" role="status">Loading document request…</p>
       <template v-else-if="unavailable">
         <h1 class="text-2xl font-semibold tracking-tight">This request is no longer available</h1>
-        <p class="mt-2 text-slate-600">Ask the sender for an active document request link.</p>
+        <p class="mt-2 text-muted-color">Ask the sender for an active document request link.</p>
       </template>
       <div v-if="error" role="alert" class="mb-4 flex flex-wrap items-center gap-3">
         <p>{{ error }}</p>
@@ -150,10 +158,10 @@ onMounted(load);
         >
           {{ request.title }}
         </h1>
-        <p class="mt-2 text-slate-600">Document request</p>
+        <p class="mt-2 text-muted-color">Document request</p>
         <section
           aria-labelledby="document-checklist-status"
-          class="mt-6 rounded-xl border border-slate-200 bg-white"
+          class="mt-6 rounded-xl border border-surface-200 bg-surface-0 dark:border-surface-700 dark:bg-surface-900"
         >
           <div class="px-4 py-4 sm:px-6">
             <h2
@@ -167,17 +175,17 @@ onMounted(load);
               <template v-else-if="complete">All documents accepted</template>
               <template v-else>Nothing for you to do right now</template>
             </h2>
-            <p v-if="remaining" class="mt-1 text-sm text-slate-600">
+            <p v-if="remaining" class="mt-1 text-sm text-muted-color">
               Add the requested files, then submit each item when it is ready.
             </p>
-            <p v-else-if="!complete" class="mt-1 text-sm text-slate-600">
+            <p v-else-if="!complete" class="mt-1 text-sm text-muted-color">
               The sender is reviewing your documents.
             </p>
             <p role="status" class="sr-only">{{ announcement }}</p>
           </div>
 
           <ul
-            class="divide-y divide-slate-200 border-t border-slate-200"
+            class="divide-y divide-surface-200 border-t border-surface-200 dark:divide-surface-700 dark:border-surface-700"
             aria-label="Requested documents"
           >
             <li v-for="item in ordered" :key="item.id" class="px-4 py-4 sm:px-6">
@@ -188,10 +196,10 @@ onMounted(load);
                 <span
                   class="text-sm font-medium"
                   :class="{
-                    'text-amber-900': item.status === 'replacement',
-                    'text-emerald-800': item.status === 'accepted',
-                    'text-sky-800': item.status === 'submitted',
-                    'text-slate-600': item.status === 'needed',
+                    'text-amber-900 dark:text-amber-300': item.status === 'replacement',
+                    'text-emerald-800 dark:text-emerald-300': item.status === 'accepted',
+                    'text-sky-800 dark:text-sky-300': item.status === 'submitted',
+                    'text-muted-color': item.status === 'needed',
                   }"
                 >
                   {{ documentRequestLabels[item.status] }}
@@ -199,23 +207,27 @@ onMounted(load);
               </div>
               <p
                 v-if="item.instructions && canSubmit(item)"
-                class="mt-2 text-sm text-slate-600 wrap-anywhere whitespace-pre-wrap"
+                class="mt-2 text-sm text-muted-color wrap-anywhere whitespace-pre-wrap"
               >
                 {{ item.instructions }}
               </p>
               <p
                 v-if="item.status === 'replacement'"
                 :id="`replacement-${item.id}`"
-                class="mt-3 rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-950 wrap-anywhere whitespace-pre-wrap"
+                class="mt-3 rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-950 wrap-anywhere whitespace-pre-wrap dark:bg-amber-950 dark:text-amber-100"
               >
                 {{ item.reason }}
               </p>
-              <p v-if="itemError?.id === item.id" role="alert" class="mt-3 text-sm text-red-800">
+              <p
+                v-if="itemError?.id === item.id"
+                role="alert"
+                class="mt-3 text-sm text-red-800 dark:text-red-300"
+              >
                 {{ itemError.text }}
               </p>
               <ul
                 v-if="item.files.length"
-                class="mt-2 space-y-1 text-sm text-slate-700"
+                class="mt-2 space-y-1 text-sm text-muted-color"
                 :aria-label="`Uploaded files for ${item.name}`"
               >
                 <li v-for="(file, index) in item.files" :key="index" class="wrap-anywhere">
@@ -239,7 +251,7 @@ onMounted(load);
                     @change="upload(item, $event)"
                   />
                   <span
-                    class="inline-flex min-h-[44px] items-center rounded-md border border-sky-700 px-3 text-sm font-semibold text-sky-800 hover:bg-sky-50 peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-sky-700"
+                    class="inline-flex min-h-[44px] items-center rounded-md border border-sky-700 px-3 text-sm font-semibold text-sky-800 hover:bg-sky-50 peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-sky-700 dark:border-sky-400 dark:text-sky-200 dark:hover:bg-sky-950"
                   >
                     {{
                       item.files.length
@@ -263,7 +275,7 @@ onMounted(load);
                 <p
                   v-if="active?.id === item.id"
                   role="status"
-                  class="w-full text-sm text-slate-600"
+                  class="w-full text-sm text-muted-color"
                 >
                   {{ active.label }}
                 </p>

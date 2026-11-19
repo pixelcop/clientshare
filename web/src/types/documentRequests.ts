@@ -33,6 +33,9 @@ export interface DocumentRequestItem {
 export interface DocumentRequest extends DocumentRequestSummary {
   items: DocumentRequestItem[];
   link?: string;
+  folder_id?: string;
+  folder_name?: string;
+  email_status?: 'queued' | 'unavailable';
 }
 
 export type RecipientDocumentRequest = Pick<DocumentRequest, 'title' | 'expires_at' | 'items'>;

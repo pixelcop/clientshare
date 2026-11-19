@@ -14,21 +14,22 @@ const { isPublicLayout } = useLayout();
 const route = useRoute();
 const isFilePage = computed(() => route.name === 'FileView');
 const isRequestRecipient = computed(() => route.name === 'DocumentRequestRecipient');
+const isAnonymousRequest = computed(() => isRequestRecipient.value && !user.value);
 </script>
 
 <template>
-  <router-view v-if="isRequestRecipient" :key="route.hash" />
+  <router-view v-if="isAnonymousRequest" :key="route.hash" />
   <template v-else>
     <AppTopbar v-if="!!user && !isFilePage" />
 
     <router-view v-if="isFilePage" />
     <div v-else class="layout-main-container">
       <div v-if="isPublicLayout" class="layout-main flex-1 w-full max-w-6xl mx-auto p-4 md:p-8">
-        <router-view />
+        <router-view :key="isRequestRecipient ? route.hash : undefined" />
       </div>
       <div v-else class="layout-main">
-        <CollectDocument v-if="user?.role === 'admin'" />
-        <router-view />
+        <CollectDocument v-if="user?.role === 'admin' && !isRequestRecipient" />
+        <router-view :key="isRequestRecipient ? route.hash : undefined" />
       </div>
     </div>
 

@@ -10,11 +10,16 @@ item. For a one-off upload without a checklist, use an [Upload only link](#send-
    **Upload** menu.
 2. Choose **New request**, give it a title, and add the documents you need. Add
    instructions where they help the recipient pick the right file.
-3. Choose **Create request**, then **Copy request link** and send it directly to
-   the recipient. ClientShare does not email this link automatically.
+3. Confirm the **Destination folder**. It defaults to the request title, and
+   you can give it a different name before creating the request.
+4. To email the link when you create the request, select an existing client user
+   with workspace access. Leave this blank to **Copy request link** and share it
+   yourself. If outbound email is disabled, use the copy option instead.
 
 The recipient can open the checklist without a portal account. They can add one
-or more files to an item and return with the same link later. **Submit for
+or more files to an item and return with the same link later. Signed-in users
+see their usual portal navigation. Uploads are saved in the destination folder
+under the client workspace as soon as they finish. **Submit for
 review** tells the team that an item is ready. Adding files alone does not
 submit the item.
 

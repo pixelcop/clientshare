@@ -166,10 +166,7 @@ const router = createRouter({
 });
 
 let initialLoad = false;
-router.beforeEach(async (to, _from) => {
-  if (to.name === 'DocumentRequestRecipient') {
-    return;
-  }
+router.beforeEach(async (_to, _from) => {
   // Always try restoring the first session load from the auth cookie.
   if (!initialLoad) {
     try {
