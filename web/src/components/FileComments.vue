@@ -600,7 +600,8 @@ ol {
   margin-bottom: 12px;
 }
 .comment-highlighted :deep(.comment-card) {
-  background: var(--p-highlight-background);
+  outline: 3px solid var(--p-indigo-500);
+  outline-offset: 1px;
 }
 .latest-comments {
   align-self: flex-end;
