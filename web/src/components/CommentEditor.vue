@@ -160,8 +160,8 @@ async function choose(person: CommentPerson) {
 }
 const mentionDetail = {
   share: 'No file access · Share file…',
-  reference_team: 'Reference only · Can’t see this team note',
-  reference_no_access: 'Reference only · No file access',
+  reference_team: 'Client · Can’t see team notes',
+  reference_no_access: 'Internal · No access to this file',
 };
 function editorAttributes() {
   return {
