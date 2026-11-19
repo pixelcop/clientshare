@@ -63,6 +63,8 @@ type SystemSettings = {
 
 const fallbackLogLevelOptions = ['debug', 'info', 'warn', 'error', 'dpanic', 'panic', 'fatal'];
 const defaultPrimaryColor = '#3B82F6';
+const showPrimaryColorSettings = false;
+const publicBaseURLPlaceholder = 'https://portal.example.com';
 const defaultSecureLinkExpiryDays = 90;
 const defaultInviteWelcomeText = inviteWelcomeText.trim();
 
@@ -383,7 +385,7 @@ onMounted(() => {
                 </div>
 
                 <!-- FIXME: when we properly set colors -->
-                <div v-if="false" class="flex flex-col gap-2">
+                <div v-if="showPrimaryColorSettings" class="flex flex-col gap-2">
                   <label class="text-sm font-medium">Primary color</label>
                   <div class="flex items-center gap-3">
                     <ColorPicker
@@ -406,7 +408,7 @@ onMounted(() => {
                     v-model="form.publicBaseURL"
                     type="url"
                     class="w-full border rounded px-3 py-2"
-                    placeholder="https://portal.example.com"
+                    :placeholder="publicBaseURLPlaceholder"
                   />
                   <p class="text-xs text-muted-color">
                     Used for invite, reset-password, and secure-link URLs for this tenant.
@@ -491,7 +493,7 @@ onMounted(() => {
                   </p>
                 </div>
                 <!-- FIXME: when we properly set colors -->
-                <div v-if="false" class="rounded border p-3 space-y-2">
+                <div v-if="showPrimaryColorSettings" class="rounded border p-3 space-y-2">
                   <p class="text-sm">Buttons</p>
                   <Button :style="{ backgroundColor: form.primaryColor || defaultPrimaryColor }">
                     Primary action
