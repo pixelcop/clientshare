@@ -421,13 +421,8 @@ onBeforeUnmount(closePopup);
     </div>
     <div class="editor-meta">
       <slot name="metadata" />
-      <button
-        type="button"
-        class="markdown-help-trigger"
-        aria-label="Markdown and @mention help"
-        @click="markdownHelp?.toggle($event)"
-      >
-        Markdown · @mentions
+      <button type="button" class="markdown-help-trigger" @click="markdownHelp?.toggle($event)">
+        Markdown supported
       </button>
       <Popover ref="markdownHelp" aria-label="Markdown and @mention quick reference">
         <dl class="markdown-help">
