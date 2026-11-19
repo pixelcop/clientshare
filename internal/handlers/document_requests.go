@@ -8,19 +8,23 @@ import (
 	"github.com/pixelcop/clientshare/internal/middleware"
 	"github.com/pixelcop/clientshare/internal/services"
 	"github.com/pixelcop/clientshare/internal/services/storage"
+	"github.com/pixelcop/clientshare/internal/tenant"
 	"gorm.io/gorm"
 )
 
 type DocumentRequestsHandler struct {
-	service *services.DocumentRequestService
+	service      *services.DocumentRequestService
+	emailBaseURL string
+	emailEnabled bool
 }
 
 func NewDocumentRequestsHandler(db *gorm.DB, store storage.Storage, signingKey string) *DocumentRequestsHandler {
 	return &DocumentRequestsHandler{service: &services.DocumentRequestService{DB: db, Store: store, SigningKey: signingKey}}
 }
 
-func RegisterDocumentRequestRoutes(public, staff fiber.Router, db *gorm.DB, store storage.Storage, signingKey string) {
+func RegisterDocumentRequestRoutes(public, staff fiber.Router, db *gorm.DB, store storage.Storage, signingKey, baseURL string, emailEnabled bool) {
 	h := NewDocumentRequestsHandler(db, store, signingKey)
+	h.emailBaseURL, h.emailEnabled = baseURL, emailEnabled
 	management := staff.Group("/clients/:clientID/document-requests", middleware.AuthRequired)
 	management.Get("/", h.List)
 	management.Post("/", h.Create)
@@ -46,9 +50,9 @@ func documentRequestError(c fiber.Ctx, err error) error {
 	switch {
 	case errors.Is(err, gorm.ErrRecordNotFound):
 		return c.Status(404).JSON(fiber.Map{"error": "Document request not found or no longer available"})
-	case errors.Is(err, services.ErrDocumentRequestInput):
+	case errors.Is(err, services.ErrDocumentRequestInput), errors.Is(err, services.ErrDocumentRequestFolder), errors.Is(err, services.ErrDocumentRequestRecipient):
 		return c.Status(400).JSON(fiber.Map{"error": err.Error()})
-	case errors.Is(err, services.ErrDocumentRequestConflict), errors.Is(err, services.ErrDocumentRequestFiles):
+	case errors.Is(err, services.ErrDocumentRequestConflict), errors.Is(err, services.ErrDocumentRequestFiles), errors.Is(err, services.ErrDocumentRequestFolderExists):
 		return c.Status(409).JSON(fiber.Map{"error": err.Error()})
 	case respondQuotaError(c, err):
 		return nil
@@ -70,7 +74,14 @@ func (h *DocumentRequestsHandler) Create(c fiber.Ctx) error {
 	if err := c.Bind().JSON(&input); err != nil {
 		return documentRequestError(c, services.ErrDocumentRequestInput)
 	}
-	view, err := h.service.Create(c.Context(), documentRequestActor(c), input)
+	service := *h.service
+	if h.emailEnabled {
+		service.NotificationBaseURL = normalizeAbsoluteURL(h.emailBaseURL)
+		if resolved, ok := tenant.FromFiber(c); ok && normalizeAbsoluteURL(resolved.PublicBaseURL) != "" {
+			service.NotificationBaseURL = normalizeAbsoluteURL(resolved.PublicBaseURL)
+		}
+	}
+	view, err := service.Create(c.Context(), documentRequestActor(c), input)
 	if err != nil {
 		return documentRequestError(c, err)
 	}

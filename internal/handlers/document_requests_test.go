@@ -14,6 +14,8 @@ import (
 
 	"github.com/pixelcop/clientshare/internal/models"
 	"github.com/pixelcop/clientshare/internal/services"
+	"github.com/pixelcop/clientshare/internal/services/email"
+	"github.com/pixelcop/clientshare/internal/services/storage"
 	"github.com/stretchr/testify/require"
 )
 
@@ -46,6 +48,12 @@ func TestDocumentRequestCollectionAndReview(t *testing.T) {
 	do(jsonAuthRequest("POST", staff, env.linkToken, json.RawMessage(input)), 404)
 	view := decode(do(jsonAuthRequest("POST", staff, env.managerToken, json.RawMessage(input)), 201))
 	require.Len(t, view.Items, 2)
+	require.Equal(t, "October close", view.FolderName)
+	require.NotEmpty(t, view.FolderID)
+	do(jsonAuthRequest("POST", staff, env.managerToken, json.RawMessage(input)), 409)
+	override := `{"title":"October close","folder_name":"2026 October uploads","items":[{"name":"Another file"}]}`
+	second := decode(do(jsonAuthRequest("POST", staff, env.managerToken, json.RawMessage(override)), 201))
+	require.Equal(t, "2026 October uploads", second.FolderName)
 	bank, payroll := view.Items[0].ID, view.Items[1].ID
 	link, err := url.Parse(view.Link)
 	require.NoError(t, err)
@@ -94,6 +102,7 @@ func TestDocumentRequestCollectionAndReview(t *testing.T) {
 	saved := decode(do(public("GET", recipient, ""), 200))
 	require.Empty(t, saved.Link)
 	require.Empty(t, saved.ID)
+	require.Empty(t, saved.FolderID)
 	require.Empty(t, saved.Items[0].Files[0].ID)
 	require.Equal(t, "needed", saved.Items[0].Status, "upload is not submission")
 	require.Equal(t, "statement.txt", saved.Items[0].Files[0].Name)
@@ -119,6 +128,10 @@ func TestDocumentRequestCollectionAndReview(t *testing.T) {
 	require.Len(t, detail.Items[0].Files, 2)
 	fileID := detail.Items[0].Files[0].ID
 	require.NotEmpty(t, fileID)
+	var file models.File
+	require.NoError(t, env.db.First(&file, "id = ?", fileID).Error)
+	require.NotNil(t, file.FolderID)
+	require.Equal(t, view.FolderID, *file.FolderID)
 	do(public("GET", "/api/files/"+fileID, ""), 401)
 	data := do(jsonAuthRequest("GET", "/api/files/"+fileID+"/download", env.managerToken, nil), 200)
 	require.Equal(t, "sample file material", string(data))
@@ -130,4 +143,55 @@ func TestDocumentRequestCollectionAndReview(t *testing.T) {
 	detail = decode(do(jsonAuthRequest("GET", staff, env.adminToken, nil), 200))
 	require.True(t, detail.Revoked)
 	require.Empty(t, detail.Link)
+}
+
+type documentRequestSender struct{ messages []email.Email }
+
+func (s *documentRequestSender) Send(msg email.Email) error {
+	s.messages = append(s.messages, msg)
+	return nil
+}
+
+func TestDocumentRequestEmailsOnlySelectedEligibleRecipient(t *testing.T) {
+	env := setupSharedHandlersEnv(t)
+	require.NoError(t, env.db.AutoMigrate(&models.DocumentRequest{}, &models.DocumentRequestItem{}, &models.DocumentRequestFile{}, &models.DocumentRequestReview{}))
+	svc := &services.DocumentRequestService{DB: env.db, Store: storage.NewLocalStorage(env.storageRoot), SigningKey: env.signingKey, NotificationBaseURL: "https://portal.example.test"}
+	req := services.AccessRequest{
+		TenantID: env.client.TenantID, ClientID: env.client.ID,
+		Actor: services.AccessActor{UserID: env.adminUser.ID},
+	}
+	in := services.DocumentRequestInput{
+		Title: "Bank documents", RecipientEmail: env.otherClientUser.Email,
+		Items: []services.DocumentRequestItemInput{{Name: "Bank statement"}},
+	}
+	_, err := svc.Create(t.Context(), req, in)
+	require.ErrorIs(t, err, services.ErrDocumentRequestRecipient)
+	in.RecipientEmail = env.clientUser.Email
+	result, err := svc.Create(t.Context(), req, in)
+	require.NoError(t, err)
+	require.Equal(t, "queued", result.EmailStatus)
+	var items []models.QueuedEmail
+	require.NoError(t, env.db.Where("document_request_id = ?", result.ID).Find(&items).Error)
+	require.Len(t, items, 1)
+	require.Equal(t, env.clientUser.Email, items[0].Recipient)
+	require.Empty(t, items[0].Body, "bearer link is only composed for delivery")
+
+	sender := &documentRequestSender{}
+	queue := email.NewDBEmailQueue(env.db, sender, time.Hour)
+	queue.DocumentRequestSigningKey = env.signingKey
+	require.Error(t, queue.Update(req.TenantID, items[0].ID, env.otherClientUser.Email, "Other message", "Other body"))
+	require.NoError(t, queue.SendNow(req.TenantID, items[0].ID))
+	require.Len(t, sender.messages, 1)
+	require.Contains(t, sender.messages[0].Body, "https://portal.example.test"+result.Link)
+
+	in.FolderName = "Second bank request"
+	result, err = svc.Create(t.Context(), req, in)
+	require.NoError(t, err)
+	var canceled models.QueuedEmail
+	require.NoError(t, env.db.Where("document_request_id = ?", result.ID).First(&canceled).Error)
+	require.NoError(t, svc.Revoke(t.Context(), req, result.ID))
+	require.NoError(t, queue.SendNow(req.TenantID, canceled.ID))
+	require.Len(t, sender.messages, 1)
+	require.NoError(t, env.db.First(&canceled, "id = ?", canceled.ID).Error)
+	require.NotNil(t, canceled.CanceledAt)
 }

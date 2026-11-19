@@ -3,16 +3,17 @@ package services
 import (
 	"context"
 	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/base64"
 	"errors"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
 	"unicode/utf8"
 
 	"github.com/pixelcop/clientshare/internal/models"
+	"github.com/pixelcop/clientshare/internal/services/email"
+	"github.com/pixelcop/clientshare/internal/services/links"
 	"github.com/pixelcop/clientshare/internal/services/storage"
 	"github.com/pixelcop/clientshare/pkg/utils/ids"
 	"gorm.io/gorm"
@@ -28,20 +29,26 @@ const (
 )
 
 var (
-	ErrDocumentRequestInput    = errors.New("invalid document request")
-	ErrDocumentRequestConflict = errors.New("this item has changed or has no available files; refresh and try again")
-	ErrDocumentRequestFiles    = errors.New("an item can have at most 20 files per submission")
+	ErrDocumentRequestInput        = errors.New("invalid document request")
+	ErrDocumentRequestConflict     = errors.New("this item has changed or has no available files; refresh and try again")
+	ErrDocumentRequestFiles        = errors.New("an item can have at most 20 files per submission")
+	ErrDocumentRequestFolder       = errors.New("enter a valid destination folder name without slashes")
+	ErrDocumentRequestFolderExists = errors.New("a folder with that name already exists; choose a different destination folder name")
+	ErrDocumentRequestRecipient    = errors.New("choose an existing client user with access to this workspace")
 )
 
 type DocumentRequestService struct {
-	DB         *gorm.DB
-	Store      storage.Storage
-	SigningKey string
+	DB                  *gorm.DB
+	Store               storage.Storage
+	SigningKey          string
+	NotificationBaseURL string
 }
 
 type DocumentRequestInput struct {
-	Title string                     `json:"title"`
-	Items []DocumentRequestItemInput `json:"items"`
+	Title          string                     `json:"title"`
+	FolderName     string                     `json:"folder_name"`
+	RecipientEmail string                     `json:"recipient_email"`
+	Items          []DocumentRequestItemInput `json:"items"`
 }
 
 type DocumentRequestItemInput struct {
@@ -50,12 +57,15 @@ type DocumentRequestItemInput struct {
 }
 
 type DocumentRequestView struct {
-	ID        string                    `json:"id,omitempty"`
-	Title     string                    `json:"title"`
-	ExpiresAt time.Time                 `json:"expires_at"`
-	Revoked   bool                      `json:"revoked,omitempty"`
-	Link      string                    `json:"link,omitempty"`
-	Items     []DocumentRequestItemView `json:"items"`
+	ID          string                    `json:"id,omitempty"`
+	Title       string                    `json:"title"`
+	ExpiresAt   time.Time                 `json:"expires_at"`
+	Revoked     bool                      `json:"revoked,omitempty"`
+	Link        string                    `json:"link,omitempty"`
+	FolderID    string                    `json:"folder_id,omitempty"`
+	FolderName  string                    `json:"folder_name,omitempty"`
+	EmailStatus string                    `json:"email_status,omitempty"`
+	Items       []DocumentRequestItemView `json:"items"`
 }
 
 type DocumentRequestItemView struct {
@@ -97,9 +107,7 @@ func (s *DocumentRequestService) staff(ctx context.Context, tx *gorm.DB, req Acc
 }
 
 func (s *DocumentRequestService) token(tenantID, requestID string) string {
-	mac := hmac.New(sha256.New, []byte(s.SigningKey))
-	_, _ = io.WriteString(mac, "document-request:v1:"+tenantID+":"+requestID)
-	return requestID + "." + base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+	return links.DocumentRequestToken(s.SigningKey, tenantID, requestID)
 }
 
 func (s *DocumentRequestService) Create(ctx context.Context, req AccessRequest, input DocumentRequestInput) (*DocumentRequestView, error) {
@@ -107,6 +115,15 @@ func (s *DocumentRequestService) Create(ctx context.Context, req AccessRequest, 
 	if s.SigningKey == "" || input.Title == "" || utf8.RuneCountInString(input.Title) > 160 || len(input.Items) == 0 || len(input.Items) > 30 {
 		return nil, ErrDocumentRequestInput
 	}
+	name := strings.TrimSpace(input.FolderName)
+	if name == "" {
+		name = input.Title
+	}
+	if len(name) > 255 || LogicalName(name) != nil || strings.ContainsAny(name, "\r\n") {
+		return nil, ErrDocumentRequestFolder
+	}
+	address := strings.TrimSpace(input.RecipientEmail)
+	emailStatus := ""
 	row := models.DocumentRequest{
 		ID: ids.NewULID(), TenantID: req.TenantID, ClientID: req.ClientID, Title: input.Title,
 		CreatedBy: req.Actor.UserID, ExpiresAt: time.Now().UTC().Add(30 * 24 * time.Hour),
@@ -126,6 +143,27 @@ func (s *DocumentRequestService) Create(ctx context.Context, req AccessRequest, 
 		if err := s.staff(ctx, tx, req, true); err != nil {
 			return err
 		}
+		var recipient *models.User
+		if address != "" {
+			if email.CommentNotificationAddress(address) == "" {
+				return ErrDocumentRequestRecipient
+			}
+			var users []models.User
+			if err := tx.Where("tenant_id = ? AND LOWER(email) = ?", row.TenantID, strings.ToLower(address)).Limit(2).Find(&users).Error; err != nil {
+				return err
+			}
+			if len(users) != 1 {
+				return ErrDocumentRequestRecipient
+			}
+			allowed, err := email.DocumentRequestRecipient(ctx, tx, row.ClientID, users[0], time.Now())
+			if err != nil {
+				return err
+			}
+			if !allowed {
+				return ErrDocumentRequestRecipient
+			}
+			recipient = &users[0]
+		}
 		var client models.Client
 		if err := tx.Where("tenant_id = ? AND id = ?", row.TenantID, row.ClientID).First(&client).Error; err != nil {
 			return err
@@ -137,24 +175,47 @@ func (s *DocumentRequestService) Create(ctx context.Context, req AccessRequest, 
 		if err != nil {
 			return err
 		}
-		name := "Request " + row.ID
 		folder, err := (&FileService{DB: tx}).CreateFolderRecord(ctx, &models.File{
 			TenantID: row.TenantID, ClientID: row.ClientID, UserID: &row.CreatedBy,
 			FolderID: &root.ID, Filename: name, Path: filepath.Join(root.Path, name), Type: "folder",
 		})
 		if err != nil {
+			if errors.Is(err, os.ErrExist) {
+				return ErrDocumentRequestFolderExists
+			}
 			return err
 		}
 		row.FolderID = folder.ID
 		if err := tx.Create(&row).Error; err != nil {
 			return err
 		}
-		return tx.Create(&items).Error
+		if err := tx.Create(&items).Error; err != nil {
+			return err
+		}
+		if recipient == nil {
+			return nil
+		}
+		if s.NotificationBaseURL == "" {
+			emailStatus = "unavailable"
+			return nil
+		}
+		key := "document-request:" + row.ID
+		emailStatus = "queued"
+		return tx.Create(&models.QueuedEmail{
+			TenantID: row.TenantID, ClientID: &row.ClientID, DocumentRequestID: &row.ID,
+			Recipient: recipient.Email, RecipientUserID: &recipient.ID, Subject: "New document request",
+			ScheduledFor: time.Now().UTC(), DeduplicationKey: &key,
+			EventType: email.DocumentRequestNotification, NotificationBaseURL: s.NotificationBaseURL,
+		}).Error
 	})
 	if err != nil {
 		return nil, err
 	}
-	return s.StaffView(ctx, req, row.ID)
+	view, err := s.StaffView(ctx, req, row.ID)
+	if err == nil {
+		view.EmailStatus = emailStatus
+	}
+	return view, err
 }
 
 func requestFolder(db *gorm.DB, tenantID, clientID, folderID string) (*models.File, error) {
@@ -239,6 +300,12 @@ func (s *DocumentRequestService) view(db *gorm.DB, row models.DocumentRequest, s
 	view := &DocumentRequestView{Title: row.Title, ExpiresAt: row.ExpiresAt, Items: make([]DocumentRequestItemView, 0, len(items))}
 	if staff {
 		view.ID, view.Revoked = row.ID, row.RevokedAt != nil
+		folder, err := requestFolder(db, row.TenantID, row.ClientID, row.FolderID)
+		if err == nil {
+			view.FolderID, view.FolderName = folder.ID, folder.Filename
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, err
+		}
 		if !view.Revoked && row.ExpiresAt.After(time.Now()) {
 			view.Link = "/document-request#token=" + s.token(row.TenantID, row.ID)
 		}

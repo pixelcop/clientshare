@@ -25,7 +25,7 @@ func TestMigrationProviderUpCreatesCurrentSchemaAndSeedsTenant(t *testing.T) {
 
 	results, err := provider.Up(context.Background())
 	require.NoError(t, err)
-	require.Len(t, results, 29)
+	require.Len(t, results, 30)
 
 	requireDefaultTenantSeeded(t, db, dbpkg.DatabaseDriverSQLite)
 	requireColumnPresent(t, db, "passkey_signups", "token_hash")
@@ -43,6 +43,7 @@ func TestMigrationProviderUpCreatesCurrentSchemaAndSeedsTenant(t *testing.T) {
 	requireColumnPresent(t, db, "file_comment_participants", "user_id")
 	requireColumnPresent(t, db, "document_requests", "revoked_at")
 	requireColumnPresent(t, db, "document_request_reviews", "round")
+	requireColumnPresent(t, db, "email_queue", "document_request_id")
 }
 
 func TestMigrationProviderUpCreatesCurrentSchemaAndSeedsTenantPostgres(t *testing.T) {
@@ -51,7 +52,7 @@ func TestMigrationProviderUpCreatesCurrentSchemaAndSeedsTenantPostgres(t *testin
 
 	results, err := provider.Up(context.Background())
 	require.NoError(t, err)
-	require.Len(t, results, 29)
+	require.Len(t, results, 30)
 
 	requireDefaultTenantSeeded(t, db, dbpkg.DatabaseDriverPostgres)
 	requireColumnPresent(t, db, "passkey_signups", "token_hash")
@@ -69,6 +70,7 @@ func TestMigrationProviderUpCreatesCurrentSchemaAndSeedsTenantPostgres(t *testin
 	requireColumnPresent(t, db, "file_comment_participants", "user_id")
 	requireColumnPresent(t, db, "document_requests", "revoked_at")
 	requireColumnPresent(t, db, "document_request_reviews", "round")
+	requireColumnPresent(t, db, "email_queue", "document_request_id")
 }
 
 func TestMigrationProviderUpIsIdempotent(t *testing.T) {
@@ -108,7 +110,7 @@ func TestMigrationProviderResetDropsManagedTables(t *testing.T) {
 
 	results, err := provider.DownTo(context.Background(), 0)
 	require.NoError(t, err)
-	require.Len(t, results, 29)
+	require.Len(t, results, 30)
 
 	requireManagedTablesMissing(t, db, dbpkg.DatabaseDriverSQLite)
 }
@@ -122,7 +124,7 @@ func TestMigrationProviderResetDropsManagedTablesPostgres(t *testing.T) {
 
 	results, err := provider.DownTo(context.Background(), 0)
 	require.NoError(t, err)
-	require.Len(t, results, 29)
+	require.Len(t, results, 30)
 
 	requireManagedTablesMissing(t, db, dbpkg.DatabaseDriverPostgres)
 }
@@ -168,6 +170,7 @@ func newMigrationProviderForTest(t *testing.T, db *sql.DB, dialect goose.Dialect
 			migration.NewGoMigration(60, upAddFileComments, downAddFileComments),
 			migration.NewGoMigration(61, upCommentNotifications, downCommentNotifications),
 			migration.NewGoMigration(62, upDocumentRequests, downDocumentRequests),
+			migration.NewGoMigration(63, upDocumentRequestEmail, downDocumentRequestEmail),
 		},
 	)
 	require.NoError(t, err)

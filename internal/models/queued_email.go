@@ -34,6 +34,7 @@ type QueuedEmail struct {
 	AccessInvitationID      *string    `gorm:"index" json:"-"`
 	IdentityInviteID        *string    `gorm:"index" json:"-"`
 	FileCommentID           *string    `gorm:"index" json:"-"`
+	DocumentRequestID       *string    `gorm:"size:26" json:"-"`
 }
 
 func (e *QueuedEmail) BeforeCreate(_ *gorm.DB) error {

@@ -43,6 +43,14 @@ func recipientAssociations(db *gorm.DB, tenantID string) *gorm.DB {
 // Only staff with whole-workspace visibility may use the directory. Sharing as
 // a client or an anonymous recipient must not turn into directory discovery.
 func (s *RecipientService) Search(ctx context.Context, req AccessRequest, search string, across bool) ([]RecipientContact, error) {
+	return s.search(ctx, req, search, across, false)
+}
+
+func (s *RecipientService) SearchWorkspaceClients(ctx context.Context, req AccessRequest, search string) ([]RecipientContact, error) {
+	return s.search(ctx, req, search, false, true)
+}
+
+func (s *RecipientService) search(ctx context.Context, req AccessRequest, search string, across, workspaceClientsOnly bool) ([]RecipientContact, error) {
 	contacts := []RecipientContact{}
 	if req.Actor.UserID == "" || req.Actor.LinkID != "" || req.TenantID == "" {
 		return nil, gorm.ErrRecordNotFound
@@ -90,6 +98,9 @@ func (s *RecipientService) Search(ctx context.Context, req AccessRequest, search
 	// and the result limit applies to identities, not association rows.
 	q := db.Table("users").Select("users.id, users.name, users.email").
 		Where("users.tenant_id = ?", req.TenantID)
+	if workspaceClientsOnly {
+		q = q.Where("users.role IN ?", []string{"client", "customer"})
+	}
 	visible := db.Table("(?) AS associations", associations).Select("user_id").Where("client_id IN ?", ids)
 	current := db.Table("(?) AS associations", associations).Select("user_id").Where("client_id = ?", req.ClientID)
 	if across {
@@ -153,6 +164,15 @@ func (s *RecipientService) Search(ctx context.Context, req AccessRequest, search
 			}
 			contacts[i].WorkspaceAccess = decision.Allowed
 		}
+	}
+	if workspaceClientsOnly {
+		allowed := contacts[:0]
+		for _, contact := range contacts {
+			if contact.WorkspaceAccess {
+				allowed = append(allowed, contact)
+			}
+		}
+		return allowed, nil
 	}
 	return contacts, nil
 }
