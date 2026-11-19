@@ -53,6 +53,7 @@ func TestCommentDispatchRevalidatesAndDoesNotSendCommentText(t *testing.T) {
 			require.Len(t, sender.sent, 1)
 			message := sender.sent[0]
 			require.Equal(t, "recipient@example.test", message.To)
+			require.Equal(t, "Comments on visible.txt", message.Subject)
 			link := "https://portal.example.test/files/visible#comment-comment"
 			require.Contains(t, message.Body, link)
 			require.Contains(t, message.HTMLBody, `href="`+link+`"`)
@@ -64,5 +65,16 @@ func TestCommentDispatchRevalidatesAndDoesNotSendCommentText(t *testing.T) {
 				require.Contains(t, message.Body, "Alex & Co mentioned you")
 			}
 		})
+	}
+}
+
+func TestCommentNotificationSubjectStaysStableWithinAnAudience(t *testing.T) {
+	for _, mentioned := range []bool{false, true} {
+		subject, _, _, err := renderCommentNotification("Alex", "Report\r\nDraft.pdf", "https://portal.example.test", false, mentioned)
+		require.NoError(t, err)
+		require.Equal(t, "Comments on Report Draft.pdf", subject)
+		subject, _, _, err = renderCommentNotification("Alex", "Report.pdf", "https://portal.example.test", true, mentioned)
+		require.NoError(t, err)
+		require.Equal(t, "Team notes on Report.pdf", subject)
 	}
 }

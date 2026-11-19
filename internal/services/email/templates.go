@@ -36,15 +36,21 @@ func renderCommentNotification(author, fileName, commentURL string, team, mentio
 	if author == "" {
 		author = "Someone"
 	}
+	// Keep the subject stable for a file and audience, even when the reason
+	// for notifying the recipient changes. Filenames cannot add header lines.
+	subjectFile := strings.Join(strings.Fields(fileName), " ")
+	if subjectFile == "" {
+		subjectFile = "a file"
+	}
 	heading := author + " commented"
-	subject := "New file comment"
+	subject := "Comments on " + subjectFile
 	if team {
-		heading, subject = author+" added a team note", "New team note"
+		heading, subject = author+" added a team note", "Team notes on "+subjectFile
 	}
 	if mentioned {
-		heading, subject = author+" mentioned you", "You were mentioned in a file comment"
+		heading = author + " mentioned you"
 		if team {
-			heading, subject = heading+" in a team note", "You were mentioned in a team note"
+			heading += " in a team note"
 		}
 	}
 	if team {
