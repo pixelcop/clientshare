@@ -261,6 +261,7 @@ export const FeedEventSourceTypeInviteToken = "invite_token";
 export const FeedEventSourceTypeDocumentRequest = "document_request";
 export const FeedEventSourceTypeDocumentRequestItem = "document_request_item";
 export const FeedEventSourceTypeDocumentRequestUpdate = "document_request_update";
+export const FeedEventSourceTypeDocumentRequestStaff = "document_request_staff";
 export const FeedEventSourceTypeFileComment = "file_comment";
 export const FeedStateUnread = "unread";
 export const FeedStateRead = "read";

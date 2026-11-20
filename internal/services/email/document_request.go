@@ -17,14 +17,10 @@ const DocumentRequestNotification = "document_request"
 const DocumentRequestUpdateNotification = "document_request_update"
 
 func DocumentRequestRecipient(ctx context.Context, db *gorm.DB, clientID string, user models.User, now time.Time) (bool, error) {
-	if (user.Role != "client" && user.Role != "customer") || CommentNotificationAddress(user.Email) == "" {
+	if CommentNotificationAddress(user.Email) == "" {
 		return false, nil
 	}
-	decision, err := (&access.AccessService{DB: db}).Resolve(ctx, access.AccessRequest{
-		TenantID: user.TenantID, ClientID: clientID, Actor: access.AccessActor{UserID: user.ID},
-		Operation: access.AccessContext, Now: now,
-	})
-	return decision.Allowed && (decision.Capabilities.CanRead || decision.Capabilities.CanUpload), err
+	return (&access.AccessService{DB: db}).DocumentRequestRecipient(ctx, clientID, user, now)
 }
 
 func (q *DBEmailQueue) revalidateDocumentRequest(item *models.QueuedEmail) (bool, error) {

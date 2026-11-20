@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/pixelcop/clientshare/internal/models"
-	"github.com/pixelcop/clientshare/internal/services/email"
 	"gorm.io/gorm"
 )
 
@@ -21,46 +20,89 @@ func recordDocumentRequestActivity(ctx context.Context, tx *gorm.DB, request mod
 }
 
 func requestItemActivity(ctx context.Context, tx *gorm.DB, request models.DocumentRequest, itemID string, round int, eventType string, actor *string, at time.Time) error {
-	resolver := &AccessService{DB: tx}
-	staff, err := resolver.WorkspaceReaderIDs(ctx, request.TenantID, request.ClientID, []string{"admin", "manager"})
+	users, err := requestActivityAudience(ctx, tx, request, true)
 	if err != nil {
 		return err
-	}
-	users := make([]string, 0, len(staff))
-	for _, id := range staff {
-		err := (&DocumentRequestService{}).staff(ctx, tx, AccessRequest{
-			TenantID: request.TenantID, ClientID: request.ClientID, Actor: AccessActor{UserID: id},
-		}, false)
-		if err == nil {
-			users = append(users, id)
-		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
-			return err
-		}
-	}
-	if eventType != models.FeedEventTypeRequestSubmitted {
-		var recipients []string
-		if err := requestAudience(tx, request).Pluck("user_id", &recipients).Error; err != nil {
-			return err
-		}
-		seen := make(map[string]bool, len(users))
-		for _, id := range users {
-			seen[id] = true
-		}
-		for _, id := range recipients {
-			if !seen[id] {
-				users = append(users, id)
-			}
-		}
 	}
 	return recordDocumentRequestActivity(ctx, tx, request, eventType, models.FeedEventSourceTypeDocumentRequestItem,
 		itemID+":"+strconv.Itoa(round), actor, users, at)
 }
 
+func requestActivityAudience(ctx context.Context, tx *gorm.DB, request models.DocumentRequest, includeClients bool) ([]string, error) {
+	users, err := (&AccessService{DB: tx}).WorkspaceReaderIDs(ctx, request.TenantID, request.ClientID, []string{"admin", "manager"})
+	if err != nil || !includeClients {
+		return users, err
+	}
+	var recipients []string
+	currentClients := tx.Model(&models.User{}).Select("id").Where("tenant_id = ? AND role IN ?", request.TenantID, []string{"client", "customer"})
+	if err := requestAudience(tx, request).Where("user_id IN (?)", currentClients).Pluck("user_id", &recipients).Error; err != nil {
+		return nil, err
+	}
+	return append(users, recipients...), nil
+}
+
+// Creation events for client recipients also retain the named audience.
+// Keep staff events separate so staff access never acts as a recipient grant.
 func requestAudience(db *gorm.DB, request models.DocumentRequest) *gorm.DB {
 	return db.Model(&models.FeedEvent{}).Where(
 		"tenant_id = ? AND client_id = ? AND event_type = ? AND source_type = ? AND source_id = ?",
 		request.TenantID, request.ClientID, models.FeedEventTypeRequestCreated, models.FeedEventSourceTypeDocumentRequest, request.ID,
 	)
+}
+
+type AccountDocumentRequest struct {
+	ID          string `json:"id"`
+	Title       string `json:"title"`
+	ClientName  string `json:"client_name"`
+	NeedsAction int    `json:"needs_action"`
+	UnderReview int    `json:"under_review"`
+}
+
+func (s *DocumentRequestService) AccountRequests(ctx context.Context, tenantID, userID string) ([]AccountDocumentRequest, error) {
+	db := s.DB.WithContext(ctx)
+	var user models.User
+	if err := db.First(&user, "tenant_id = ? AND id = ? AND role IN ?", tenantID, userID, []string{"client", "customer"}).Error; err != nil {
+		return nil, err
+	}
+	var candidates []struct {
+		AccountDocumentRequest
+		ClientID  string
+		ExpiresAt time.Time
+	}
+	err := db.Table("document_requests AS dr").
+		Select(`dr.id, dr.title, dr.client_id, dr.expires_at, c.name AS client_name,
+			(SELECT COUNT(*) FROM document_request_items i WHERE i.request_id = dr.id AND i.status IN ?) AS needs_action,
+			(SELECT COUNT(*) FROM document_request_items i WHERE i.request_id = dr.id AND i.status = ?) AS under_review`,
+			[]string{requestNeeded, requestReplacement}, requestSubmitted).
+		Joins("JOIN clients c ON c.id = dr.client_id AND c.tenant_id = dr.tenant_id").
+		Joins("JOIN files f ON f.id = dr.folder_id AND f.tenant_id = dr.tenant_id AND f.client_id = dr.client_id AND f.type = 'folder' AND f.deleted_at IS NULL AND f.disk_deleted_at IS NULL").
+		Where("dr.tenant_id = ? AND dr.revoked_at IS NULL", tenantID).
+		Where(`EXISTS (SELECT 1 FROM feed_events fe WHERE fe.tenant_id = dr.tenant_id AND fe.client_id = dr.client_id AND fe.source_id = dr.id
+			AND fe.user_id = ? AND fe.event_type = ? AND fe.source_type = ?)`, user.ID, models.FeedEventTypeRequestCreated, models.FeedEventSourceTypeDocumentRequest).
+		Order("dr.created_at DESC, dr.id DESC").Scan(&candidates).Error
+	if err != nil {
+		return nil, err
+	}
+	results := make([]AccountDocumentRequest, 0, len(candidates))
+	now := time.Now()
+	allowedByClient := make(map[string]bool)
+	for _, candidate := range candidates {
+		if !candidate.ExpiresAt.After(now) {
+			continue
+		}
+		allowed, checked := allowedByClient[candidate.ClientID]
+		if !checked {
+			allowed, err = (&AccessService{DB: db}).DocumentRequestRecipient(ctx, candidate.ClientID, user, now)
+			if err != nil {
+				return nil, err
+			}
+			allowedByClient[candidate.ClientID] = allowed
+		}
+		if allowed {
+			results = append(results, candidate.AccountDocumentRequest)
+		}
+	}
+	return results, nil
 }
 
 // AccountLink only restores the link for a named recipient. Workspace membership
@@ -90,7 +132,7 @@ func (s *DocumentRequestService) AccountLink(ctx context.Context, tenantID, user
 }
 
 func requestActivityRecipient(ctx context.Context, db *gorm.DB, request models.DocumentRequest, user models.User) (bool, error) {
-	allowed, err := email.DocumentRequestRecipient(ctx, db, request.ClientID, user, time.Now())
+	allowed, err := (&AccessService{DB: db}).DocumentRequestRecipient(ctx, request.ClientID, user, time.Now())
 	if err != nil || !allowed {
 		return false, err
 	}
@@ -105,7 +147,7 @@ func hydrateRequestActivity(ctx context.Context, db *gorm.DB, user models.User, 
 	}
 	requestID := event.SourceID
 	switch event.SourceType {
-	case models.FeedEventSourceTypeDocumentRequest:
+	case models.FeedEventSourceTypeDocumentRequest, models.FeedEventSourceTypeDocumentRequestStaff:
 		if event.EventType != models.FeedEventTypeRequestCreated {
 			return false, nil
 		}
@@ -150,17 +192,17 @@ func hydrateRequestActivity(ctx context.Context, db *gorm.DB, user models.User, 
 		return false, err
 	}
 	if user.Role == "admin" || user.Role == "manager" {
-		err = (&DocumentRequestService{}).staff(ctx, db, AccessRequest{TenantID: event.TenantID, ClientID: request.ClientID, Actor: AccessActor{UserID: user.ID}}, false)
+		decision, err := (&AccessService{DB: db}).Resolve(ctx, AccessRequest{TenantID: event.TenantID, ClientID: request.ClientID, Actor: AccessActor{UserID: user.ID}, Operation: AccessRead})
 		if err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return false, nil
-			}
 			return false, err
 		}
-		event.RequestOpen = true
+		if !decision.Allowed {
+			return false, nil
+		}
+		event.RequestOpen = decision.CanManageClient
 	} else {
 		allowed, err := requestActivityRecipient(ctx, db, request, user)
-		if err != nil || !allowed || event.EventType == models.FeedEventTypeRequestSubmitted {
+		if err != nil || !allowed {
 			return false, err
 		}
 		if request.RevokedAt != nil || !request.ExpiresAt.After(time.Now()) {

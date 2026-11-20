@@ -73,6 +73,25 @@ func TestDocumentRequestCollectionAndReview(t *testing.T) {
 	}
 	activity(env.clientToken, models.FeedEventTypeRequestCreated)
 	activity(env.mismatchToken)
+	adminEvents := do(jsonAuthRequest("GET", "/api/feed", env.adminToken, nil), 200)
+	require.Contains(t, string(adminEvents), models.FeedEventSourceTypeDocumentRequestStaff)
+	require.Contains(t, string(adminEvents), view.ID)
+	accountRequests := func(session string, expected ...string) {
+		t.Helper()
+		raw := do(jsonAuthRequest("GET", "/api/my-document-requests", session, nil), 200)
+		var list []services.AccountDocumentRequest
+		require.NoError(t, json.Unmarshal(raw, &list))
+		got := make([]string, 0, len(list))
+		for _, entry := range list {
+			got = append(got, entry.ID)
+		}
+		require.ElementsMatch(t, expected, got)
+		require.NotContains(t, string(raw), "token")
+	}
+	accountRequests(env.clientToken, view.ID)
+	accountRequests(env.mismatchToken)
+	accountRequests(env.otherToken)
+	do(jsonAuthRequest("GET", "/api/my-document-requests", env.linkToken, nil), 404)
 	accountPath := "/api/my-document-requests/" + view.ID + "/link"
 	do(jsonAuthRequest("GET", accountPath, env.clientToken, nil), 200)
 	do(jsonAuthRequest("GET", accountPath, env.mismatchToken, nil), 404)
@@ -137,7 +156,7 @@ func TestDocumentRequestCollectionAndReview(t *testing.T) {
 	review(payroll, `{"round":1,"status":"accepted"}`, 204)
 	review(bank, `{"round":1,"status":"replacement"}`, 400)
 	review(bank, `{"round":1,"status":"replacement","reason":"Page 2 is missing"}`, 204)
-	activity(env.clientToken, models.FeedEventTypeRequestCreated, models.FeedEventTypeRequestAccepted, models.FeedEventTypeRequestReplacement)
+	activity(env.clientToken, models.FeedEventTypeRequestCreated, models.FeedEventTypeRequestSubmitted, models.FeedEventTypeRequestSubmitted, models.FeedEventTypeRequestAccepted, models.FeedEventTypeRequestReplacement)
 	returned := decode(do(public("GET", recipient, ""), 200))
 	require.Equal(t, "Page 2 is missing", returned.Items[0].Reason)
 	require.Empty(t, returned.Items[0].Files)
@@ -175,15 +194,19 @@ func TestDocumentRequestCollectionAndReview(t *testing.T) {
 	require.Equal(t, "accepted", expanded.Items[1].Status)
 	require.Equal(t, "needed", expanded.Items[2].Status)
 	require.Equal(t, "October invoices", expanded.Items[2].Name)
-	activity(env.clientToken, models.FeedEventTypeRequestCreated, models.FeedEventTypeRequestAccepted, models.FeedEventTypeRequestReplacement, models.FeedEventTypeRequestAccepted, models.FeedEventTypeRequestUpdated)
+	activity(env.clientToken, models.FeedEventTypeRequestCreated, models.FeedEventTypeRequestSubmitted, models.FeedEventTypeRequestSubmitted, models.FeedEventTypeRequestSubmitted, models.FeedEventTypeRequestAccepted, models.FeedEventTypeRequestReplacement, models.FeedEventTypeRequestAccepted, models.FeedEventTypeRequestUpdated)
+	activity(env.managerToken, models.FeedEventTypeRequestSubmitted, models.FeedEventTypeRequestSubmitted, models.FeedEventTypeRequestSubmitted, models.FeedEventTypeRequestAccepted, models.FeedEventTypeRequestReplacement, models.FeedEventTypeRequestAccepted, models.FeedEventTypeRequestUpdated)
+	activity(env.mismatchToken)
 	require.NoError(t, env.db.Model(&models.DocumentRequest{}).Where("id = ?", view.ID).Update("expires_at", time.Now().Add(-time.Minute)).Error)
 	do(public("GET", recipient, ""), 404)
+	accountRequests(env.clientToken)
 	require.NoError(t, env.db.Model(&models.DocumentRequest{}).Where("id = ?", view.ID).Update("expires_at", time.Now().Add(time.Hour)).Error)
 	do(jsonAuthRequest("POST", staff+"/revoke", env.adminToken, nil), 204)
 	do(jsonAuthRequest("POST", staff+"/additions", env.adminToken, addition), 404)
 	do(public("GET", recipient, ""), 404)
 	do(jsonAuthRequest("GET", accountPath, env.clientToken, nil), 404)
 	activity(env.clientToken)
+	accountRequests(env.clientToken)
 	detail = decode(do(jsonAuthRequest("GET", staff, env.adminToken, nil), 200))
 	require.True(t, detail.Revoked)
 	require.Empty(t, detail.Link)
@@ -252,6 +275,15 @@ func TestDocumentRequestEmailsOnlySelectedEligibleRecipient(t *testing.T) {
 	var all []string
 	require.NoError(t, env.db.Model(&models.QueuedEmail{}).Where("document_request_id = ?", result.ID).Pluck("recipient", &all).Error)
 	require.ElementsMatch(t, []string{env.clientUser.Email, env.mismatchUser.Email}, all)
+	var notified []string
+	require.NoError(t, env.db.Model(&models.FeedEvent{}).Where("event_type = ? AND source_type = ? AND source_id = ?", models.FeedEventTypeRequestCreated, models.FeedEventSourceTypeDocumentRequest, result.ID).Pluck("user_id", &notified).Error)
+	require.ElementsMatch(t, []string{env.clientUser.ID, env.mismatchUser.ID}, notified)
+	list, err := svc.AccountRequests(t.Context(), req.TenantID, env.mismatchUser.ID)
+	require.NoError(t, err)
+	require.Len(t, list, 1)
+	require.Equal(t, result.ID, list[0].ID)
+	require.Equal(t, 1, list[0].NeedsAction)
+	require.Zero(t, list[0].UnderReview)
 	var canceled models.QueuedEmail
 	require.NoError(t, env.db.Where("document_request_id = ?", result.ID).First(&canceled).Error)
 	require.NoError(t, svc.Revoke(t.Context(), req, result.ID))

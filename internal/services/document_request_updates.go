@@ -77,7 +77,10 @@ func (s *DocumentRequestService) AddItems(ctx context.Context, req AccessRequest
 			return err
 		}
 		recipients := make([]models.User, 0, len(named))
-		users := make([]string, 0, len(named))
+		users, err := requestActivityAudience(ctx, tx, row, true)
+		if err != nil {
+			return err
+		}
 		for _, user := range named {
 			allowed, err := email.DocumentRequestRecipient(ctx, tx, row.ClientID, user, now)
 			if err != nil {
@@ -85,7 +88,6 @@ func (s *DocumentRequestService) AddItems(ctx context.Context, req AccessRequest
 			}
 			if allowed {
 				recipients = append(recipients, user)
-				users = append(users, user.ID)
 			}
 		}
 		if err := recordDocumentRequestActivity(ctx, tx, row, models.FeedEventTypeRequestUpdated, models.FeedEventSourceTypeDocumentRequestUpdate, update.ID, &req.Actor.UserID, users, now); err != nil {
@@ -119,8 +121,8 @@ func (s *DocumentRequestService) queueRequestEmails(tx *gorm.DB, row models.Docu
 	now := time.Now().UTC()
 	seen := make(map[string]bool)
 	for _, recipient := range recipients {
-		address := strings.ToLower(recipient.Email)
-		if seen[address] {
+		address := strings.ToLower(email.CommentNotificationAddress(recipient.Email))
+		if address == "" || seen[address] {
 			continue
 		}
 		seen[address] = true
@@ -130,6 +132,9 @@ func (s *DocumentRequestService) queueRequestEmails(tx *gorm.DB, row models.Docu
 			Recipient: recipient.Email, RecipientUserID: &recipient.ID, Subject: subject,
 			ScheduledFor: now, DeduplicationKey: &key, EventType: event, NotificationBaseURL: s.NotificationBaseURL,
 		})
+	}
+	if len(deliveries) == 0 {
+		return "no_recipients", 0, nil
 	}
 	return "queued", len(deliveries), tx.CreateInBatches(&deliveries, 25).Error
 }

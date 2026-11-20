@@ -7,6 +7,19 @@ import (
 	"github.com/pixelcop/clientshare/internal/models"
 )
 
+// DocumentRequestRecipient reports whether a client account can use a request
+// in this workspace, independently of whether it can receive email.
+func (s *AccessService) DocumentRequestRecipient(ctx context.Context, clientID string, user models.User, now time.Time) (bool, error) {
+	if user.Role != "client" && user.Role != "customer" {
+		return false, nil
+	}
+	decision, err := s.Resolve(ctx, AccessRequest{
+		TenantID: user.TenantID, ClientID: clientID, Actor: AccessActor{UserID: user.ID},
+		Operation: AccessContext, Now: now,
+	})
+	return decision.Allowed && (decision.Capabilities.CanRead || decision.Capabilities.CanUpload), err
+}
+
 // WorkspaceReaderIDs selects notification candidates from whole-workspace
 // sources only. Item-only recipients do not become client subscribers. Dispatch
 // still rechecks each item's current authorization before rendering its name.

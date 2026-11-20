@@ -24,6 +24,7 @@ const (
 	FeedEventSourceTypeDocumentRequest       = "document_request"
 	FeedEventSourceTypeDocumentRequestItem   = "document_request_item"
 	FeedEventSourceTypeDocumentRequestUpdate = "document_request_update"
+	FeedEventSourceTypeDocumentRequestStaff  = "document_request_staff"
 	FeedEventSourceTypeFileComment           = "file_comment"
 
 	FeedStateUnread = "unread"

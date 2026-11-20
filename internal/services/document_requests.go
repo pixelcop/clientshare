@@ -150,22 +150,18 @@ func documentRequestRecipients(ctx context.Context, db *gorm.DB, req AccessReque
 	}
 	now := time.Now()
 	recipients := users[:0]
-	seen := make(map[string]bool)
+	matched := make(map[string]bool)
 	for _, user := range users {
-		address := strings.ToLower(email.CommentNotificationAddress(user.Email))
-		if address == "" || seen[address] {
-			continue
-		}
-		allowed, err := email.DocumentRequestRecipient(ctx, db, req.ClientID, user, now)
+		allowed, err := (&AccessService{DB: db}).DocumentRequestRecipient(ctx, req.ClientID, user, now)
 		if err != nil {
 			return nil, err
 		}
 		if allowed {
-			seen[address] = true
+			matched[strings.ToLower(email.CommentNotificationAddress(user.Email))] = true
 			recipients = append(recipients, user)
 		}
 	}
-	if !input.EmailAll && len(recipients) != len(requested) {
+	if !input.EmailAll && len(matched) != len(requested) {
 		return nil, ErrDocumentRequestRecipient
 	}
 	return recipients, nil
@@ -234,6 +230,13 @@ func (s *DocumentRequestService) Create(ctx context.Context, req AccessRequest, 
 			return err
 		}
 		if err := tx.Create(&items).Error; err != nil {
+			return err
+		}
+		staff, err := requestActivityAudience(ctx, tx, row, false)
+		if err != nil {
+			return err
+		}
+		if err := recordDocumentRequestActivity(ctx, tx, row, models.FeedEventTypeRequestCreated, models.FeedEventSourceTypeDocumentRequestStaff, row.ID, &row.CreatedBy, staff, row.CreatedAt); err != nil {
 			return err
 		}
 		if len(recipients) == 0 {
