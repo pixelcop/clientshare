@@ -31,6 +31,10 @@ can revoke it sooner from the request.
 
 ## Review the documents
 
+Activity notifies staff when an item is submitted for review. The selected
+client users get Activity entries for new requests, accepted documents, and
+replacement requests, even if email delivery is disabled.
+
 Open the request and use **Refresh** to check for submissions. Open a filename
 to preview it. On desktop the request checklist stays to the left of the file
 and file comments open on the right. On a smaller screen, use **Request** in the

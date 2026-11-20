@@ -26,11 +26,11 @@ const isAnonymousRequest = computed(() => isRequestRecipient.value && !user.valu
       v-if="isPublicLayout || isAnonymousRequest"
       class="layout-main flex-1 w-full max-w-6xl mx-auto p-4 md:p-8"
     >
-      <router-view :key="isRequestRecipient ? route.hash : undefined" />
+      <router-view :key="isRequestRecipient ? route.fullPath : undefined" />
     </div>
     <div v-else class="layout-main">
       <CollectDocument v-if="user?.role === 'admin' && !isRequestRecipient" />
-      <router-view :key="isRequestRecipient ? route.hash : undefined" />
+      <router-view :key="isRequestRecipient ? route.fullPath : undefined" />
     </div>
   </div>
 

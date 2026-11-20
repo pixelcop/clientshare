@@ -8,12 +8,21 @@ import (
 )
 
 const (
-	FeedEventTypeFileUploaded   = "file_uploaded"
-	FeedEventTypeInviteAccepted = "invite_accepted"
+	FeedEventTypeFileUploaded       = "file_uploaded"
+	FeedEventTypeInviteAccepted     = "invite_accepted"
+	FeedEventTypeRequestCreated     = "request_created"
+	FeedEventTypeRequestSubmitted   = "request_submitted"
+	FeedEventTypeRequestAccepted    = "request_accepted"
+	FeedEventTypeRequestReplacement = "request_replacement"
+	FeedEventTypeFileComment        = "file_comment"
+	FeedEventTypeTeamNote           = "team_note" // response label for a file comment with team visibility
 
-	FeedEventSourceTypeFileActivity    = "file_activity"
-	FeedEventSourceTypeFileUploadBatch = "file_upload_batch"
-	FeedEventSourceTypeInviteToken     = "invite_token"
+	FeedEventSourceTypeFileActivity        = "file_activity"
+	FeedEventSourceTypeFileUploadBatch     = "file_upload_batch"
+	FeedEventSourceTypeInviteToken         = "invite_token"
+	FeedEventSourceTypeDocumentRequest     = "document_request"
+	FeedEventSourceTypeDocumentRequestItem = "document_request_item"
+	FeedEventSourceTypeFileComment         = "file_comment"
 
 	FeedStateUnread = "unread"
 	FeedStateRead   = "read"
@@ -56,6 +65,10 @@ type FeedEvent struct {
 	SubjectEmail  string          `gorm:"->;column:subject_email;-:migration" json:"subject_email,omitempty"`
 	Files         []FeedEventFile `gorm:"-" json:"files,omitempty"`
 	FileCount     int             `gorm:"-" json:"file_count,omitempty"`
+	RequestID     string          `gorm:"-" json:"request_id,omitempty"`
+	RequestTitle  string          `gorm:"-" json:"request_title,omitempty"`
+	RequestItem   string          `gorm:"-" json:"request_item,omitempty"`
+	RequestOpen   bool            `gorm:"-" json:"request_open,omitempty"`
 	IsRead        bool            `gorm:"not null;default:false" json:"is_read"`
 	ReadAt        *time.Time      `json:"read_at,omitempty"`
 }

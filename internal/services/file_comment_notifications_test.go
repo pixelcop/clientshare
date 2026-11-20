@@ -3,11 +3,36 @@ package services
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/pixelcop/clientshare/internal/models"
 	"github.com/pixelcop/clientshare/internal/services/email"
 	"github.com/stretchr/testify/require"
 )
+
+func TestCommentActivityIsPrivateAndIndependentOfEmail(t *testing.T) {
+	f, service := commentFixture(t)
+	admin := f.req("admin", "file", AccessRead)
+	shared, err := service.Create(t.Context(), admin, CommentInput{Body: "[@Member](mention:member) Shared text", Visibility: CommentShared}, "shared-feed")
+	require.NoError(t, err)
+	note, err := service.Create(t.Context(), admin, CommentInput{Body: "[@Member](mention:member) [@Manager](mention:manager) Private note", Visibility: CommentTeam}, "team-feed")
+	require.NoError(t, err)
+	feed := NewFeedService(f.db)
+	member, err := feed.ListFeed(t.Context(), "tenant", "member", "client", 1, 10)
+	require.NoError(t, err)
+	require.Len(t, member.Items, 1)
+	require.Equal(t, shared.ID, member.Items[0].SourceID)
+	require.Equal(t, models.FeedEventTypeFileComment, member.Items[0].EventType)
+	manager, err := feed.ListFeed(t.Context(), "tenant", "manager", "manager", 1, 10)
+	require.NoError(t, err)
+	require.Len(t, manager.Items, 1)
+	require.Equal(t, note.ID, manager.Items[0].SourceID)
+	require.Equal(t, models.FeedEventTypeTeamNote, manager.Items[0].EventType)
+	require.NoError(t, f.db.Model(&models.FileComment{}).Where("id = ?", shared.ID).Update("deleted_at", time.Now()).Error)
+	member, err = feed.ListFeed(t.Context(), "tenant", "member", "client", 1, 10)
+	require.NoError(t, err)
+	require.Empty(t, member.Items)
+}
 
 func TestCommentNotificationRecipientsFollowParticipationAndExactFileAccess(t *testing.T) {
 	f, service := commentFixture(t)

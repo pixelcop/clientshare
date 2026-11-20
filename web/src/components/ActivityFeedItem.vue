@@ -2,6 +2,7 @@
 import { storeToRefs } from 'pinia';
 
 import { useActivitiesStore } from '@/stores/activities';
+import { useAuthStore } from '@/stores/auth';
 import {
   type FeedEvent,
   FeedEventSourceTypeFileUploadBatch,
@@ -18,6 +19,7 @@ const { item } = defineProps<{
 }>();
 
 const activitiesStore = useActivitiesStore();
+const auth = useAuthStore();
 
 const { currentState } = storeToRefs(activitiesStore);
 
@@ -29,6 +31,15 @@ function handleMarkRead(item: FeedEvent) {
 }
 
 function iconClass(item: FeedEvent) {
+  if (item.request_id) {
+    if (item.event_type === 'request_accepted') {
+      return 'oi oi-check';
+    }
+    return item.event_type === 'request_submitted' ? 'oi oi-upload' : 'oi oi-file';
+  }
+  if (item.event_type === 'file_comment' || item.event_type === 'team_note') {
+    return 'oi oi-comment';
+  }
   return item.event_type === 'invite_accepted' ? 'oi oi-user-plus' : 'oi oi-upload';
 }
 
@@ -63,6 +74,19 @@ const folderPath = computed(() => {
 
 const isFileUploaded = computed(() => item.event_type === FileUploaded);
 const isInviteAccepted = computed(() => item.event_type === InviteAccepted);
+const isComment = computed(() => ['file_comment', 'team_note'].includes(item.event_type));
+const requestRoute = computed(() => {
+  if (!item.request_open || !item.request_id) {
+    return undefined;
+  }
+  if (['admin', 'manager'].includes(auth.user?.role ?? '') && item.client_id) {
+    return {
+      name: 'DocumentRequests',
+      params: { clientId: item.client_id, requestId: item.request_id },
+    };
+  }
+  return { name: 'DocumentRequestRecipient', query: { request: item.request_id } };
+});
 const groupedFiles = computed(() => item.files || []);
 const groupedFileCount = computed(() => item.file_count || groupedFiles.value.length);
 const isGroupedFileUpload = computed(
@@ -78,6 +102,9 @@ const hiddenGroupedFileCount = computed(() =>
 const canMarkRead = computed(() => !item.is_read && currentState.value === FeedStateUnread);
 
 const primaryLabel = computed(() => {
+  if (item.request_title) {
+    return item.request_item || item.request_title;
+  }
   if (item.event_type === 'invite_accepted') {
     return subjectLabel(item);
   }
@@ -88,6 +115,20 @@ const primaryLabel = computed(() => {
 });
 
 const actionLabel = computed(() => {
+  switch (item.event_type) {
+    case 'request_created':
+      return 'New document request';
+    case 'request_submitted':
+      return 'Submitted for review';
+    case 'request_accepted':
+      return 'Accepted';
+    case 'request_replacement':
+      return 'Replacement requested';
+    case 'file_comment':
+      return 'New comment';
+    case 'team_note':
+      return 'New team-only note';
+  }
   if (item.event_type === 'invite_accepted') {
     return 'accepted invite';
   }
@@ -106,7 +147,14 @@ const actionLabel = computed(() => {
     <div class="flex flex-row">
       <i class="pt-1 text-muted-color" :class="iconClass(item)" />
       <div data-sentry-mask class="ml-2 flex flex-col gap-1">
-        <div v-if="isFileUploaded" class="flex flex-wrap gap-2">
+        <div
+          v-if="item.request_item || item.request_title"
+          class="flex flex-wrap gap-x-2 text-sm text-muted-color"
+        >
+          <span v-if="item.client_name">{{ item.client_name }}</span>
+          <span v-if="item.request_item">{{ item.request_title }}</span>
+        </div>
+        <div v-else-if="isFileUploaded" class="flex flex-wrap gap-2">
           <span v-if="item.client_name">{{ item.client_name }}</span>
           <span v-if="folderPath" class="text-sm text-muted-color">
             {{ folderPath }}
@@ -119,8 +167,22 @@ const actionLabel = computed(() => {
         </div>
 
         <div v-if="primaryLabel" class="text-sm font-semibold">
+          <RouterLink v-if="requestRoute" :to="requestRoute" class="hover:underline">
+            {{ primaryLabel }}
+          </RouterLink>
+          <RouterLink
+            v-else-if="isComment && item.file_id"
+            :to="{
+              name: 'FileView',
+              params: { fileId: item.file_id },
+              hash: `#comment-${item.source_id}`,
+            }"
+            class="hover:underline"
+          >
+            {{ primaryLabel }}
+          </RouterLink>
           <a
-            v-if="isFileUploaded && !isGroupedFileUpload && item.file_id"
+            v-else-if="isFileUploaded && !isGroupedFileUpload && item.file_id"
             :href="`/files/${item.file_id}`"
             class="hover:underline"
           >

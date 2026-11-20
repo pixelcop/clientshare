@@ -53,6 +53,10 @@ var FeedEvent = struct {
 	SubjectEmail  field.String
 	Files         field.Slice[models.FeedEventFile]
 	FileCount     field.Number[int]
+	RequestID     field.String
+	RequestTitle  field.String
+	RequestItem   field.String
+	RequestOpen   field.Bool
 	IsRead        field.Bool
 	ReadAt        field.Time
 }{
@@ -75,6 +79,10 @@ var FeedEvent = struct {
 	SubjectEmail:  field.String{}.WithColumn("subject_email"),
 	Files:         field.Slice[models.FeedEventFile]{}.WithName("Files"),
 	FileCount:     field.Number[int]{}.WithColumn("file_count"),
+	RequestID:     field.String{}.WithColumn("request_id"),
+	RequestTitle:  field.String{}.WithColumn("request_title"),
+	RequestItem:   field.String{}.WithColumn("request_item"),
+	RequestOpen:   field.Bool{}.WithColumn("request_open"),
 	IsRead:        field.Bool{}.WithColumn("is_read"),
 	ReadAt:        field.Time{}.WithColumn("read_at"),
 }

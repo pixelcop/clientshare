@@ -10,9 +10,12 @@ import {
   type RecipientDocumentRequest,
 } from '@/types/documentRequests';
 
-const token = new URLSearchParams(useRoute().hash.slice(1)).get('token');
+const route = useRoute();
+const accountRequest = typeof route.query.request === 'string' ? route.query.request : '';
 const endpoint = '/api/document-request';
-const config = { headers: { 'X-Document-Request': token ?? '' } };
+const config = {
+  headers: { 'X-Document-Request': new URLSearchParams(route.hash.slice(1)).get('token') ?? '' },
+};
 const request = ref<RecipientDocumentRequest>();
 const loading = ref(true);
 const unavailable = ref(false);
@@ -31,16 +34,22 @@ const ordered = computed(() =>
 );
 
 async function load() {
-  if (!token) {
+  if (!config.headers['X-Document-Request'] && !accountRequest) {
     unavailable.value = true;
     loading.value = false;
     return;
   }
   error.value = '';
   try {
+    if (!config.headers['X-Document-Request']) {
+      const { data } = await axios.get<{ token: string }>(
+        `/api/my-document-requests/${encodeURIComponent(accountRequest)}/link`,
+      );
+      config.headers['X-Document-Request'] = data.token;
+    }
     request.value = (await axios.get<RecipientDocumentRequest>(endpoint, config)).data;
   } catch (failure) {
-    if (axios.isAxiosError(failure) && failure.response?.status === 404) {
+    if (axios.isAxiosError(failure) && [401, 404].includes(failure.response?.status ?? 0)) {
       unavailable.value = true;
       request.value = undefined;
     } else {

@@ -31,6 +31,7 @@ func RegisterDocumentRequestRoutes(public, staff fiber.Router, db *gorm.DB, stor
 	management.Get("/:requestID", h.StaffView)
 	management.Post("/:requestID/revoke", h.Revoke)
 	management.Post("/:requestID/items/:itemID/review", h.Review)
+	staff.Get("/my-document-requests/:requestID/link", middleware.AuthRequired, h.AccountLink)
 
 	// The request credential is separate from secure-link sessions and portal
 	// authentication. It is passed in a header, never in an API path or query.
@@ -45,6 +46,17 @@ func documentRequestActor(c fiber.Ctx) services.AccessRequest {
 }
 
 func documentRequestToken(c fiber.Ctx) string { return c.Get("X-Document-Request") }
+
+func (h *DocumentRequestsHandler) AccountLink(c fiber.Ctx) error {
+	if fiber.Locals[string](c, "role") == "link" {
+		return documentRequestError(c, gorm.ErrRecordNotFound)
+	}
+	token, err := h.service.AccountLink(c.Context(), tenantIDFromCtx(c), fiber.Locals[string](c, "user_id"), c.Params("requestID"))
+	if err != nil {
+		return documentRequestError(c, err)
+	}
+	return c.JSON(fiber.Map{"token": token})
+}
 
 func documentRequestError(c fiber.Ctx, err error) error {
 	switch {

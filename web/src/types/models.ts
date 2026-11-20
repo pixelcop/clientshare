@@ -241,9 +241,18 @@ export interface DocumentRequestReview {
 
 export const FeedEventTypeFileUploaded = "file_uploaded";
 export const FeedEventTypeInviteAccepted = "invite_accepted";
+export const FeedEventTypeRequestCreated = "request_created";
+export const FeedEventTypeRequestSubmitted = "request_submitted";
+export const FeedEventTypeRequestAccepted = "request_accepted";
+export const FeedEventTypeRequestReplacement = "request_replacement";
+export const FeedEventTypeFileComment = "file_comment";
+export const FeedEventTypeTeamNote = "team_note"; // response label for a file comment with team visibility
 export const FeedEventSourceTypeFileActivity = "file_activity";
 export const FeedEventSourceTypeFileUploadBatch = "file_upload_batch";
 export const FeedEventSourceTypeInviteToken = "invite_token";
+export const FeedEventSourceTypeDocumentRequest = "document_request";
+export const FeedEventSourceTypeDocumentRequestItem = "document_request_item";
+export const FeedEventSourceTypeFileComment = "file_comment";
 export const FeedStateUnread = "unread";
 export const FeedStateRead = "read";
 export const FeedStateAll = "all";
@@ -280,6 +289,10 @@ export interface FeedEvent {
   subject_email?: string;
   files?: FeedEventFile[];
   file_count?: number /* int */;
+  request_id?: string;
+  request_title?: string;
+  request_item?: string;
+  request_open?: boolean;
   is_read: boolean;
   read_at?: string;
 }

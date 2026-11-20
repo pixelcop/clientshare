@@ -43,7 +43,7 @@ func TestDocumentRequestCollectionAndReview(t *testing.T) {
 		return view
 	}
 
-	input := `{"title":"October close","items":[{"name":"Bank statement","instructions":"Every page"},{"name":"Payroll summary"}]}`
+	input := `{"title":"October close","recipient_emails":["` + env.clientUser.Email + `"],"items":[{"name":"Bank statement","instructions":"Every page"},{"name":"Payroll summary"}]}`
 	do(jsonAuthRequest("POST", staff, env.clientToken, json.RawMessage(input)), 404)
 	do(jsonAuthRequest("POST", staff, env.linkToken, json.RawMessage(input)), 404)
 	view := decode(do(jsonAuthRequest("POST", staff, env.managerToken, json.RawMessage(input)), 201))
@@ -55,6 +55,27 @@ func TestDocumentRequestCollectionAndReview(t *testing.T) {
 	second := decode(do(jsonAuthRequest("POST", staff, env.managerToken, json.RawMessage(override)), 201))
 	require.Equal(t, "2026 October uploads", second.FolderName)
 	bank, payroll := view.Items[0].ID, view.Items[1].ID
+	activity := func(session string, expected ...string) {
+		t.Helper()
+		res := do(jsonAuthRequest("GET", "/api/feed?state=all", session, nil), 200)
+		require.NotContains(t, string(res), "token=")
+		require.NotContains(t, string(res), "Page 2 is missing")
+		var result models.FeedListResponse
+		require.NoError(t, json.Unmarshal(res, &result))
+		actual := make([]string, 0, len(result.Items))
+		for _, event := range result.Items {
+			actual = append(actual, event.EventType)
+			require.Equal(t, view.ID, event.RequestID)
+			require.Equal(t, "October close", event.RequestTitle)
+		}
+		require.ElementsMatch(t, expected, actual)
+	}
+	activity(env.clientToken, models.FeedEventTypeRequestCreated)
+	activity(env.mismatchToken)
+	accountPath := "/api/my-document-requests/" + view.ID + "/link"
+	do(jsonAuthRequest("GET", accountPath, env.clientToken, nil), 200)
+	do(jsonAuthRequest("GET", accountPath, env.mismatchToken, nil), 404)
+	do(jsonAuthRequest("GET", accountPath, env.otherToken, nil), 404)
 	link, err := url.Parse(view.Link)
 	require.NoError(t, err)
 	fragment, err := url.ParseQuery(link.Fragment)
@@ -98,6 +119,7 @@ func TestDocumentRequestCollectionAndReview(t *testing.T) {
 	upload("unknown-item", "1", "wrong.txt", 404)
 	upload(bank, "1", "statement.txt", 201)
 	upload(payroll, "1", "payroll.txt", 201)
+	activity(env.managerToken)
 
 	saved := decode(do(public("GET", recipient, ""), 200))
 	require.Empty(t, saved.Link)
@@ -107,11 +129,14 @@ func TestDocumentRequestCollectionAndReview(t *testing.T) {
 	require.Equal(t, "needed", saved.Items[0].Status, "upload is not submission")
 	require.Equal(t, "statement.txt", saved.Items[0].Files[0].Name)
 	do(public("POST", recipient+"/items/"+bank+"/submit", `{"round":1}`), 204)
+	do(public("POST", recipient+"/items/"+bank+"/submit", `{"round":1}`), 204)
 	do(public("POST", recipient+"/items/"+payroll+"/submit", `{"round":1}`), 204)
+	activity(env.managerToken, models.FeedEventTypeRequestSubmitted, models.FeedEventTypeRequestSubmitted)
 	upload(bank, "1", "late.txt", 409)
 	review(payroll, `{"round":1,"status":"accepted"}`, 204)
 	review(bank, `{"round":1,"status":"replacement"}`, 400)
 	review(bank, `{"round":1,"status":"replacement","reason":"Page 2 is missing"}`, 204)
+	activity(env.clientToken, models.FeedEventTypeRequestCreated, models.FeedEventTypeRequestAccepted, models.FeedEventTypeRequestReplacement)
 	returned := decode(do(public("GET", recipient, ""), 200))
 	require.Equal(t, "Page 2 is missing", returned.Items[0].Reason)
 	require.Empty(t, returned.Items[0].Files)
@@ -140,6 +165,8 @@ func TestDocumentRequestCollectionAndReview(t *testing.T) {
 	require.NoError(t, env.db.Model(&models.DocumentRequest{}).Where("id = ?", view.ID).Update("expires_at", time.Now().Add(time.Hour)).Error)
 	do(jsonAuthRequest("POST", staff+"/revoke", env.adminToken, nil), 204)
 	do(public("GET", recipient, ""), 404)
+	do(jsonAuthRequest("GET", accountPath, env.clientToken, nil), 404)
+	activity(env.clientToken)
 	detail = decode(do(jsonAuthRequest("GET", staff, env.adminToken, nil), 200))
 	require.True(t, detail.Revoked)
 	require.Empty(t, detail.Link)

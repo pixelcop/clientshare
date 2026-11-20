@@ -92,8 +92,10 @@ placeholder in the conversation. **History** lets you review your own earlier
 versions, including removed text, while you still have the required access.
 Other readers cannot browse your revision history.
 
-Editing or removing a comment does not send another email. Comments do not
-create activity-feed notifications.
+New comments also appear in Activity for eligible mentions and conversation
+participants, and shared comments can appear for the file uploader. Activity
+links to the comment without showing its text. Editing or removing a comment
+does not send another email or create another Activity entry.
 Reopen the file to see new messages. Leaving the file discards an unsent
 draft. If access is removed or expires, the conversation and its history become
 unavailable to that person.

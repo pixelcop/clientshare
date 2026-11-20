@@ -236,6 +236,13 @@ func (s *DocumentRequestService) Create(ctx context.Context, req AccessRequest, 
 			}
 			return nil
 		}
+		users := make([]string, 0, len(recipients))
+		for _, recipient := range recipients {
+			users = append(users, recipient.ID)
+		}
+		if err := recordDocumentRequestActivity(ctx, tx, row, models.FeedEventTypeRequestCreated, models.FeedEventSourceTypeDocumentRequest, row.ID, &row.CreatedBy, users, row.CreatedAt); err != nil {
+			return err
+		}
 		if s.NotificationBaseURL == "" {
 			emailStatus = "unavailable"
 			return nil
@@ -460,7 +467,11 @@ func (s *DocumentRequestService) Submit(ctx context.Context, tenantID, token, it
 		if count == 0 {
 			return ErrDocumentRequestConflict
 		}
-		return tx.Model(&item).Updates(map[string]any{"status": requestSubmitted, "reason": "", "submitted_at": time.Now().UTC()}).Error
+		now := time.Now().UTC()
+		if err := tx.Model(&item).Updates(map[string]any{"status": requestSubmitted, "reason": "", "submitted_at": now}).Error; err != nil {
+			return err
+		}
+		return requestItemActivity(ctx, tx, row, item.ID, round, models.FeedEventTypeRequestSubmitted, nil, now)
 	})
 }
 
@@ -492,14 +503,20 @@ func (s *DocumentRequestService) Review(ctx context.Context, req AccessRequest, 
 				return ErrDocumentRequestConflict
 			}
 		}
-		if err := tx.Create(&models.DocumentRequestReview{ItemID: itemID, Round: round, Status: status, Reason: reason, ReviewerID: req.Actor.UserID, SubmittedAt: *item.SubmittedAt}).Error; err != nil {
+		now := time.Now().UTC()
+		if err := tx.Create(&models.DocumentRequestReview{ItemID: itemID, Round: round, Status: status, Reason: reason, ReviewerID: req.Actor.UserID, SubmittedAt: *item.SubmittedAt, CreatedAt: now}).Error; err != nil {
 			return err
 		}
 		nextRound := round
+		eventType := models.FeedEventTypeRequestAccepted
 		if status == requestReplacement {
 			nextRound++
+			eventType = models.FeedEventTypeRequestReplacement
 		}
-		return tx.Model(&item).Updates(map[string]any{"status": status, "reason": reason, "round": nextRound, "submitted_at": nil}).Error
+		if err := tx.Model(&item).Updates(map[string]any{"status": status, "reason": reason, "round": nextRound, "submitted_at": nil}).Error; err != nil {
+			return err
+		}
+		return requestItemActivity(ctx, tx, row, item.ID, round, eventType, &req.Actor.UserID, now)
 	})
 }
 
