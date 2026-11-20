@@ -89,9 +89,13 @@ func recordCommentParticipation(ctx context.Context, tx *gorm.DB, comment models
 	for _, user := range eligible {
 		queue(user, email.CommentMentionNotification)
 	}
+	var actorID *string
+	if !isRequestGuestAuthor(comment.AuthorID) {
+		actorID = &comment.AuthorID
+	}
 	err := (&FeedService{DB: tx}).createEvents(ctx, feedUsers, func(userID string) models.FeedEvent {
 		return models.FeedEvent{
-			TenantID: comment.TenantID, ClientID: &file.ClientID, UserID: userID, ActorUserID: &comment.AuthorID,
+			TenantID: comment.TenantID, ClientID: &file.ClientID, UserID: userID, ActorUserID: actorID,
 			SourceType: models.FeedEventSourceTypeFileComment, SourceID: comment.ID, EventType: models.FeedEventTypeFileComment,
 			FileID: &file.ID, CreatedAt: comment.CreatedAt,
 		}

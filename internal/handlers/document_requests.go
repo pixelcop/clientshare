@@ -41,6 +41,64 @@ func RegisterDocumentRequestRoutes(public, staff fiber.Router, db *gorm.DB, stor
 	recipient.Get("/", h.PublicView)
 	recipient.Post("/items/:itemID/files", h.Upload)
 	recipient.Post("/items/:itemID/submit", h.Submit)
+	files := recipient.Group("/files/:fileID")
+	files.Get("/", h.RecipientFile)
+	files.Get("/view", h.recipientFileContent(true))
+	files.Get("/download", h.recipientFileContent(false))
+	files.Get("/comments", h.RecipientComments)
+	files.Get("/comments/count", h.RecipientCommentCount)
+	files.Post("/comments", h.RecipientCommentCreate)
+}
+
+func (h *DocumentRequestsHandler) RecipientFile(c fiber.Ctx) error {
+	c.Set("Cache-Control", "no-store")
+	file, err := h.service.RecipientFile(c.Context(), tenantIDFromCtx(c), documentRequestToken(c), c.Params("fileID"))
+	if err != nil {
+		return documentRequestError(c, err)
+	}
+	return c.JSON(fiber.Map{"id": file.ID, "filename": file.Filename, "size": file.Size,
+		"type": file.Type, "uploaded_at": file.UploadedAt, "capabilities": fiber.Map{"can_read": true}})
+}
+
+func (h *DocumentRequestsHandler) recipientFileContent(preview bool) fiber.Handler {
+	files := NewFileHandler(h.service.DB, h.service.Store, nil, "", nil)
+	return func(c fiber.Ctx) error {
+		c.Set("Cache-Control", "no-store")
+		file, err := h.service.RecipientFile(c.Context(), tenantIDFromCtx(c), documentRequestToken(c), c.Params("fileID"))
+		if err != nil {
+			return documentRequestError(c, err)
+		}
+		c.Locals("file", file)
+		return files.sendFileContent(c, preview)
+	}
+}
+
+func (h *DocumentRequestsHandler) requestComments(c fiber.Ctx) (*services.FileCommentService, services.AccessRequest) {
+	c.Set("Cache-Control", "no-store")
+	return h.service.RecipientComments(documentRequestToken(c), h.withEmail(c).NotificationBaseURL),
+		services.AccessRequest{TenantID: tenantIDFromCtx(c), FileID: c.Params("fileID")}
+}
+
+func (h *DocumentRequestsHandler) RecipientComments(c fiber.Ctx) error {
+	svc, req := h.requestComments(c)
+	page, err := svc.ListAround(c.Context(), req, c.Query("before"), c.Query("focus"))
+	return commentResponse(c, page, err, 200)
+}
+
+func (h *DocumentRequestsHandler) RecipientCommentCount(c fiber.Ctx) error {
+	svc, req := h.requestComments(c)
+	count, err := svc.Count(c.Context(), req)
+	return commentResponse(c, fiber.Map{"count": count}, err, 200)
+}
+
+func (h *DocumentRequestsHandler) RecipientCommentCreate(c fiber.Ctx) error {
+	var input services.CommentInput
+	if len(c.Body()) > 32*1024 || c.Bind().Body(&input) != nil {
+		return commentResponse(c, nil, services.ErrCommentInput, 400)
+	}
+	svc, req := h.requestComments(c)
+	comment, err := svc.Create(c.Context(), req, input, c.Get("Idempotency-Key"))
+	return commentResponse(c, comment, err, 201)
 }
 
 func documentRequestActor(c fiber.Ctx) services.AccessRequest {

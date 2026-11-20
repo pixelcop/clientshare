@@ -22,6 +22,7 @@ import (
 func TestDocumentRequestCollectionAndReview(t *testing.T) {
 	env := setupSharedHandlersEnv(t)
 	require.NoError(t, env.db.AutoMigrate(&models.DocumentRequest{}, &models.DocumentRequestItem{}, &models.DocumentRequestFile{}, &models.DocumentRequestReview{}, &models.DocumentRequestUpdate{}))
+	require.NoError(t, env.db.AutoMigrate(&models.FileComment{}, &models.FileCommentRevision{}, &models.FileCommentParticipant{}))
 	staff := "/api/clients/" + env.client.ID + "/document-requests"
 	const recipient = "/api/document-request"
 
@@ -148,9 +149,47 @@ func TestDocumentRequestCollectionAndReview(t *testing.T) {
 	require.Empty(t, saved.Items[0].Files[0].ID)
 	require.Equal(t, "needed", saved.Items[0].Status, "upload is not submission")
 	require.Equal(t, "statement.txt", saved.Items[0].Files[0].Name)
+	staffDraft := decode(do(jsonAuthRequest("GET", staff, env.adminToken, nil), 200))
+	filePath := recipient + "/files/" + staffDraft.Items[0].Files[0].ID
+	do(public("GET", filePath+"/view", ""), 404)
 	do(public("POST", recipient+"/items/"+bank+"/submit", `{"round":1}`), 204)
 	do(public("POST", recipient+"/items/"+bank+"/submit", `{"round":1}`), 204)
 	do(public("POST", recipient+"/items/"+payroll+"/submit", `{"round":1}`), 204)
+	submitted := decode(do(public("GET", recipient, ""), 200))
+	require.NotNil(t, submitted.Items[0].Files[0].SubmittedAt)
+	require.Equal(t, staffDraft.Items[0].Files[0].ID, submitted.Items[0].Files[0].ID)
+	do(public("GET", filePath, ""), 200)
+	require.Equal(t, "sample file material", string(do(public("GET", filePath+"/view", ""), 200)))
+	do(public("GET", recipient+"/files/"+view.FolderID+"/view", ""), 404)
+	secondToken, err := url.Parse(second.Link)
+	require.NoError(t, err)
+	secondFragment, err := url.ParseQuery(secondToken.Fragment)
+	require.NoError(t, err)
+	wrongRequest := public("GET", filePath+"/view", "")
+	wrongRequest.Header.Set("X-Document-Request", secondFragment.Get("token"))
+	do(wrongRequest, 404)
+	guestPost := func(body, key string, status int) []byte {
+		req := public("POST", filePath+"/comments", body)
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Idempotency-Key", key)
+		return do(req, status)
+	}
+	guestPost(`{"body":"Private note attempt","visibility":"team"}`, "private", 404)
+	firstComment := guestPost(`{"body":"Can you clarify the second page?","visibility":"shared"}`, "guest-question", 201)
+	require.JSONEq(t, string(firstComment), string(guestPost(`{"body":"Can you clarify the second page?","visibility":"shared"}`, "guest-question", 201)))
+	require.Contains(t, string(firstComment), `"author_name":"Request guest"`)
+	require.Contains(t, string(firstComment), `"can_edit":false`)
+	commentSvc := &services.FileCommentService{DB: env.db}
+	for _, visibility := range []string{services.CommentTeam, services.CommentShared} {
+		_, err := commentSvc.Create(t.Context(), services.AccessRequest{TenantID: env.client.TenantID, FileID: submitted.Items[0].Files[0].ID,
+			Actor: services.AccessActor{UserID: env.adminUser.ID}}, services.CommentInput{Body: "Staff reply: " + visibility, Visibility: visibility}, visibility)
+		require.NoError(t, err)
+	}
+	conversation := string(do(public("GET", filePath+"/comments", ""), 200))
+	require.Contains(t, conversation, "Can you clarify the second page?")
+	require.Contains(t, conversation, "Staff reply: shared")
+	require.NotContains(t, conversation, "Staff reply: team")
+	require.JSONEq(t, `{"count":2}`, string(do(public("GET", filePath+"/comments/count", ""), 200)))
 	activity(env.managerToken, models.FeedEventTypeRequestSubmitted, models.FeedEventTypeRequestSubmitted)
 	upload(bank, "1", "late.txt", 409)
 	review(payroll, `{"round":1,"status":"accepted"}`, 204)
@@ -159,7 +198,10 @@ func TestDocumentRequestCollectionAndReview(t *testing.T) {
 	activity(env.clientToken, models.FeedEventTypeRequestCreated, models.FeedEventTypeRequestSubmitted, models.FeedEventTypeRequestSubmitted, models.FeedEventTypeRequestAccepted, models.FeedEventTypeRequestReplacement)
 	returned := decode(do(public("GET", recipient, ""), 200))
 	require.Equal(t, "Page 2 is missing", returned.Items[0].Reason)
-	require.Empty(t, returned.Items[0].Files)
+	require.Len(t, returned.Items[0].Files, 1)
+	require.Equal(t, submitted.Items[0].Files[0].SubmittedAt, returned.Items[0].Files[0].SubmittedAt)
+	require.Equal(t, 2, returned.Items[0].Files[0].Comments)
+	do(public("GET", filePath+"/comments", ""), 200)
 	require.Empty(t, returned.Items[0].History)
 	require.Equal(t, "accepted", returned.Items[1].Status)
 	upload(bank, "1", "stale.txt", 409)
@@ -199,11 +241,14 @@ func TestDocumentRequestCollectionAndReview(t *testing.T) {
 	activity(env.mismatchToken)
 	require.NoError(t, env.db.Model(&models.DocumentRequest{}).Where("id = ?", view.ID).Update("expires_at", time.Now().Add(-time.Minute)).Error)
 	do(public("GET", recipient, ""), 404)
+	do(public("GET", filePath+"/download", ""), 404)
+	do(public("GET", filePath+"/comments", ""), 404)
 	accountRequests(env.clientToken)
 	require.NoError(t, env.db.Model(&models.DocumentRequest{}).Where("id = ?", view.ID).Update("expires_at", time.Now().Add(time.Hour)).Error)
 	do(jsonAuthRequest("POST", staff+"/revoke", env.adminToken, nil), 204)
 	do(jsonAuthRequest("POST", staff+"/additions", env.adminToken, addition), 404)
 	do(public("GET", recipient, ""), 404)
+	guestPost(`{"body":"After revocation","visibility":"shared"}`, "after-revocation", 404)
 	do(jsonAuthRequest("GET", accountPath, env.clientToken, nil), 404)
 	activity(env.clientToken)
 	accountRequests(env.clientToken)
@@ -222,6 +267,7 @@ func (s *documentRequestSender) Send(msg email.Email) error {
 func TestDocumentRequestEmailsOnlySelectedEligibleRecipient(t *testing.T) {
 	env := setupSharedHandlersEnv(t)
 	require.NoError(t, env.db.AutoMigrate(&models.DocumentRequest{}, &models.DocumentRequestItem{}, &models.DocumentRequestFile{}, &models.DocumentRequestReview{}, &models.DocumentRequestUpdate{}))
+	require.NoError(t, env.db.AutoMigrate(&models.FileComment{}))
 	svc := &services.DocumentRequestService{DB: env.db, Store: storage.NewLocalStorage(env.storageRoot), SigningKey: env.signingKey, NotificationBaseURL: "https://portal.example.test"}
 	req := services.AccessRequest{
 		TenantID: env.client.TenantID, ClientID: env.client.ID,

@@ -91,9 +91,11 @@ type DocumentRequestItemView struct {
 }
 
 type DocumentRequestFile struct {
-	ID    string `json:"id,omitempty"` // present only for staff; ordinary file authorization still applies
-	Name  string `json:"name"`
-	Round int    `json:"round"`
+	ID          string     `json:"id,omitempty"` // unsubmitted drafts have no recipient viewer link
+	Name        string     `json:"name"`
+	Round       int        `json:"round"`
+	SubmittedAt *time.Time `json:"submitted_at,omitempty"`
+	Comments    int        `json:"comment_count,omitempty"`
 }
 
 type DocumentRequestReview struct {
@@ -365,18 +367,32 @@ func (s *DocumentRequestService) view(db *gorm.DB, row models.DocumentRequest, s
 	for _, item := range items {
 		out := DocumentRequestItemView{ID: item.ID, Name: item.Name, Instructions: item.Instructions,
 			Status: item.Status, Reason: item.Reason, Round: item.Round, Files: []DocumentRequestFile{}}
-		query := liveRequestFiles(db, row).Where("drf.item_id = ?", item.ID)
-		if staff {
-			query = query.Select("drf.file_id AS id, drf.name, drf.round")
-			if err := db.Model(&models.DocumentRequestReview{}).Where("item_id = ?", item.ID).
-				Select("round, status, reason, submitted_at, created_at AS reviewed_at").Order("round DESC").Scan(&out.History).Error; err != nil {
-				return nil, err
-			}
-		} else {
-			query = query.Where("drf.round = ?", item.Round).Select("drf.name, drf.round")
+		query := requestFilesWithSubmission(db, row).Where("drf.item_id = ?", item.ID)
+		comments := db.Model(&models.FileComment{}).Select("COUNT(*)").
+			Where("tenant_id = ? AND file_id = drf.file_id AND deleted_at IS NULL", row.TenantID)
+		fileID := "drf.file_id"
+		var history []DocumentRequestReview
+		if err := db.Model(&models.DocumentRequestReview{}).Where("item_id = ?", item.ID).
+			Select("round, status, reason, submitted_at, created_at AS reviewed_at").Order("round DESC").Scan(&history).Error; err != nil {
+			return nil, err
 		}
+		if staff {
+			out.History = history
+		} else {
+			comments = comments.Where("visibility = ? AND "+requestFileSubmittedAt+" IS NOT NULL", CommentShared)
+			fileID = "CASE WHEN " + requestFileSubmittedAt + " IS NOT NULL THEN drf.file_id ELSE '' END"
+			query = query.Where("drf.round = ? OR "+requestFileSubmittedAt+" IS NOT NULL", item.Round)
+		}
+		query = query.Select(fileID+" AS id, drf.name, drf.round, (?) AS comments", comments)
 		if err := query.Order("drf.created_at, drf.file_id").Scan(&out.Files).Error; err != nil {
 			return nil, err
+		}
+		dates := map[int]*time.Time{item.Round: item.SubmittedAt}
+		for _, review := range history {
+			dates[review.Round] = &review.SubmittedAt
+		}
+		for i := range out.Files {
+			out.Files[i].SubmittedAt = dates[out.Files[i].Round]
 		}
 		view.Items = append(view.Items, out)
 	}

@@ -31,7 +31,10 @@ var (
 type FileCommentService struct {
 	DB                  *gorm.DB
 	NotificationBaseURL string
+	requestGuest        func(*gorm.DB, AccessRequest) (models.User, error)
 }
+
+func isRequestGuestAuthor(id string) bool { return strings.HasPrefix(id, "~") }
 
 type FileCommentPage struct {
 	Items            []models.FileComment `json:"items"`
@@ -67,6 +70,10 @@ type CommentInput struct {
 // (even alongside a staff identity) is never permission to read conversations.
 func (s *FileCommentService) authorize(ctx context.Context, req AccessRequest) (models.User, bool, error) {
 	var user models.User
+	if s.requestGuest != nil {
+		actor, err := s.requestGuest(s.DB.WithContext(ctx), req)
+		return actor, false, err
+	}
 	if req.TenantID == "" || req.Actor.UserID == "" || req.Actor.LinkID != "" || req.FileID == "" {
 		return user, false, gorm.ErrRecordNotFound
 	}
@@ -186,10 +193,13 @@ func decorateComments(db *gorm.DB, req AccessRequest, actor models.User, comment
 	for i := range comments {
 		c := &comments[i]
 		c.AuthorName = names[c.AuthorID]
+		if isRequestGuestAuthor(c.AuthorID) {
+			c.AuthorName = "Request guest"
+		}
 		if c.AuthorName == "" {
 			c.AuthorName = "Portal user"
 		}
-		c.CanViewHistory = c.AuthorID == actor.ID
+		c.CanViewHistory = !isRequestGuestAuthor(actor.ID) && c.AuthorID == actor.ID
 		c.CanEdit = c.CanViewHistory && c.DeletedAt == nil
 		if c.DeletedAt == nil {
 			render, ids := prepareCommentMarkdown(c.Body)
@@ -206,6 +216,9 @@ func decorateComments(db *gorm.DB, req AccessRequest, actor models.User, comment
 	}
 	live := map[string]map[string]string{}
 	for audience, ids := range byAudience {
+		if isRequestGuestAuthor(actor.ID) {
+			break // Request guests cannot resolve identities from the directory.
+		}
 		keys := make([]string, 0, len(ids))
 		for id := range ids {
 			keys = append(keys, id)
@@ -231,6 +244,9 @@ func decorateComments(db *gorm.DB, req AccessRequest, actor models.User, comment
 				return err
 			}
 			c.BodyHTML = &rendered
+			if isRequestGuestAuthor(actor.ID) {
+				c.Body = "" // The rendered conversation is sufficient; do not send raw mention markup.
+			}
 		}
 	}
 	return nil
@@ -252,7 +268,9 @@ func (s *FileCommentService) Create(ctx context.Context, req AccessRequest, inpu
 		if err := LockTenantAccess(tx, req.TenantID); err != nil {
 			return err
 		}
-		actor, team, err := (&FileCommentService{DB: tx}).authorize(ctx, req)
+		service := *s
+		service.DB = tx
+		actor, team, err := service.authorize(ctx, req)
 		if err != nil {
 			return err
 		}
@@ -267,7 +285,11 @@ func (s *FileCommentService) Create(ctx context.Context, req AccessRequest, inpu
 		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
 		} else {
-			if err := (&FileCommentService{DB: tx}).validateMentions(ctx, req, actor, input.Visibility, input.Body); err != nil {
+			if isRequestGuestAuthor(actor.ID) {
+				if _, mentions := prepareCommentMarkdown(input.Body); len(mentions) > 0 {
+					return ErrCommentMention
+				}
+			} else if err := service.validateMentions(ctx, req, actor, input.Visibility, input.Body); err != nil {
 				return err
 			}
 			now := time.Now().UTC()
