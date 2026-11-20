@@ -228,14 +228,15 @@ async function revoke() {
 <template>
   <section class="mx-auto max-w-4xl space-y-5 leading-normal">
     <RouterLink
-      :to="requestId ? requestRoute() : { name: 'Clients' }"
+      :to="requestId || creating ? requestRoute() : { name: 'Clients' }"
       class="inline-block text-sm text-primary hover:underline"
+      @click="creating = false"
     >
-      {{ requestId ? 'All document requests' : 'All clients' }}
+      {{ requestId || creating ? 'All document requests' : 'All clients' }}
     </RouterLink>
     <div class="flex flex-wrap items-center justify-between gap-3">
       <h1 class="m-0 text-2xl font-semibold tracking-tight wrap-anywhere">
-        {{ request?.title ?? 'Document requests' }}
+        {{ creating ? 'New document request' : (request?.title ?? 'Document requests') }}
       </h1>
       <Button
         v-if="!requestId && !creating && !loading && !error"
@@ -251,185 +252,207 @@ async function revoke() {
 
     <form
       v-if="!requestId && creating"
-      class="space-y-4 rounded-xl border border-surface-200 p-4 dark:border-surface-700"
+      class="rounded-xl border border-surface-200 bg-surface-0 dark:border-surface-700 dark:bg-surface-900"
       @submit.prevent="create"
     >
-      <h2 class="text-lg font-semibold">New document request</h2>
-      <label class="block space-y-1">
-        <span class="font-medium">Request title</span>
-        <input
-          v-model="title"
-          :class="inputClass"
-          maxlength="160"
-          required
-          placeholder="e.g. October close"
-        />
-      </label>
-      <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-        <label v-if="editingFolder" for="request-folder" class="text-muted-color"
-          >Destination folder:</label
-        >
-        <span v-else class="text-muted-color">Destination folder:</span>
-        <template v-if="editingFolder">
+      <div class="px-4 pt-4 sm:px-6 sm:pt-6">
+        <label class="block space-y-1">
+          <span class="font-medium">Request title</span>
           <input
-            id="request-folder"
-            ref="folderInput"
-            v-model="folderDraft"
+            v-model="title"
             :class="inputClass"
-            class="max-w-64"
             maxlength="160"
-            placeholder="Use request title"
-            @keydown.enter.prevent="finishFolder(true)"
-            @keydown.esc.prevent="finishFolder(false)"
+            required
+            placeholder="e.g. October close"
           />
-          <Button type="button" label="Done" size="small" @click="finishFolder(true)" />
+        </label>
+        <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+          <label v-if="editingFolder" for="request-folder" class="text-muted-color"
+            >Destination folder:</label
+          >
+          <span v-else class="text-muted-color">Destination folder:</span>
+          <template v-if="editingFolder">
+            <input
+              id="request-folder"
+              ref="folderInput"
+              v-model="folderDraft"
+              :class="inputClass"
+              class="max-w-64"
+              maxlength="160"
+              placeholder="Use request title"
+              @keydown.enter.prevent="finishFolder(true)"
+              @keydown.esc.prevent="finishFolder(false)"
+            />
+            <Button type="button" label="Done" size="small" @click="finishFolder(true)" />
+            <Button
+              type="button"
+              label="Cancel"
+              size="small"
+              variant="text"
+              @click="finishFolder(false)"
+            />
+          </template>
+          <template v-else>
+            <span class="font-medium wrap-anywhere">{{
+              folderName || 'Same as request title'
+            }}</span>
+            <button
+              ref="folderEditButton"
+              type="button"
+              class="min-h-9 cursor-pointer rounded-sm px-2 font-medium underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-primary"
+              aria-label="Edit destination folder"
+              @click="editFolder"
+            >
+              Edit
+            </button>
+          </template>
+        </div>
+      </div>
+      <section aria-labelledby="request-documents-heading" class="px-4 pt-4 pb-5 sm:px-6">
+        <h2 id="request-documents-heading" class="m-0 text-lg font-semibold">Documents</h2>
+        <ol class="mt-2 divide-y divide-surface-200 dark:divide-surface-700">
+          <li v-for="(item, index) in draft" :key="item.key" class="py-3">
+            <fieldset class="min-w-0">
+              <legend class="sr-only">Document {{ index + 1 }}</legend>
+              <div class="flex items-end gap-2">
+                <label :for="`request-item-name-${item.key}`" class="flex-1 font-medium"
+                  >Document {{ index + 1 }}</label
+                >
+                <Button
+                  v-if="draft.length > 1"
+                  type="button"
+                  label="Remove"
+                  severity="secondary"
+                  variant="text"
+                  size="small"
+                  :aria-label="`Remove document ${index + 1}`"
+                  @click="draft.splice(index, 1)"
+                />
+              </div>
+              <div>
+                <input
+                  :id="`request-item-name-${item.key}`"
+                  v-model="item.name"
+                  :class="inputClass"
+                  class="mt-1"
+                  maxlength="160"
+                  required
+                />
+                <button
+                  v-if="!item.showInstructions"
+                  type="button"
+                  class="min-h-8 cursor-pointer rounded-sm text-sm text-primary-emphasis underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-primary"
+                  @click="revealInstructions(item)"
+                >
+                  Add instructions
+                </button>
+                <label v-else class="mt-2 block space-y-1">
+                  <span>Instructions <span class="text-muted-color">(optional)</span></span>
+                  <textarea
+                    :id="`request-item-instructions-${item.key}`"
+                    v-model="item.instructions"
+                    :class="inputClass"
+                    maxlength="1000"
+                    rows="2"
+                  />
+                </label>
+              </div>
+            </fieldset>
+          </li>
+        </ol>
+        <Button
+          type="button"
+          label="Add document"
+          icon="oi oi-plus"
+          severity="secondary"
+          variant="outlined"
+          :disabled="draft.length >= 30"
+          @click="draft.push(newRow())"
+        />
+      </section>
+      <div
+        class="space-y-4 rounded-b-xl border-t border-surface-200 bg-surface-50 px-4 py-4 sm:px-6 dark:border-surface-700 dark:bg-surface-800"
+      >
+        <fieldset class="min-w-0 space-y-1">
+          <legend class="text-base font-semibold">Delivery</legend>
+          <label class="inline-flex min-h-9 cursor-pointer items-center gap-2 font-medium">
+            <input
+              v-model="emailAll"
+              type="checkbox"
+              class="size-4 accent-primary"
+              :disabled="saving"
+            />
+            Email all client users
+          </label>
+          <p v-if="emailAll" class="text-sm text-muted-color">
+            Everyone with client access to this workspace will get a separate email.
+          </p>
+          <div v-if="!emailAll" class="space-y-2">
+            <RecipientPicker
+              v-model="recipientEmail"
+              input-id="request-recipient"
+              :client-id="clientId"
+              current-client-only
+              label="Find a client user to email"
+              :disabled="saving || recipientEmails.length >= 100"
+            >
+              <template #action>
+                <Button
+                  type="button"
+                  label="Add recipient"
+                  severity="secondary"
+                  :disabled="saving || !recipientEmail.trim() || recipientEmails.length >= 100"
+                  @click="addRecipient"
+                />
+              </template>
+            </RecipientPicker>
+            <ul
+              v-if="recipientEmails.length"
+              aria-label="Selected recipients"
+              class="flex flex-wrap gap-2"
+            >
+              <li
+                v-for="address in recipientEmails"
+                :key="address"
+                class="flex items-center gap-1 rounded-md bg-surface-100 pl-2 text-sm dark:bg-surface-800"
+              >
+                <span class="min-w-0 wrap-anywhere">{{ address }}</span>
+                <Button
+                  label="Remove"
+                  :aria-label="`Remove ${address}`"
+                  type="button"
+                  size="small"
+                  variant="text"
+                  severity="secondary"
+                  :disabled="saving"
+                  @click="recipientEmails = recipientEmails.filter((entry) => entry !== address)"
+                />
+              </li>
+            </ul>
+            <p class="text-sm text-muted-color">
+              {{
+                recipientEmail.trim()
+                  ? 'Use Add recipient to include this address.'
+                  : 'Leave the list empty to copy and share the link yourself.'
+              }}
+            </p>
+          </div>
+        </fieldset>
+        <div class="flex flex-wrap gap-2">
+          <Button
+            type="submit"
+            label="Create request"
+            :disabled="saving || editingFolder || (!emailAll && !!recipientEmail.trim())"
+          />
           <Button
             type="button"
             label="Cancel"
-            size="small"
+            severity="secondary"
             variant="text"
-            @click="finishFolder(false)"
-          />
-        </template>
-        <template v-else>
-          <span class="font-medium wrap-anywhere">{{ folderName || 'Same as request title' }}</span>
-          <button
-            ref="folderEditButton"
-            type="button"
-            class="min-h-9 cursor-pointer rounded-sm px-2 font-medium underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-primary"
-            aria-label="Edit destination folder"
-            @click="editFolder"
-          >
-            Edit
-          </button>
-        </template>
-      </div>
-      <fieldset
-        v-for="(item, index) in draft"
-        :key="item.key"
-        class="space-y-2 border-t border-surface-200 pt-3 dark:border-surface-700"
-      >
-        <legend class="pr-2 text-sm font-medium">Item {{ index + 1 }}</legend>
-        <div>
-          <label class="block space-y-1">
-            <span>Document name</span>
-            <input v-model="item.name" :class="inputClass" maxlength="160" required />
-          </label>
-          <button
-            v-if="!item.showInstructions"
-            type="button"
-            class="min-h-8 cursor-pointer rounded-sm text-sm text-primary-emphasis underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-primary"
-            @click="revealInstructions(item)"
-          >
-            Add instructions
-          </button>
-          <label v-else class="mt-2 block space-y-1">
-            <span>Instructions <span class="text-muted-color">(optional)</span></span>
-            <textarea
-              :id="`request-item-instructions-${item.key}`"
-              v-model="item.instructions"
-              :class="inputClass"
-              maxlength="1000"
-              rows="2"
-            />
-          </label>
-        </div>
-        <Button
-          v-if="draft.length > 1"
-          type="button"
-          label="Remove item"
-          severity="secondary"
-          variant="text"
-          :aria-label="`Remove item ${index + 1}`"
-          @click="draft.splice(index, 1)"
-        />
-      </fieldset>
-      <Button
-        type="button"
-        label="Add another item"
-        severity="secondary"
-        :disabled="draft.length >= 30"
-        @click="draft.push(newRow())"
-      />
-      <fieldset class="space-y-2 border-t border-surface-200 pt-3 dark:border-surface-700">
-        <legend class="pr-2 text-sm font-medium">Delivery</legend>
-        <label class="inline-flex min-h-9 cursor-pointer items-center gap-2 font-medium">
-          <input
-            v-model="emailAll"
-            type="checkbox"
-            class="size-4 accent-primary"
             :disabled="saving"
+            @click="creating = false"
           />
-          Email all client users
-        </label>
-        <p v-if="emailAll" class="text-sm text-muted-color">
-          Everyone with client access to this workspace will get a separate email.
-        </p>
-        <div v-if="!emailAll" class="space-y-2">
-          <RecipientPicker
-            v-model="recipientEmail"
-            input-id="request-recipient"
-            :client-id="clientId"
-            current-client-only
-            label="Find a client user to email"
-            :disabled="saving || recipientEmails.length >= 100"
-          >
-            <template #action>
-              <Button
-                type="button"
-                label="Add recipient"
-                severity="secondary"
-                :disabled="saving || !recipientEmail.trim() || recipientEmails.length >= 100"
-                @click="addRecipient"
-              />
-            </template>
-          </RecipientPicker>
-          <ul
-            v-if="recipientEmails.length"
-            aria-label="Selected recipients"
-            class="flex flex-wrap gap-2"
-          >
-            <li
-              v-for="address in recipientEmails"
-              :key="address"
-              class="flex items-center gap-1 rounded-md bg-surface-100 pl-2 text-sm dark:bg-surface-800"
-            >
-              <span class="min-w-0 wrap-anywhere">{{ address }}</span>
-              <Button
-                label="Remove"
-                :aria-label="`Remove ${address}`"
-                type="button"
-                size="small"
-                variant="text"
-                severity="secondary"
-                :disabled="saving"
-                @click="recipientEmails = recipientEmails.filter((entry) => entry !== address)"
-              />
-            </li>
-          </ul>
-          <p class="text-sm text-muted-color">
-            {{
-              recipientEmail.trim()
-                ? 'Use Add recipient to include this address.'
-                : 'Leave the list empty to copy and share the link yourself.'
-            }}
-          </p>
         </div>
-      </fieldset>
-      <div class="flex flex-wrap gap-2">
-        <Button
-          type="submit"
-          label="Create request"
-          :disabled="saving || editingFolder || (!emailAll && !!recipientEmail.trim())"
-        />
-        <Button
-          type="button"
-          label="Cancel"
-          severity="secondary"
-          variant="text"
-          :disabled="saving"
-          @click="creating = false"
-        />
       </div>
     </form>
 
