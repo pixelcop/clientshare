@@ -79,9 +79,10 @@ RUN --mount=type=cache,target=/go/pkg/mod,uid=65534 \
 
 FROM go-base AS go-test
 
+# Assets are already generated; their frontend sources are not in this stage.
 RUN --mount=type=cache,target=/go/pkg/mod,uid=65534 \
     --mount=type=cache,target=/tmp/.cache/go-build,uid=65534 \
-    make test
+    go test ./...
 
 # Runtime image
 FROM alpine:3.20 AS runtime
