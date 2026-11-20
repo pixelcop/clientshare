@@ -62,8 +62,14 @@ function addRecipient() {
   recipientEmail.value = '';
 }
 let nextRow = 0;
-const newRow = () => ({ key: nextRow++, name: '', instructions: '' });
+const newRow = () => ({ key: nextRow++, name: '', instructions: '', showInstructions: false });
 const draft = ref([newRow()]);
+
+async function revealInstructions(item: ReturnType<typeof newRow>) {
+  item.showInstructions = true;
+  await nextTick();
+  document.getElementById(`request-item-instructions-${item.key}`)?.focus();
+}
 const returning = ref('');
 const reason = ref('');
 const revoking = ref(false);
@@ -304,14 +310,30 @@ async function revoke() {
         class="space-y-2 border-t border-surface-200 pt-3 dark:border-surface-700"
       >
         <legend class="pr-2 text-sm font-medium">Item {{ index + 1 }}</legend>
-        <label class="block space-y-1">
-          <span>Document name</span>
-          <input v-model="item.name" :class="inputClass" maxlength="160" required />
-        </label>
-        <label class="block space-y-1">
-          <span>Instructions <span class="text-muted-color">(optional)</span></span>
-          <textarea v-model="item.instructions" :class="inputClass" maxlength="1000" rows="2" />
-        </label>
+        <div>
+          <label class="block space-y-1">
+            <span>Document name</span>
+            <input v-model="item.name" :class="inputClass" maxlength="160" required />
+          </label>
+          <button
+            v-if="!item.showInstructions"
+            type="button"
+            class="min-h-8 cursor-pointer rounded-sm text-sm text-primary-emphasis underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-primary"
+            @click="revealInstructions(item)"
+          >
+            Add instructions
+          </button>
+          <label v-else class="mt-2 block space-y-1">
+            <span>Instructions <span class="text-muted-color">(optional)</span></span>
+            <textarea
+              :id="`request-item-instructions-${item.key}`"
+              v-model="item.instructions"
+              :class="inputClass"
+              maxlength="1000"
+              rows="2"
+            />
+          </label>
+        </div>
         <Button
           v-if="draft.length > 1"
           type="button"
