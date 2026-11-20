@@ -10,11 +10,12 @@ item. For a one-off upload without a checklist, use an [Upload only link](#send-
    **Upload** menu.
 2. Choose **New request**, give it a title, and add the documents you need. Add
    instructions where they help the recipient pick the right file.
-3. Confirm the **Destination folder**. It defaults to the request title, and
-   you can give it a different name before creating the request.
-4. To email the link when you create the request, select an existing client user
-   with workspace access. Leave this blank to **Copy request link** and share it
-   yourself. If outbound email is disabled, use the copy option instead.
+3. The **Destination folder** defaults to the request title. Choose **Edit**
+   beside the name if you want a different folder.
+4. **Email all client users** is checked by default. Each client user with
+   workspace access gets a separate email. Uncheck it to add specific client
+   users, or leave the list empty to **Copy request link** and share it yourself.
+   If outbound email is disabled, use the copy option instead.
 
 The recipient can open the checklist without a portal account. They can add one
 or more files to an item and return with the same link later. Signed-in users

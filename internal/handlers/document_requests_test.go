@@ -161,12 +161,12 @@ func TestDocumentRequestEmailsOnlySelectedEligibleRecipient(t *testing.T) {
 		Actor: services.AccessActor{UserID: env.adminUser.ID},
 	}
 	in := services.DocumentRequestInput{
-		Title: "Bank documents", RecipientEmail: env.otherClientUser.Email,
+		Title: "Bank documents", RecipientEmails: []string{env.otherClientUser.Email},
 		Items: []services.DocumentRequestItemInput{{Name: "Bank statement"}},
 	}
 	_, err := svc.Create(t.Context(), req, in)
 	require.ErrorIs(t, err, services.ErrDocumentRequestRecipient)
-	in.RecipientEmail = env.clientUser.Email
+	in.RecipientEmails = []string{env.clientUser.Email, strings.ToUpper(env.clientUser.Email)}
 	result, err := svc.Create(t.Context(), req, in)
 	require.NoError(t, err)
 	require.Equal(t, "queued", result.EmailStatus)
@@ -185,8 +185,13 @@ func TestDocumentRequestEmailsOnlySelectedEligibleRecipient(t *testing.T) {
 	require.Contains(t, sender.messages[0].Body, "https://portal.example.test"+result.Link)
 
 	in.FolderName = "Second bank request"
+	in.EmailAll, in.RecipientEmails = true, nil
 	result, err = svc.Create(t.Context(), req, in)
 	require.NoError(t, err)
+	require.Equal(t, 2, result.EmailCount)
+	var all []string
+	require.NoError(t, env.db.Model(&models.QueuedEmail{}).Where("document_request_id = ?", result.ID).Pluck("recipient", &all).Error)
+	require.ElementsMatch(t, []string{env.clientUser.Email, env.mismatchUser.Email}, all)
 	var canceled models.QueuedEmail
 	require.NoError(t, env.db.Where("document_request_id = ?", result.ID).First(&canceled).Error)
 	require.NoError(t, svc.Revoke(t.Context(), req, result.ID))

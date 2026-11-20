@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import axios from 'axios';
 import Button from 'openvue/button';
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 
 import RecipientPicker from '@/components/RecipientPicker.vue';
@@ -24,14 +24,43 @@ const error = ref('');
 const notice = ref('');
 const creating = ref(false);
 const title = ref('');
+const emailAll = ref(true);
 const recipientEmail = ref('');
+const recipientEmails = ref<string[]>([]);
 const folderOverride = ref<string | null>(null);
-const folderName = computed({
-  get: () => folderOverride.value ?? title.value,
-  set: (value: string) => {
-    folderOverride.value = value;
-  },
-});
+const folderDraft = ref('');
+const editingFolder = ref(false);
+const folderInput = ref<HTMLInputElement>();
+const folderEditButton = ref<HTMLButtonElement>();
+const folderName = computed(() => folderOverride.value ?? title.value.trim());
+
+async function editFolder() {
+  folderDraft.value = folderName.value;
+  editingFolder.value = true;
+  await nextTick();
+  folderInput.value?.focus();
+  folderInput.value?.select();
+}
+
+async function finishFolder(save: boolean) {
+  if (save) {
+    folderOverride.value = folderDraft.value.trim() || null;
+  }
+  editingFolder.value = false;
+  await nextTick();
+  folderEditButton.value?.focus();
+}
+
+function addRecipient() {
+  const address = recipientEmail.value.trim();
+  if (!address || recipientEmails.value.length >= 100) {
+    return;
+  }
+  if (!recipientEmails.value.some((entry) => entry.toLowerCase() === address.toLowerCase())) {
+    recipientEmails.value.push(address);
+  }
+  recipientEmail.value = '';
+}
 let nextRow = 0;
 const newRow = () => ({ key: nextRow++, name: '', instructions: '' });
 const draft = ref([newRow()]);
@@ -89,30 +118,41 @@ watch(
     notice.value = '';
     revoking.value = false;
     creating.value = false;
+    editingFolder.value = false;
     void load();
   },
   { immediate: true },
 );
 
 async function create() {
+  if (editingFolder.value || (!emailAll.value && recipientEmail.value.trim())) {
+    return;
+  }
   saving.value = true;
   error.value = '';
   try {
     const { data } = await axios.post<DocumentRequest>(endpoint.value, {
       title: title.value,
       folder_name: folderName.value,
-      recipient_email: recipientEmail.value,
+      email_all: emailAll.value,
+      recipient_emails: emailAll.value ? [] : recipientEmails.value,
       items: draft.value.map(({ name, instructions }) => ({ name, instructions })),
     });
     title.value = '';
     recipientEmail.value = '';
+    recipientEmails.value = [];
+    emailAll.value = true;
     folderOverride.value = null;
     draft.value = [newRow()];
     await router.push(requestRoute(data.id));
     if (data.email_status === 'queued') {
-      notice.value = 'Request created. Email queued for the recipient.';
+      const count = data.email_count ?? 0;
+      notice.value = `Request created. Email queued for ${count === 1 ? '1 client user' : `${count} client users`}.`;
     } else if (data.email_status === 'unavailable') {
       notice.value = 'Request created. Email is unavailable; copy and share the request link.';
+    } else if (data.email_status === 'no_recipients') {
+      notice.value =
+        'Request created. No client users could be emailed; copy and share the request link.';
     }
   } catch (failure) {
     error.value =
@@ -219,35 +259,44 @@ async function revoke() {
           placeholder="e.g. October close"
         />
       </label>
-      <label class="block space-y-1">
-        <span class="font-medium">Destination folder</span>
-        <input
-          v-model="folderName"
-          :class="inputClass"
-          maxlength="160"
-          aria-describedby="request-folder-help"
-        />
-      </label>
-      <p id="request-folder-help" class="text-sm text-muted-color">
-        Files go into this new folder in the client workspace. It uses the request title unless you
-        change it.
-      </p>
-      <div class="space-y-1">
-        <label for="request-recipient" class="font-medium"
-          >Email a client user <span class="text-muted-color">(optional)</span></label
+      <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+        <label v-if="editingFolder" for="request-folder" class="text-muted-color"
+          >Destination folder:</label
         >
-        <RecipientPicker
-          v-model="recipientEmail"
-          input-id="request-recipient"
-          :client-id="clientId"
-          current-client-only
-          label="Email a client user"
-          :disabled="saving"
-        />
-        <p class="text-sm text-muted-color">
-          Choose an existing user from this workspace to email the link on creation, or leave this
-          blank to share it yourself.
-        </p>
+        <span v-else class="text-muted-color">Destination folder:</span>
+        <template v-if="editingFolder">
+          <input
+            id="request-folder"
+            ref="folderInput"
+            v-model="folderDraft"
+            :class="inputClass"
+            class="max-w-64"
+            maxlength="160"
+            placeholder="Use request title"
+            @keydown.enter.prevent="finishFolder(true)"
+            @keydown.esc.prevent="finishFolder(false)"
+          />
+          <Button type="button" label="Done" size="small" @click="finishFolder(true)" />
+          <Button
+            type="button"
+            label="Cancel"
+            size="small"
+            variant="text"
+            @click="finishFolder(false)"
+          />
+        </template>
+        <template v-else>
+          <span class="font-medium wrap-anywhere">{{ folderName || 'Same as request title' }}</span>
+          <button
+            ref="folderEditButton"
+            type="button"
+            class="min-h-9 cursor-pointer rounded-sm px-2 font-medium underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-primary"
+            aria-label="Edit destination folder"
+            @click="editFolder"
+          >
+            Edit
+          </button>
+        </template>
       </div>
       <fieldset
         v-for="(item, index) in draft"
@@ -273,15 +322,84 @@ async function revoke() {
           @click="draft.splice(index, 1)"
         />
       </fieldset>
+      <Button
+        type="button"
+        label="Add another item"
+        severity="secondary"
+        :disabled="draft.length >= 30"
+        @click="draft.push(newRow())"
+      />
+      <fieldset class="space-y-2 border-t border-surface-200 pt-3 dark:border-surface-700">
+        <legend class="pr-2 text-sm font-medium">Delivery</legend>
+        <label class="inline-flex min-h-9 cursor-pointer items-center gap-2 font-medium">
+          <input
+            v-model="emailAll"
+            type="checkbox"
+            class="size-4 accent-primary"
+            :disabled="saving"
+          />
+          Email all client users
+        </label>
+        <p v-if="emailAll" class="text-sm text-muted-color">
+          Everyone with client access to this workspace will get a separate email.
+        </p>
+        <div v-if="!emailAll" class="space-y-2">
+          <RecipientPicker
+            v-model="recipientEmail"
+            input-id="request-recipient"
+            :client-id="clientId"
+            current-client-only
+            label="Find a client user to email"
+            :disabled="saving || recipientEmails.length >= 100"
+          >
+            <template #action>
+              <Button
+                type="button"
+                label="Add recipient"
+                severity="secondary"
+                :disabled="saving || !recipientEmail.trim() || recipientEmails.length >= 100"
+                @click="addRecipient"
+              />
+            </template>
+          </RecipientPicker>
+          <ul
+            v-if="recipientEmails.length"
+            aria-label="Selected recipients"
+            class="flex flex-wrap gap-2"
+          >
+            <li
+              v-for="address in recipientEmails"
+              :key="address"
+              class="flex items-center gap-1 rounded-md bg-surface-100 pl-2 text-sm dark:bg-surface-800"
+            >
+              <span class="min-w-0 wrap-anywhere">{{ address }}</span>
+              <Button
+                label="Remove"
+                :aria-label="`Remove ${address}`"
+                type="button"
+                size="small"
+                variant="text"
+                severity="secondary"
+                :disabled="saving"
+                @click="recipientEmails = recipientEmails.filter((entry) => entry !== address)"
+              />
+            </li>
+          </ul>
+          <p class="text-sm text-muted-color">
+            {{
+              recipientEmail.trim()
+                ? 'Use Add recipient to include this address.'
+                : 'Leave the list empty to copy and share the link yourself.'
+            }}
+          </p>
+        </div>
+      </fieldset>
       <div class="flex flex-wrap gap-2">
         <Button
-          type="button"
-          label="Add another item"
-          severity="secondary"
-          :disabled="draft.length >= 30"
-          @click="draft.push(newRow())"
+          type="submit"
+          label="Create request"
+          :disabled="saving || editingFolder || (!emailAll && !!recipientEmail.trim())"
         />
-        <Button type="submit" label="Create request" :disabled="saving" />
         <Button
           type="button"
           label="Cancel"

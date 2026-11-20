@@ -45,10 +45,11 @@ type DocumentRequestService struct {
 }
 
 type DocumentRequestInput struct {
-	Title          string                     `json:"title"`
-	FolderName     string                     `json:"folder_name"`
-	RecipientEmail string                     `json:"recipient_email"`
-	Items          []DocumentRequestItemInput `json:"items"`
+	Title           string                     `json:"title"`
+	FolderName      string                     `json:"folder_name"`
+	EmailAll        bool                       `json:"email_all"`
+	RecipientEmails []string                   `json:"recipient_emails"`
+	Items           []DocumentRequestItemInput `json:"items"`
 }
 
 type DocumentRequestItemInput struct {
@@ -65,6 +66,7 @@ type DocumentRequestView struct {
 	FolderID    string                    `json:"folder_id,omitempty"`
 	FolderName  string                    `json:"folder_name,omitempty"`
 	EmailStatus string                    `json:"email_status,omitempty"`
+	EmailCount  int                       `json:"email_count,omitempty"`
 	Items       []DocumentRequestItemView `json:"items"`
 }
 
@@ -110,6 +112,56 @@ func (s *DocumentRequestService) token(tenantID, requestID string) string {
 	return links.DocumentRequestToken(s.SigningKey, tenantID, requestID)
 }
 
+func documentRequestRecipients(ctx context.Context, db *gorm.DB, req AccessRequest, input DocumentRequestInput) ([]models.User, error) {
+	if !input.EmailAll && len(input.RecipientEmails) == 0 {
+		return nil, nil
+	}
+	query := db.Where("tenant_id = ? AND role IN ?", req.TenantID, []string{"client", "customer"})
+	associations := db.Table("(?) AS associations", recipientAssociations(db, req.TenantID)).
+		Select("user_id").Where("client_id = ?", req.ClientID)
+	query = query.Where("id IN (?)", associations)
+	requested := make(map[string]bool)
+	if !input.EmailAll {
+		addresses := make([]string, 0, len(input.RecipientEmails))
+		for _, value := range input.RecipientEmails {
+			address := strings.ToLower(email.CommentNotificationAddress(value))
+			if address == "" {
+				return nil, ErrDocumentRequestRecipient
+			}
+			if !requested[address] {
+				requested[address] = true
+				addresses = append(addresses, address)
+			}
+		}
+		query = query.Where("LOWER(email) IN ?", addresses)
+	}
+	var users []models.User
+	if err := query.Order("id").Find(&users).Error; err != nil {
+		return nil, err
+	}
+	now := time.Now()
+	recipients := users[:0]
+	seen := make(map[string]bool)
+	for _, user := range users {
+		address := strings.ToLower(email.CommentNotificationAddress(user.Email))
+		if address == "" || seen[address] {
+			continue
+		}
+		allowed, err := email.DocumentRequestRecipient(ctx, db, req.ClientID, user, now)
+		if err != nil {
+			return nil, err
+		}
+		if allowed {
+			seen[address] = true
+			recipients = append(recipients, user)
+		}
+	}
+	if !input.EmailAll && len(recipients) != len(requested) {
+		return nil, ErrDocumentRequestRecipient
+	}
+	return recipients, nil
+}
+
 func (s *DocumentRequestService) Create(ctx context.Context, req AccessRequest, input DocumentRequestInput) (*DocumentRequestView, error) {
 	input.Title = strings.TrimSpace(input.Title)
 	if s.SigningKey == "" || input.Title == "" || utf8.RuneCountInString(input.Title) > 160 || len(input.Items) == 0 || len(input.Items) > 30 {
@@ -122,8 +174,11 @@ func (s *DocumentRequestService) Create(ctx context.Context, req AccessRequest, 
 	if len(name) > 255 || LogicalName(name) != nil || strings.ContainsAny(name, "\r\n") {
 		return nil, ErrDocumentRequestFolder
 	}
-	address := strings.TrimSpace(input.RecipientEmail)
+	if len(input.RecipientEmails) > 100 || (input.EmailAll && len(input.RecipientEmails) != 0) {
+		return nil, ErrDocumentRequestInput
+	}
 	emailStatus := ""
+	emailCount := 0
 	row := models.DocumentRequest{
 		ID: ids.NewULID(), TenantID: req.TenantID, ClientID: req.ClientID, Title: input.Title,
 		CreatedBy: req.Actor.UserID, ExpiresAt: time.Now().UTC().Add(30 * 24 * time.Hour),
@@ -143,26 +198,9 @@ func (s *DocumentRequestService) Create(ctx context.Context, req AccessRequest, 
 		if err := s.staff(ctx, tx, req, true); err != nil {
 			return err
 		}
-		var recipient *models.User
-		if address != "" {
-			if email.CommentNotificationAddress(address) == "" {
-				return ErrDocumentRequestRecipient
-			}
-			var users []models.User
-			if err := tx.Where("tenant_id = ? AND LOWER(email) = ?", row.TenantID, strings.ToLower(address)).Limit(2).Find(&users).Error; err != nil {
-				return err
-			}
-			if len(users) != 1 {
-				return ErrDocumentRequestRecipient
-			}
-			allowed, err := email.DocumentRequestRecipient(ctx, tx, row.ClientID, users[0], time.Now())
-			if err != nil {
-				return err
-			}
-			if !allowed {
-				return ErrDocumentRequestRecipient
-			}
-			recipient = &users[0]
+		recipients, err := documentRequestRecipients(ctx, tx, req, input)
+		if err != nil {
+			return err
 		}
 		var client models.Client
 		if err := tx.Where("tenant_id = ? AND id = ?", row.TenantID, row.ClientID).First(&client).Error; err != nil {
@@ -192,21 +230,30 @@ func (s *DocumentRequestService) Create(ctx context.Context, req AccessRequest, 
 		if err := tx.Create(&items).Error; err != nil {
 			return err
 		}
-		if recipient == nil {
+		if len(recipients) == 0 {
+			if input.EmailAll {
+				emailStatus = "no_recipients"
+			}
 			return nil
 		}
 		if s.NotificationBaseURL == "" {
 			emailStatus = "unavailable"
 			return nil
 		}
-		key := "document-request:" + row.ID
 		emailStatus = "queued"
-		return tx.Create(&models.QueuedEmail{
-			TenantID: row.TenantID, ClientID: &row.ClientID, DocumentRequestID: &row.ID,
-			Recipient: recipient.Email, RecipientUserID: &recipient.ID, Subject: "New document request",
-			ScheduledFor: time.Now().UTC(), DeduplicationKey: &key,
-			EventType: email.DocumentRequestNotification, NotificationBaseURL: s.NotificationBaseURL,
-		}).Error
+		emailCount = len(recipients)
+		deliveries := make([]models.QueuedEmail, 0, emailCount)
+		now := time.Now().UTC()
+		for _, recipient := range recipients {
+			key := "document-request:" + row.ID + ":" + recipient.ID
+			deliveries = append(deliveries, models.QueuedEmail{
+				TenantID: row.TenantID, ClientID: &row.ClientID, DocumentRequestID: &row.ID,
+				Recipient: recipient.Email, RecipientUserID: &recipient.ID, Subject: "New document request",
+				ScheduledFor: now, DeduplicationKey: &key,
+				EventType: email.DocumentRequestNotification, NotificationBaseURL: s.NotificationBaseURL,
+			})
+		}
+		return tx.CreateInBatches(&deliveries, 25).Error
 	})
 	if err != nil {
 		return nil, err
@@ -214,6 +261,7 @@ func (s *DocumentRequestService) Create(ctx context.Context, req AccessRequest, 
 	view, err := s.StaffView(ctx, req, row.ID)
 	if err == nil {
 		view.EmailStatus = emailStatus
+		view.EmailCount = emailCount
 	}
 	return view, err
 }
