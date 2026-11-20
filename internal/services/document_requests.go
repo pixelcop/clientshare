@@ -46,6 +46,7 @@ type DocumentRequestService struct {
 
 type DocumentRequestInput struct {
 	Title           string                     `json:"title"`
+	Description     string                     `json:"description"`
 	FolderName      string                     `json:"folder_name"`
 	EmailAll        bool                       `json:"email_all"`
 	RecipientEmails []string                   `json:"recipient_emails"`
@@ -58,16 +59,24 @@ type DocumentRequestItemInput struct {
 }
 
 type DocumentRequestView struct {
-	ID          string                    `json:"id,omitempty"`
-	Title       string                    `json:"title"`
-	ExpiresAt   time.Time                 `json:"expires_at"`
-	Revoked     bool                      `json:"revoked,omitempty"`
-	Link        string                    `json:"link,omitempty"`
-	FolderID    string                    `json:"folder_id,omitempty"`
-	FolderName  string                    `json:"folder_name,omitempty"`
-	EmailStatus string                    `json:"email_status,omitempty"`
-	EmailCount  int                       `json:"email_count,omitempty"`
-	Items       []DocumentRequestItemView `json:"items"`
+	ID          string                      `json:"id,omitempty"`
+	Title       string                      `json:"title"`
+	Description string                      `json:"description,omitempty"`
+	Updates     []DocumentRequestUpdateView `json:"updates,omitempty"`
+	ExpiresAt   time.Time                   `json:"expires_at"`
+	Revoked     bool                        `json:"revoked,omitempty"`
+	Link        string                      `json:"link,omitempty"`
+	FolderID    string                      `json:"folder_id,omitempty"`
+	FolderName  string                      `json:"folder_name,omitempty"`
+	EmailStatus string                      `json:"email_status,omitempty"`
+	EmailCount  int                         `json:"email_count,omitempty"`
+	Items       []DocumentRequestItemView   `json:"items"`
+}
+
+type DocumentRequestUpdateView struct {
+	ID          string    `json:"id"`
+	Description string    `json:"description"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 type DocumentRequestItemView struct {
@@ -164,7 +173,8 @@ func documentRequestRecipients(ctx context.Context, db *gorm.DB, req AccessReque
 
 func (s *DocumentRequestService) Create(ctx context.Context, req AccessRequest, input DocumentRequestInput) (*DocumentRequestView, error) {
 	input.Title = strings.TrimSpace(input.Title)
-	if s.SigningKey == "" || input.Title == "" || utf8.RuneCountInString(input.Title) > 160 || len(input.Items) == 0 || len(input.Items) > 30 {
+	input.Description = strings.TrimSpace(input.Description)
+	if s.SigningKey == "" || input.Title == "" || utf8.RuneCountInString(input.Title) > 160 || utf8.RuneCountInString(input.Description) > 4000 {
 		return nil, ErrDocumentRequestInput
 	}
 	name := strings.TrimSpace(input.FolderName)
@@ -180,18 +190,14 @@ func (s *DocumentRequestService) Create(ctx context.Context, req AccessRequest, 
 	emailStatus := ""
 	emailCount := 0
 	row := models.DocumentRequest{
-		ID: ids.NewULID(), TenantID: req.TenantID, ClientID: req.ClientID, Title: input.Title,
+		ID: ids.NewULID(), TenantID: req.TenantID, ClientID: req.ClientID, Title: input.Title, Description: input.Description,
 		CreatedBy: req.Actor.UserID, ExpiresAt: time.Now().UTC().Add(30 * 24 * time.Hour),
 	}
-	items := make([]models.DocumentRequestItem, 0, len(input.Items))
-	for position, item := range input.Items {
-		item.Name, item.Instructions = strings.TrimSpace(item.Name), strings.TrimSpace(item.Instructions)
-		if item.Name == "" || utf8.RuneCountInString(item.Name) > 160 || utf8.RuneCountInString(item.Instructions) > 1000 {
-			return nil, ErrDocumentRequestInput
-		}
-		items = append(items, models.DocumentRequestItem{RequestID: row.ID, Position: position, Name: item.Name, Instructions: item.Instructions, Status: requestNeeded, Round: 1})
+	items, err := newRequestItems(row.ID, input.Items)
+	if err != nil {
+		return nil, err
 	}
-	err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err = s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := LockTenantAccess(tx, req.TenantID); err != nil {
 			return err
 		}
@@ -243,24 +249,8 @@ func (s *DocumentRequestService) Create(ctx context.Context, req AccessRequest, 
 		if err := recordDocumentRequestActivity(ctx, tx, row, models.FeedEventTypeRequestCreated, models.FeedEventSourceTypeDocumentRequest, row.ID, &row.CreatedBy, users, row.CreatedAt); err != nil {
 			return err
 		}
-		if s.NotificationBaseURL == "" {
-			emailStatus = "unavailable"
-			return nil
-		}
-		emailStatus = "queued"
-		emailCount = len(recipients)
-		deliveries := make([]models.QueuedEmail, 0, emailCount)
-		now := time.Now().UTC()
-		for _, recipient := range recipients {
-			key := "document-request:" + row.ID + ":" + recipient.ID
-			deliveries = append(deliveries, models.QueuedEmail{
-				TenantID: row.TenantID, ClientID: &row.ClientID, DocumentRequestID: &row.ID,
-				Recipient: recipient.Email, RecipientUserID: &recipient.ID, Subject: "New document request",
-				ScheduledFor: now, DeduplicationKey: &key,
-				EventType: email.DocumentRequestNotification, NotificationBaseURL: s.NotificationBaseURL,
-			})
-		}
-		return tx.CreateInBatches(&deliveries, 25).Error
+		emailStatus, emailCount, err = s.queueRequestEmails(tx, row, recipients, nil)
+		return err
 	})
 	if err != nil {
 		return nil, err
@@ -352,7 +342,11 @@ func (s *DocumentRequestService) view(db *gorm.DB, row models.DocumentRequest, s
 	if err := db.Where("request_id = ?", row.ID).Order("position").Find(&items).Error; err != nil {
 		return nil, err
 	}
-	view := &DocumentRequestView{Title: row.Title, ExpiresAt: row.ExpiresAt, Items: make([]DocumentRequestItemView, 0, len(items))}
+	view := &DocumentRequestView{Title: row.Title, Description: row.Description, ExpiresAt: row.ExpiresAt, Items: make([]DocumentRequestItemView, 0, len(items))}
+	if err := db.Model(&models.DocumentRequestUpdate{}).Where("request_id = ? AND description <> ''", row.ID).
+		Order("created_at DESC, id DESC").Find(&view.Updates).Error; err != nil {
+		return nil, err
+	}
 	if staff {
 		view.ID, view.Revoked = row.ID, row.RevokedAt != nil
 		folder, err := requestFolder(db, row.TenantID, row.ClientID, row.FolderID)
@@ -361,7 +355,7 @@ func (s *DocumentRequestService) view(db *gorm.DB, row models.DocumentRequest, s
 		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, err
 		}
-		if !view.Revoked && row.ExpiresAt.After(time.Now()) {
+		if view.FolderID != "" && !view.Revoked && row.ExpiresAt.After(time.Now()) {
 			view.Link = "/document-request#token=" + s.token(row.TenantID, row.ID)
 		}
 	}

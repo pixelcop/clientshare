@@ -21,7 +21,7 @@ import (
 
 func TestDocumentRequestCollectionAndReview(t *testing.T) {
 	env := setupSharedHandlersEnv(t)
-	require.NoError(t, env.db.AutoMigrate(&models.DocumentRequest{}, &models.DocumentRequestItem{}, &models.DocumentRequestFile{}, &models.DocumentRequestReview{}))
+	require.NoError(t, env.db.AutoMigrate(&models.DocumentRequest{}, &models.DocumentRequestItem{}, &models.DocumentRequestFile{}, &models.DocumentRequestReview{}, &models.DocumentRequestUpdate{}))
 	staff := "/api/clients/" + env.client.ID + "/document-requests"
 	const recipient = "/api/document-request"
 
@@ -43,12 +43,13 @@ func TestDocumentRequestCollectionAndReview(t *testing.T) {
 		return view
 	}
 
-	input := `{"title":"October close","recipient_emails":["` + env.clientUser.Email + `"],"items":[{"name":"Bank statement","instructions":"Every page"},{"name":"Payroll summary"}]}`
+	input := `{"title":"October close","description":"Please use PDFs if possible.","recipient_emails":["` + env.clientUser.Email + `"],"items":[{"name":"Bank statement","instructions":"Every page"},{"name":"Payroll summary"}]}`
 	do(jsonAuthRequest("POST", staff, env.clientToken, json.RawMessage(input)), 404)
 	do(jsonAuthRequest("POST", staff, env.linkToken, json.RawMessage(input)), 404)
 	view := decode(do(jsonAuthRequest("POST", staff, env.managerToken, json.RawMessage(input)), 201))
 	require.Len(t, view.Items, 2)
 	require.Equal(t, "October close", view.FolderName)
+	require.Equal(t, "Please use PDFs if possible.", view.Description)
 	require.NotEmpty(t, view.FolderID)
 	do(jsonAuthRequest("POST", staff, env.managerToken, json.RawMessage(input)), 409)
 	override := `{"title":"October close","folder_name":"2026 October uploads","items":[{"name":"Another file"}]}`
@@ -160,10 +161,26 @@ func TestDocumentRequestCollectionAndReview(t *testing.T) {
 	do(public("GET", "/api/files/"+fileID, ""), 401)
 	data := do(jsonAuthRequest("GET", "/api/files/"+fileID+"/download", env.managerToken, nil), 200)
 	require.Equal(t, "sample file material", string(data))
+	addition := json.RawMessage(`{"description":"Please also include October invoices.","items":[{"name":"October invoices"}]}`)
+	do(jsonAuthRequest("POST", staff+"/additions", env.clientToken, addition), 404)
+	expanded := decode(do(jsonAuthRequest("POST", staff+"/additions", env.adminToken, addition), 201))
+	require.Equal(t, view.Link, expanded.Link)
+	require.Equal(t, view.FolderID, expanded.FolderID)
+	expanded = decode(do(public("GET", recipient, ""), 200))
+	require.Equal(t, "Please use PDFs if possible.", expanded.Description)
+	require.Len(t, expanded.Updates, 1)
+	require.Equal(t, "Please also include October invoices.", expanded.Updates[0].Description)
+	require.Len(t, expanded.Items, 3)
+	require.Equal(t, "accepted", expanded.Items[0].Status)
+	require.Equal(t, "accepted", expanded.Items[1].Status)
+	require.Equal(t, "needed", expanded.Items[2].Status)
+	require.Equal(t, "October invoices", expanded.Items[2].Name)
+	activity(env.clientToken, models.FeedEventTypeRequestCreated, models.FeedEventTypeRequestAccepted, models.FeedEventTypeRequestReplacement, models.FeedEventTypeRequestAccepted, models.FeedEventTypeRequestUpdated)
 	require.NoError(t, env.db.Model(&models.DocumentRequest{}).Where("id = ?", view.ID).Update("expires_at", time.Now().Add(-time.Minute)).Error)
 	do(public("GET", recipient, ""), 404)
 	require.NoError(t, env.db.Model(&models.DocumentRequest{}).Where("id = ?", view.ID).Update("expires_at", time.Now().Add(time.Hour)).Error)
 	do(jsonAuthRequest("POST", staff+"/revoke", env.adminToken, nil), 204)
+	do(jsonAuthRequest("POST", staff+"/additions", env.adminToken, addition), 404)
 	do(public("GET", recipient, ""), 404)
 	do(jsonAuthRequest("GET", accountPath, env.clientToken, nil), 404)
 	activity(env.clientToken)
@@ -181,14 +198,14 @@ func (s *documentRequestSender) Send(msg email.Email) error {
 
 func TestDocumentRequestEmailsOnlySelectedEligibleRecipient(t *testing.T) {
 	env := setupSharedHandlersEnv(t)
-	require.NoError(t, env.db.AutoMigrate(&models.DocumentRequest{}, &models.DocumentRequestItem{}, &models.DocumentRequestFile{}, &models.DocumentRequestReview{}))
+	require.NoError(t, env.db.AutoMigrate(&models.DocumentRequest{}, &models.DocumentRequestItem{}, &models.DocumentRequestFile{}, &models.DocumentRequestReview{}, &models.DocumentRequestUpdate{}))
 	svc := &services.DocumentRequestService{DB: env.db, Store: storage.NewLocalStorage(env.storageRoot), SigningKey: env.signingKey, NotificationBaseURL: "https://portal.example.test"}
 	req := services.AccessRequest{
 		TenantID: env.client.TenantID, ClientID: env.client.ID,
 		Actor: services.AccessActor{UserID: env.adminUser.ID},
 	}
 	in := services.DocumentRequestInput{
-		Title: "Bank documents", RecipientEmails: []string{env.otherClientUser.Email},
+		Title: "Bank documents", Description: "Use the final statement.", RecipientEmails: []string{env.otherClientUser.Email},
 		Items: []services.DocumentRequestItemInput{{Name: "Bank statement"}},
 	}
 	_, err := svc.Create(t.Context(), req, in)
@@ -210,6 +227,22 @@ func TestDocumentRequestEmailsOnlySelectedEligibleRecipient(t *testing.T) {
 	require.NoError(t, queue.SendNow(req.TenantID, items[0].ID))
 	require.Len(t, sender.messages, 1)
 	require.Contains(t, sender.messages[0].Body, "https://portal.example.test"+result.Link)
+	require.Contains(t, sender.messages[0].Body, in.Description)
+	update, err := svc.AddItems(t.Context(), req, result.ID, services.DocumentRequestAddition{
+		Description: "Include the full invoice.",
+		Items:       []services.DocumentRequestItemInput{{Name: "Invoice"}},
+	})
+	require.NoError(t, err)
+	require.Equal(t, 1, update.EmailCount)
+	var updateEmail models.QueuedEmail
+	require.NoError(t, env.db.Where("document_request_id = ? AND document_request_update_id IS NOT NULL", result.ID).First(&updateEmail).Error)
+	require.Empty(t, updateEmail.Body)
+	require.NoError(t, queue.SendNow(req.TenantID, updateEmail.ID))
+	require.Len(t, sender.messages, 2)
+	require.Equal(t, "More documents requested", sender.messages[1].Subject)
+	require.Contains(t, sender.messages[1].Body, "Include the full invoice.")
+	require.NotContains(t, sender.messages[1].Body, in.Description)
+	require.Contains(t, sender.messages[1].Body, "https://portal.example.test"+result.Link)
 
 	in.FolderName = "Second bank request"
 	in.EmailAll, in.RecipientEmails = true, nil
@@ -223,7 +256,7 @@ func TestDocumentRequestEmailsOnlySelectedEligibleRecipient(t *testing.T) {
 	require.NoError(t, env.db.Where("document_request_id = ?", result.ID).First(&canceled).Error)
 	require.NoError(t, svc.Revoke(t.Context(), req, result.ID))
 	require.NoError(t, queue.SendNow(req.TenantID, canceled.ID))
-	require.Len(t, sender.messages, 1)
+	require.Len(t, sender.messages, 2)
 	require.NoError(t, env.db.First(&canceled, "id = ?", canceled.ID).Error)
 	require.NotNil(t, canceled.CanceledAt)
 }

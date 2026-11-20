@@ -7,25 +7,39 @@ import (
 )
 
 var DocumentRequest = struct {
-	ID        field.String
-	TenantID  field.String
-	ClientID  field.String
-	FolderID  field.String
-	Title     field.String
-	CreatedBy field.String
-	CreatedAt field.Time
-	ExpiresAt field.Time
-	RevokedAt field.Time
+	ID          field.String
+	TenantID    field.String
+	ClientID    field.String
+	FolderID    field.String
+	Title       field.String
+	Description field.String
+	CreatedBy   field.String
+	CreatedAt   field.Time
+	ExpiresAt   field.Time
+	RevokedAt   field.Time
 }{
-	ID:        field.String{}.WithColumn("id"),
-	TenantID:  field.String{}.WithColumn("tenant_id"),
-	ClientID:  field.String{}.WithColumn("client_id"),
-	FolderID:  field.String{}.WithColumn("folder_id"),
-	Title:     field.String{}.WithColumn("title"),
-	CreatedBy: field.String{}.WithColumn("created_by"),
-	CreatedAt: field.Time{}.WithColumn("created_at"),
-	ExpiresAt: field.Time{}.WithColumn("expires_at"),
-	RevokedAt: field.Time{}.WithColumn("revoked_at"),
+	ID:          field.String{}.WithColumn("id"),
+	TenantID:    field.String{}.WithColumn("tenant_id"),
+	ClientID:    field.String{}.WithColumn("client_id"),
+	FolderID:    field.String{}.WithColumn("folder_id"),
+	Title:       field.String{}.WithColumn("title"),
+	Description: field.String{}.WithColumn("description"),
+	CreatedBy:   field.String{}.WithColumn("created_by"),
+	CreatedAt:   field.Time{}.WithColumn("created_at"),
+	ExpiresAt:   field.Time{}.WithColumn("expires_at"),
+	RevokedAt:   field.Time{}.WithColumn("revoked_at"),
+}
+
+var DocumentRequestUpdate = struct {
+	ID          field.String
+	RequestID   field.String
+	Description field.String
+	CreatedAt   field.Time
+}{
+	ID:          field.String{}.WithColumn("id"),
+	RequestID:   field.String{}.WithColumn("request_id"),
+	Description: field.String{}.WithColumn("description"),
+	CreatedAt:   field.Time{}.WithColumn("created_at"),
 }
 
 var DocumentRequestItem = struct {

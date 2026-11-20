@@ -109,6 +109,20 @@ func hydrateRequestActivity(ctx context.Context, db *gorm.DB, user models.User, 
 		if event.EventType != models.FeedEventTypeRequestCreated {
 			return false, nil
 		}
+	case models.FeedEventSourceTypeDocumentRequestUpdate:
+		if event.EventType != models.FeedEventTypeRequestUpdated {
+			return false, nil
+		}
+		var update models.DocumentRequestUpdate
+		err := db.Select("document_request_updates.request_id").Joins("JOIN document_requests dr ON dr.id = document_request_updates.request_id").
+			Where("dr.tenant_id = ? AND dr.client_id = ? AND document_request_updates.id = ?", event.TenantID, *event.ClientID, event.SourceID).First(&update).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return false, nil
+		}
+		if err != nil {
+			return false, err
+		}
+		requestID = update.RequestID
 	case models.FeedEventSourceTypeDocumentRequestItem:
 		itemID, _, ok := strings.Cut(event.SourceID, ":")
 		if !ok {

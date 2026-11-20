@@ -30,6 +30,7 @@ func RegisterDocumentRequestRoutes(public, staff fiber.Router, db *gorm.DB, stor
 	management.Post("/", h.Create)
 	management.Get("/:requestID", h.StaffView)
 	management.Post("/:requestID/revoke", h.Revoke)
+	management.Post("/:requestID/additions", h.AddItems)
 	management.Post("/:requestID/items/:itemID/review", h.Review)
 	staff.Get("/my-document-requests/:requestID/link", middleware.AuthRequired, h.AccountLink)
 
@@ -64,7 +65,7 @@ func documentRequestError(c fiber.Ctx, err error) error {
 		return c.Status(404).JSON(fiber.Map{"error": "Document request not found or no longer available"})
 	case errors.Is(err, services.ErrDocumentRequestInput), errors.Is(err, services.ErrDocumentRequestFolder), errors.Is(err, services.ErrDocumentRequestRecipient):
 		return c.Status(400).JSON(fiber.Map{"error": err.Error()})
-	case errors.Is(err, services.ErrDocumentRequestConflict), errors.Is(err, services.ErrDocumentRequestFiles), errors.Is(err, services.ErrDocumentRequestFolderExists):
+	case errors.Is(err, services.ErrDocumentRequestConflict), errors.Is(err, services.ErrDocumentRequestFiles), errors.Is(err, services.ErrDocumentRequestFolderExists), errors.Is(err, services.ErrDocumentRequestItemLimit):
 		return c.Status(409).JSON(fiber.Map{"error": err.Error()})
 	case respondQuotaError(c, err):
 		return nil
@@ -86,6 +87,15 @@ func (h *DocumentRequestsHandler) Create(c fiber.Ctx) error {
 	if err := c.Bind().JSON(&input); err != nil {
 		return documentRequestError(c, services.ErrDocumentRequestInput)
 	}
+	service := h.withEmail(c)
+	view, err := service.Create(c.Context(), documentRequestActor(c), input)
+	if err != nil {
+		return documentRequestError(c, err)
+	}
+	return c.Status(201).JSON(view)
+}
+
+func (h *DocumentRequestsHandler) withEmail(c fiber.Ctx) services.DocumentRequestService {
 	service := *h.service
 	if h.emailEnabled {
 		service.NotificationBaseURL = normalizeAbsoluteURL(h.emailBaseURL)
@@ -93,7 +103,16 @@ func (h *DocumentRequestsHandler) Create(c fiber.Ctx) error {
 			service.NotificationBaseURL = normalizeAbsoluteURL(resolved.PublicBaseURL)
 		}
 	}
-	view, err := service.Create(c.Context(), documentRequestActor(c), input)
+	return service
+}
+
+func (h *DocumentRequestsHandler) AddItems(c fiber.Ctx) error {
+	var input services.DocumentRequestAddition
+	if err := c.Bind().JSON(&input); err != nil {
+		return documentRequestError(c, services.ErrDocumentRequestInput)
+	}
+	service := h.withEmail(c)
+	view, err := service.AddItems(c.Context(), documentRequestActor(c), c.Params("requestID"), input)
 	if err != nil {
 		return documentRequestError(c, err)
 	}

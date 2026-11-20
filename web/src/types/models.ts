@@ -203,10 +203,17 @@ export interface DocumentRequest {
   ClientID: string;
   FolderID: string;
   Title: string;
+  Description: string;
   CreatedBy: string;
   CreatedAt: string;
   ExpiresAt: string;
   RevokedAt?: string;
+}
+export interface DocumentRequestUpdate {
+  ID: string;
+  RequestID: string;
+  Description: string;
+  CreatedAt: string;
 }
 export interface DocumentRequestItem {
   ID: string;
@@ -242,6 +249,7 @@ export interface DocumentRequestReview {
 export const FeedEventTypeFileUploaded = "file_uploaded";
 export const FeedEventTypeInviteAccepted = "invite_accepted";
 export const FeedEventTypeRequestCreated = "request_created";
+export const FeedEventTypeRequestUpdated = "request_updated";
 export const FeedEventTypeRequestSubmitted = "request_submitted";
 export const FeedEventTypeRequestAccepted = "request_accepted";
 export const FeedEventTypeRequestReplacement = "request_replacement";
@@ -252,6 +260,7 @@ export const FeedEventSourceTypeFileUploadBatch = "file_upload_batch";
 export const FeedEventSourceTypeInviteToken = "invite_token";
 export const FeedEventSourceTypeDocumentRequest = "document_request";
 export const FeedEventSourceTypeDocumentRequestItem = "document_request_item";
+export const FeedEventSourceTypeDocumentRequestUpdate = "document_request_update";
 export const FeedEventSourceTypeFileComment = "file_comment";
 export const FeedStateUnread = "unread";
 export const FeedStateRead = "read";

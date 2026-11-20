@@ -108,7 +108,7 @@ func (s *FeedService) visibleFeedEvents(ctx context.Context, tenantID, userID, e
 	}
 	for _, event := range events {
 		switch event.EventType {
-		case models.FeedEventTypeRequestCreated, models.FeedEventTypeRequestSubmitted, models.FeedEventTypeRequestAccepted, models.FeedEventTypeRequestReplacement:
+		case models.FeedEventTypeRequestCreated, models.FeedEventTypeRequestUpdated, models.FeedEventTypeRequestSubmitted, models.FeedEventTypeRequestAccepted, models.FeedEventTypeRequestReplacement:
 			ok, err := hydrateRequestActivity(ctx, s.DB.WithContext(ctx), user, &event)
 			if err != nil {
 				return nil, err

@@ -8,15 +8,16 @@ import (
 )
 
 type DocumentRequest struct {
-	ID        string `gorm:"size:26;primaryKey"`
-	TenantID  string `gorm:"size:26;not null;index:idx_document_requests_client"`
-	ClientID  string `gorm:"size:26;not null;index:idx_document_requests_client"`
-	FolderID  string `gorm:"size:26;not null"`
-	Title     string `gorm:"size:160;not null"`
-	CreatedBy string `gorm:"size:26;not null"`
-	CreatedAt time.Time
-	ExpiresAt time.Time `gorm:"not null"`
-	RevokedAt *time.Time
+	ID          string `gorm:"size:26;primaryKey"`
+	TenantID    string `gorm:"size:26;not null;index:idx_document_requests_client"`
+	ClientID    string `gorm:"size:26;not null;index:idx_document_requests_client"`
+	FolderID    string `gorm:"size:26;not null"`
+	Title       string `gorm:"size:160;not null"`
+	Description string `gorm:"type:text"`
+	CreatedBy   string `gorm:"size:26;not null"`
+	CreatedAt   time.Time
+	ExpiresAt   time.Time `gorm:"not null"`
+	RevokedAt   *time.Time
 }
 
 func (r *DocumentRequest) BeforeCreate(_ *gorm.DB) error {
@@ -24,6 +25,13 @@ func (r *DocumentRequest) BeforeCreate(_ *gorm.DB) error {
 		r.ID = ids.NewULID()
 	}
 	return nil
+}
+
+type DocumentRequestUpdate struct {
+	ID          string `gorm:"size:26;primaryKey"`
+	RequestID   string `gorm:"size:26;not null;index"`
+	Description string `gorm:"type:text;not null"`
+	CreatedAt   time.Time
 }
 
 type DocumentRequestItem struct {
