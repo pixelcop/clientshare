@@ -503,10 +503,6 @@ onBeforeUnmount(() => clearTimeout(highlightTimer));
             data-sentry-mask
             @submit.prevent="send"
           >
-            <p v-if="visibility === 'shared'" class="audience-help">
-              On a document request upload, anyone with the active request link can read shared
-              comments.
-            </p>
             <p v-if="teamDraftUnavailable" role="status" class="audience-help">
               Team-note access changed. Copy your draft, or clear it before writing a shared
               comment.
