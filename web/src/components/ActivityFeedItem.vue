@@ -169,7 +169,12 @@ const actionLabel = computed(() => {
         </div>
 
         <div v-if="primaryLabel" class="text-sm font-semibold">
-          <RouterLink v-if="requestRoute" :to="requestRoute" class="hover:underline">
+          <RouterLink
+            v-if="requestRoute"
+            :to="requestRoute"
+            class="hover:underline"
+            @click="handleMarkRead(item)"
+          >
             {{ primaryLabel }}
           </RouterLink>
           <RouterLink
@@ -180,16 +185,18 @@ const actionLabel = computed(() => {
               hash: `#comment-${item.source_id}`,
             }"
             class="hover:underline"
+            @click="handleMarkRead(item)"
           >
             {{ primaryLabel }}
           </RouterLink>
-          <a
+          <RouterLink
             v-else-if="isFileUploaded && !isGroupedFileUpload && item.file_id"
-            :href="`/files/${item.file_id}`"
+            :to="`/files/${item.file_id}`"
             class="hover:underline"
+            @click="handleMarkRead(item)"
           >
             {{ primaryLabel }}
-          </a>
+          </RouterLink>
           <template v-else>
             {{ primaryLabel }}
           </template>
@@ -200,9 +207,14 @@ const actionLabel = computed(() => {
           class="flex flex-wrap gap-x-3 gap-y-1 text-sm text-muted-color"
         >
           <template v-for="file in visibleGroupedFiles" :key="file.id || file.path">
-            <a v-if="file.id" :href="`/files/${file.id}`" class="hover:underline">
+            <RouterLink
+              v-if="file.id"
+              :to="`/files/${file.id}`"
+              class="hover:underline"
+              @click="handleMarkRead(item)"
+            >
               {{ fileName(file.path) }}
-            </a>
+            </RouterLink>
             <span v-else>{{ fileName(file.path) }}</span>
           </template>
           <span v-if="hiddenGroupedFileCount > 0">+{{ hiddenGroupedFileCount }} more</span>

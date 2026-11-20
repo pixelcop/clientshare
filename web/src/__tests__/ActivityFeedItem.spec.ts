@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import ActivityFeedItem from '../components/ActivityFeedItem.vue';
 import { useActivitiesStore } from '../stores/activities';
@@ -24,6 +24,11 @@ function buildUploadEvent(overrides: Partial<FeedEvent> = {}): FeedEvent {
   };
 }
 
+const RouterLink = {
+  props: ['to'],
+  template: "<a :href=\"typeof to === 'string' ? to : '#'\" @click.prevent><slot /></a>",
+};
+
 describe('ActivityFeedItem', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
@@ -42,6 +47,7 @@ describe('ActivityFeedItem', () => {
       },
       global: {
         stubs: {
+          RouterLink,
           Button: {
             template: '<button><slot /></button>',
           },
@@ -63,6 +69,7 @@ describe('ActivityFeedItem', () => {
       },
       global: {
         stubs: {
+          RouterLink,
           Button: {
             template: '<button><slot /></button>',
           },
@@ -93,6 +100,7 @@ describe('ActivityFeedItem', () => {
       },
       global: {
         stubs: {
+          RouterLink,
           Button: {
             template: '<button><slot /></button>',
           },
@@ -105,5 +113,42 @@ describe('ActivityFeedItem', () => {
     expect(wrapper.find('a[href="/files/file_2"]').exists()).toBe(true);
     expect(wrapper.text()).toContain('report.pdf');
     expect(wrapper.text()).toContain('invoice.pdf');
+  });
+
+  it.each([
+    { file_id: 'file_1' },
+    { event_type: 'file_comment', file_id: 'file_1' },
+    {
+      event_type: 'request_created',
+      request_open: true,
+      request_id: 'request_1',
+      request_title: 'October close',
+    },
+    {
+      source_type: FeedEventSourceTypeFileUploadBatch,
+      files: [
+        { id: 'file_1', path: 'report.pdf' },
+        { id: 'file_2', path: 'invoice.pdf' },
+      ],
+    },
+  ])('marks the activity as read when opening its link (%o)', async (overrides) => {
+    const markRead = vi.spyOn(useActivitiesStore(), 'markRead').mockResolvedValue(undefined);
+    const wrapper = mount(ActivityFeedItem, {
+      props: { item: buildUploadEvent(overrides) },
+      global: { stubs: { RouterLink, Button: true } },
+    });
+
+    await wrapper.get('a').trigger('click');
+    expect(markRead).toHaveBeenCalledExactlyOnceWith('evt_1');
+  });
+
+  it('does not mark an already-read item again', async () => {
+    const markRead = vi.spyOn(useActivitiesStore(), 'markRead').mockResolvedValue(undefined);
+    const wrapper = mount(ActivityFeedItem, {
+      props: { item: buildUploadEvent({ file_id: 'file_1', is_read: true }) },
+      global: { stubs: { RouterLink, Button: true } },
+    });
+    await wrapper.get('a').trigger('click');
+    expect(markRead).not.toHaveBeenCalled();
   });
 });
