@@ -561,7 +561,7 @@ func (h *FileHandler) UploadFiles(c fiber.Ctx) error {
 		fileRecord := &models.File{
 			TenantID: tenantID, ClientID: client.ID, UserID: &userID,
 			FolderID: &folder.ID, Filename: filename, Path: dstPath,
-			Type: "file", UploadedAt: time.Now(),
+			Type: "file", UploadedAt: time.Now().UTC(),
 			UploadSessionID: accessSessionID(c),
 		}
 		err = services.UploadFile(c.Context(), h.db, tenantStore, fileRecord, f, file.Size)
@@ -701,7 +701,7 @@ func (h *FileHandler) CreateFolder(c fiber.Ctx) error {
 		Path:            subPath,
 		Type:            "folder",
 		Size:            0,
-		UploadedAt:      time.Now(),
+		UploadedAt:      time.Now().UTC(),
 		UploadSessionID: accessSessionID(c),
 	}
 	if folderRecord, err = h.fileService.CreateFolderRecord(c.Context(), folderRecord); err != nil {

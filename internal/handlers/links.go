@@ -205,7 +205,7 @@ func (h *LinkHandler) CreateSecureLink(c fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
 	createdBy := fiber.Locals[string](c, "user_id")
-	expiry := time.Now().Add(time.Duration(body.ExpiryDays) * 24 * time.Hour)
+	expiry := time.Now().UTC().Add(time.Duration(body.ExpiryDays) * 24 * time.Hour)
 	if body.ExpiresAt != nil {
 		expiry = body.ExpiresAt.UTC()
 		if !expiry.After(time.Now()) || expiry.After(time.Now().Add(time.Duration(services.MaxSecureLinkDefaultExpiryDays)*24*time.Hour)) {
@@ -226,7 +226,7 @@ func (h *LinkHandler) CreateSecureLink(c fiber.Ctx) error {
 		ExpiresAt:    expiry,
 		AccessType:   body.AccessType,
 		CreatedBy:    createdBy,
-		CreatedAt:    time.Now(),
+		CreatedAt:    time.Now().UTC(),
 		CreationKey:  creationKey,
 		CreationHash: requestDigest(string(fingerprint)),
 	}

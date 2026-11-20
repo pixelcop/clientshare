@@ -115,6 +115,37 @@ func TestAccessRoleMembershipAndOperationMatrix(t *testing.T) {
 	f.check(t, r, false)
 }
 
+func TestWorkspaceAccessUsesAssignmentExpiryInstants(t *testing.T) {
+	f := newAccessFixture(t)
+	role := models.DefaultAccessRoles("tenant")[0]
+	require.NoError(t, f.db.Create(&role).Error)
+	now := time.Now().UTC()
+	for _, tt := range []struct {
+		user   string
+		expiry time.Time
+		active bool
+	}{
+		{"active-assignee", now.Add(time.Hour).In(time.FixedZone("west", -3*3600)), true},
+		{"expired-assignee", now.Add(-time.Hour).In(time.FixedZone("east", 3*3600)), false},
+	} {
+		require.NoError(t, f.db.Create(&models.User{ID: tt.user, TenantID: "tenant", Role: "client", Email: tt.user + "@example.test"}).Error)
+		require.NoError(t, f.db.Create(&models.RoleAssignment{TenantID: "tenant", ClientID: "client", RoleID: role.ID, UserID: &tt.user, ExpiresAt: &tt.expiry}).Error)
+		q, err := f.s.ClientScope(t.Context(), "tenant", tt.user, AccessRead)
+		require.NoError(t, err)
+		var ids []string
+		require.NoError(t, q.Pluck("clients.id", &ids).Error)
+		if tt.active {
+			require.Equal(t, []string{"client"}, ids)
+		} else {
+			require.Empty(t, ids)
+		}
+	}
+	readers, err := f.s.WorkspaceReaderIDs(t.Context(), "tenant", "client", []string{"client"})
+	require.NoError(t, err)
+	require.Contains(t, readers, "active-assignee")
+	require.NotContains(t, readers, "expired-assignee")
+}
+
 func TestUploaderReadsOnlyExactOwnedItemsWithCurrentAuthority(t *testing.T) {
 	for _, scope := range []string{"membership", "grant"} {
 		t.Run(scope, func(t *testing.T) {

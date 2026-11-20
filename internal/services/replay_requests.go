@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pixelcop/clientshare/internal/dbtime"
 	"github.com/pixelcop/clientshare/internal/models"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -44,8 +45,8 @@ func (s *ReplayRequestService) List(ctx context.Context) ([]models.ReplayRequest
 	// Active requests must remain visible/revocable even when newer requests
 	// have already expired. Fill the remaining space with recent history.
 	err := s.db.WithContext(ctx).Clauses(clause.OrderBy{Expression: clause.Expr{
-		SQL:  "CASE WHEN revoked_at IS NULL AND expires_at > ? THEN 0 ELSE 1 END, created_at DESC",
-		Vars: []any{time.Now().UTC()},
+		SQL:  "CASE WHEN revoked_at IS NULL AND ? THEN 0 ELSE 1 END, " + dbtime.Instant(s.db, "created_at") + " DESC",
+		Vars: []any{dbtime.Compare(s.db, "expires_at", ">", time.Now())},
 	}}).Limit(100).Find(&rules).Error
 	return rules, err
 }
@@ -63,7 +64,7 @@ func (s *ReplayRequestService) Create(ctx context.Context, rule models.ReplayReq
 	defer s.mu.Unlock()
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var count int64
-		if err := tx.Model(&models.ReplayRequest{}).Where("revoked_at IS NULL AND expires_at > ?", now).Count(&count).Error; err != nil {
+		if err := tx.Model(&models.ReplayRequest{}).Where("revoked_at IS NULL AND ?", dbtime.Compare(tx, "expires_at", ">", now)).Count(&count).Error; err != nil {
 			return err
 		}
 		if count >= maxActiveReplayRequests {
@@ -97,7 +98,7 @@ func (s *ReplayRequestService) Active(ctx context.Context) ([]models.ReplayReque
 	now := time.Now().UTC()
 	if s.loadedAt.IsZero() || now.Sub(s.loadedAt) >= replayCacheTTL {
 		var rules []models.ReplayRequest
-		err := s.db.WithContext(ctx).Where("revoked_at IS NULL AND expires_at > ?", now).Limit(maxActiveReplayRequests + 1).Find(&rules).Error
+		err := s.db.WithContext(ctx).Where("revoked_at IS NULL AND ?", dbtime.Compare(s.db, "expires_at", ">", now)).Limit(maxActiveReplayRequests + 1).Find(&rules).Error
 		if err != nil || len(rules) > maxActiveReplayRequests {
 			s.rules = nil
 			if err == nil {

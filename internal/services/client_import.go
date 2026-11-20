@@ -151,7 +151,7 @@ func (s *ClientImportService) upsertImportedUser(tenantID, email string, clientI
 		return false, false, "", err
 	}
 
-	now := time.Now()
+	now := time.Now().UTC()
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		if s.EmailQueue == nil {
 			return false, false, "", errors.New("email queue is required for new user invites")
@@ -403,7 +403,7 @@ func normalizeClientIDs(clientIDs []string) []string {
 }
 
 func addClientAssignment(tx *gorm.DB, tenantID, userID, clientID string) error {
-	rel := models.UserClient{TenantID: strings.TrimSpace(tenantID), UserID: strings.TrimSpace(userID), ClientID: strings.TrimSpace(clientID), CreatedAt: time.Now()}
+	rel := models.UserClient{TenantID: strings.TrimSpace(tenantID), UserID: strings.TrimSpace(userID), ClientID: strings.TrimSpace(clientID), CreatedAt: time.Now().UTC()}
 	if rel.UserID == "" || rel.ClientID == "" {
 		return fiber.NewError(fiber.StatusBadRequest, "user_id and client_id are required")
 	}

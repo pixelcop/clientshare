@@ -248,7 +248,7 @@ func (s *AccessRoleService) SaveGroup(ctx context.Context, tenantID, actorID, id
 			if err != nil {
 				return err
 			}
-			if err := tx.Model(&models.AccessGroup{}).Where("tenant_id = ? AND id = ? AND version = ?", tenantID, id, input.Version).Updates(map[string]any{"name": strings.TrimSpace(input.Name), "description": strings.TrimSpace(input.Description), "version": input.Version + 1, "updated_at": time.Now()}).Error; err != nil {
+			if err := tx.Model(&models.AccessGroup{}).Where("tenant_id = ? AND id = ? AND version = ?", tenantID, id, input.Version).Updates(map[string]any{"name": strings.TrimSpace(input.Name), "description": strings.TrimSpace(input.Description), "version": input.Version + 1, "updated_at": time.Now().UTC()}).Error; err != nil {
 				return err
 			}
 		}

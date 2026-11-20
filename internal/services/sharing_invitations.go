@@ -353,6 +353,10 @@ func (s *SharingService) AcceptInvitation(ctx context.Context, tenantID, userID,
 			// role-backed intent stays separately removable and auditable.
 		} else {
 			req.FileID = *invitation.FileID
+			if invitation.GrantExpiresAt != nil {
+				utc := invitation.GrantExpiresAt.UTC()
+				invitation.GrantExpiresAt = &utc
+			}
 			file, err := (&AccessService{DB: tx}).ValidateTarget(ctx, tenantID, invitation.ClientID, req.FileID)
 			if err != nil {
 				return err
@@ -394,7 +398,11 @@ func (s *SharingService) AcceptInvitation(ctx context.Context, tenantID, userID,
 						caps.CanDelete = caps.CanDelete || grant.CanDelete
 						caps.CanShare = caps.CanShare || grant.CanShare
 						if grant.ExpiresAt == nil || (expiry != nil && grant.ExpiresAt.After(*expiry)) {
-							expiry = grant.ExpiresAt
+							expiry = nil
+							if grant.ExpiresAt != nil {
+								utc := grant.ExpiresAt.UTC()
+								expiry = &utc
+							}
 						}
 					}
 					if err := tx.Model(&grant).Updates(map[string]any{"role_id": invitation.RoleID, "can_read": caps.CanRead, "can_upload": caps.CanUpload, "can_delete": caps.CanDelete, "can_share": caps.CanShare, "expires_at": expiry, "revoked_at": nil, "version": gorm.Expr("version + 1"), "updated_at": s.now()}).Error; err != nil {

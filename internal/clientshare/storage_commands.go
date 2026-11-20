@@ -75,7 +75,10 @@ func newStorageOperation(operation, description string, config *string) *cobra.C
 		if err != nil {
 			return err
 		}
-		db, err := gorm.Open(dialector, &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+		db, err := gorm.Open(dialector, &gorm.Config{
+			Logger:  logger.Default.LogMode(logger.Silent),
+			NowFunc: func() time.Time { return time.Now().UTC() },
+		})
 		if err != nil {
 			return err
 		}

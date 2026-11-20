@@ -37,3 +37,17 @@ func TestSQLiteEmailQueueSchedulesByInstantAcrossOffsets(t *testing.T) {
 	require.Len(t, pending, 1)
 	require.Equal(t, "Future local", pending[0].Subject)
 }
+
+func TestDBEmailQueueStoresExplicitScheduleInUTC(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(t.TempDir()+"/queue.db"), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&models.QueuedEmail{}))
+	queue := NewDBEmailQueue(db, nil, time.Hour)
+	schedule := time.Now().In(time.FixedZone("east", 5*3600+30*60)).Add(time.Hour)
+	item, err := queue.Queue(Email{TenantID: "test", To: "recipient@example.test"}, &schedule)
+	require.NoError(t, err)
+	var raw string
+	require.NoError(t, db.Model(&models.QueuedEmail{}).Select("CAST(scheduled_for AS TEXT)").Where("id = ?", item.ID).Scan(&raw).Error)
+	require.True(t, item.ScheduledFor.Equal(schedule))
+	require.Equal(t, schedule.UTC().Format("2006-01-02 15:04:05.999999999-07:00"), raw)
+}

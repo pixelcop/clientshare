@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/pixelcop/clientshare/internal/dbtime"
 	"github.com/pixelcop/clientshare/internal/models"
 	"gorm.io/gorm"
 )
@@ -70,9 +71,9 @@ func (s *AccessService) ClientScope(ctx context.Context, tenantID, userID string
 		AND (NOT scope_uc.capabilities_set OR `+explicit+`)) OR EXISTS (
 		SELECT 1 FROM role_assignments ra JOIN access_roles ar ON ar.tenant_id=ra.tenant_id AND ar.id=ra.role_id
 		WHERE ra.tenant_id=clients.tenant_id AND ra.client_id=clients.id AND ra.file_id IS NULL AND ar.allow_workspace=TRUE
-		AND ra.revoked_at IS NULL AND ra.source_kind NOT IN ('membership','grant') AND (ra.expires_at IS NULL OR ra.expires_at > ?)
+		AND ra.revoked_at IS NULL AND ra.source_kind NOT IN ('membership','grant') AND (ra.expires_at IS NULL OR ?)
 		AND (ra.user_id = ? OR EXISTS (SELECT 1 FROM access_group_members gm WHERE gm.tenant_id=ra.tenant_id AND gm.group_id=ra.group_id AND gm.user_id=?))
-		AND (ar.audience='both' OR ar.audience=?) AND `+groupExplicit+`))`, userID, userTypeForRole(user.Role), time.Now().UTC(), userID, userID, userTypeForRole(user.Role)), nil
+		AND (ar.audience='both' OR ar.audience=?) AND `+groupExplicit+`))`, userID, userTypeForRole(user.Role), dbtime.Compare(q, "ra.expires_at", ">", time.Now()), userID, userID, userTypeForRole(user.Role)), nil
 }
 
 // ResolveClients decorates authorized client pages without per-row queries or

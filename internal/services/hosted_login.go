@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/pixelcop/clientshare/internal/auth"
+	"github.com/pixelcop/clientshare/internal/dbtime"
 	"github.com/pixelcop/clientshare/internal/models"
 	"github.com/pixelcop/clientshare/internal/tenant"
 	"gorm.io/gorm"
@@ -129,8 +130,8 @@ func (s *HostedLoginService) IssueHandoff(identity HostedLoginIdentity) (*Hosted
 	if err != nil {
 		return nil, fmt.Errorf("generate hosted login handoff: %w", err)
 	}
-	now := time.Now()
-	_ = s.db.Where("expires_at < ? OR used_at IS NOT NULL", now).Delete(&models.HostedLoginHandoff{}).Error
+	now := time.Now().UTC()
+	_ = s.db.Where("? OR used_at IS NOT NULL", dbtime.Compare(s.db, "expires_at", "<", now)).Delete(&models.HostedLoginHandoff{}).Error
 	handoff := models.HostedLoginHandoff{
 		TenantID:  identity.TenantID,
 		UserID:    identity.UserID,
@@ -218,22 +219,25 @@ func (s *HostedLoginService) ConsumeHandoff(tenantID, code string) (*HostedLogin
 	if tenantID == "" || code == "" {
 		return nil, ErrHostedLoginHandoffInvalid
 	}
-	now := time.Now()
+	now := time.Now().UTC()
+	active := dbtime.Compare(s.db, "expires_at", ">", now)
 	codeHash := hashHostedLoginHandoff(s.handoffSecret, code)
 	var handoff models.HostedLoginHandoff
 	err := s.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("tenant_id = ? AND code_hash = ? AND used_at IS NULL AND expires_at > ?", tenantID, codeHash, now).First(&handoff).Error; err != nil {
+		if err := tx.Where("tenant_id = ? AND code_hash = ? AND used_at IS NULL AND ?", tenantID, codeHash, active).First(&handoff).Error; err != nil {
 			return err
 		}
-		var active int64
-		if err := tx.Model(&models.BrowserSession{}).Where("group_id = ? AND revoked_at IS NULL AND expires_at > ? AND idle_expires_at > ?", handoff.SessionGroupID, now, now).Count(&active).Error; err != nil {
+		var activeSessions int64
+		if err := tx.Model(&models.BrowserSession{}).Where("group_id = ? AND revoked_at IS NULL", handoff.SessionGroupID).
+			Where(active).
+			Where(dbtime.Compare(tx, "idle_expires_at", ">", now)).Count(&activeSessions).Error; err != nil {
 			return err
 		}
-		if handoff.SessionGroupID == "" || active == 0 {
+		if handoff.SessionGroupID == "" || activeSessions == 0 {
 			return ErrHostedLoginHandoffInvalid
 		}
 		result := tx.Model(&models.HostedLoginHandoff{}).
-			Where("id = ? AND used_at IS NULL AND expires_at > ?", handoff.ID, now).
+			Where("id = ? AND used_at IS NULL AND ?", handoff.ID, active).
 			Update("used_at", now)
 		if result.Error != nil {
 			return result.Error

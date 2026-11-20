@@ -5,6 +5,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/pixelcop/clientshare/internal/dbtime"
 	"github.com/pixelcop/clientshare/internal/models"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -29,14 +30,16 @@ type RecipientClient struct {
 type RecipientService struct{ DB *gorm.DB }
 
 func recipientAssociations(db *gorm.DB, tenantID string) *gorm.DB {
-	now := time.Now().UTC()
+	now := time.Now()
+	active := dbtime.Compare(db, "expires_at", ">", now)
+	assignmentActive := dbtime.Compare(db, "ra.expires_at", ">", now)
 	return db.Raw(`
 		SELECT user_id, client_id FROM user_clients WHERE tenant_id = ?
-		UNION SELECT user_id, client_id FROM item_grants WHERE tenant_id = ? AND user_id IS NOT NULL AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > ?)
-		UNION SELECT recipient_user_id AS user_id, client_id FROM access_invitations WHERE tenant_id = ? AND recipient_user_id IS NOT NULL AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > ?
-		UNION SELECT ra.user_id, ra.client_id FROM role_assignments ra WHERE ra.tenant_id = ? AND ra.user_id IS NOT NULL AND ra.revoked_at IS NULL AND (ra.expires_at IS NULL OR ra.expires_at > ?)
-		UNION SELECT gm.user_id, ra.client_id FROM role_assignments ra JOIN access_group_members gm ON gm.tenant_id = ra.tenant_id AND gm.group_id = ra.group_id WHERE ra.tenant_id = ? AND ra.revoked_at IS NULL AND (ra.expires_at IS NULL OR ra.expires_at > ?)`,
-		tenantID, tenantID, now, tenantID, now, tenantID, now, tenantID, now)
+		UNION SELECT user_id, client_id FROM item_grants WHERE tenant_id = ? AND user_id IS NOT NULL AND revoked_at IS NULL AND (expires_at IS NULL OR ?)
+		UNION SELECT recipient_user_id AS user_id, client_id FROM access_invitations WHERE tenant_id = ? AND recipient_user_id IS NOT NULL AND accepted_at IS NULL AND revoked_at IS NULL AND ?
+		UNION SELECT ra.user_id, ra.client_id FROM role_assignments ra WHERE ra.tenant_id = ? AND ra.user_id IS NOT NULL AND ra.revoked_at IS NULL AND (ra.expires_at IS NULL OR ?)
+		UNION SELECT gm.user_id, ra.client_id FROM role_assignments ra JOIN access_group_members gm ON gm.tenant_id = ra.tenant_id AND gm.group_id = ra.group_id WHERE ra.tenant_id = ? AND ra.revoked_at IS NULL AND (ra.expires_at IS NULL OR ?)`,
+		tenantID, tenantID, active, tenantID, active, tenantID, assignmentActive, tenantID, assignmentActive)
 }
 
 // Search reuses identities and existing relationships without mutating either.

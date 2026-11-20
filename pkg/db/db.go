@@ -1,6 +1,8 @@
 package db
 
 import (
+	"time"
+
 	dbpkg "github.com/pixelcop/clientshare/internal/db"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -17,7 +19,8 @@ func GormConfig(logger *zap.Logger) *gorm.Config {
 	gl.IgnoreRecordNotFoundError = true
 	gl.SetAsDefault()
 	return &gorm.Config{
-		Logger: gl,
+		Logger:  gl,
+		NowFunc: func() time.Time { return time.Now().UTC() },
 	}
 }
 

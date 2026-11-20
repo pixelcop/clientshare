@@ -517,7 +517,7 @@ func (s *DocumentRequestService) Review(ctx context.Context, req AccessRequest, 
 			}
 		}
 		now := time.Now().UTC()
-		if err := tx.Create(&models.DocumentRequestReview{ItemID: itemID, Round: round, Status: status, Reason: reason, ReviewerID: req.Actor.UserID, SubmittedAt: *item.SubmittedAt, CreatedAt: now}).Error; err != nil {
+		if err := tx.Create(&models.DocumentRequestReview{ItemID: itemID, Round: round, Status: status, Reason: reason, ReviewerID: req.Actor.UserID, SubmittedAt: item.SubmittedAt.UTC(), CreatedAt: now}).Error; err != nil {
 			return err
 		}
 		nextRound := round

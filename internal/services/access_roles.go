@@ -225,7 +225,7 @@ func (s *AccessRoleService) SaveRole(ctx context.Context, tenantID, actorID, rol
 		if (input.Audience != result.Audience || input.AllowWorkspace != result.AllowWorkspace || input.AllowFolder != result.AllowFolder || input.AllowFile != result.AllowFile) && (current.Memberships+current.Grants+current.Invitations+current.GroupAssignments) > 0 {
 			return ErrRoleInput
 		}
-		updates := map[string]any{"name": input.Name, "description": input.Description, "audience": input.Audience, "allow_workspace": input.AllowWorkspace, "allow_folder": input.AllowFolder, "allow_file": input.AllowFile, "can_read": input.CanRead, "can_upload": input.CanUpload, "can_delete": input.CanDelete, "can_invite_external": input.CanInviteExternal, "can_create_links": input.CanCreateLinks, "can_manage_access": input.CanManageAccess, "version": version + 1, "updated_at": time.Now()}
+		updates := map[string]any{"name": input.Name, "description": input.Description, "audience": input.Audience, "allow_workspace": input.AllowWorkspace, "allow_folder": input.AllowFolder, "allow_file": input.AllowFile, "can_read": input.CanRead, "can_upload": input.CanUpload, "can_delete": input.CanDelete, "can_invite_external": input.CanInviteExternal, "can_create_links": input.CanCreateLinks, "can_manage_access": input.CanManageAccess, "version": version + 1, "updated_at": time.Now().UTC()}
 		updated := tx.Model(&models.AccessRole{}).Where("tenant_id = ? AND id = ? AND version = ?", tenantID, roleID, version).Updates(updates)
 		if updated.Error != nil {
 			return updated.Error
@@ -286,7 +286,7 @@ func (s *AccessRoleService) ArchiveRole(ctx context.Context, tenantID, actorID, 
 			return ErrRoleConflict
 		}
 		before := role
-		if err := tx.Model(&role).Updates(map[string]any{"archived_at": time.Now(), "version": version + 1}).Error; err != nil {
+		if err := tx.Model(&role).Updates(map[string]any{"archived_at": time.Now().UTC(), "version": version + 1}).Error; err != nil {
 			return err
 		}
 		return sharingAudit(tx, AccessRequest{TenantID: tenantID, Actor: AccessActor{UserID: actorID}}, "role.archive", roleID, before, role)

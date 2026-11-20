@@ -122,7 +122,7 @@ func (s *SharingService) PrepareInvitationDelivery(ctx context.Context, req Acce
 		}
 		expiry := s.now().Add(identityTTL)
 		if intent.ExpiresAt.Before(expiry) {
-			expiry = intent.ExpiresAt
+			expiry = intent.ExpiresAt.UTC()
 		}
 		proof = models.InviteToken{ID: ids.NewULID(), TenantID: req.TenantID, UserID: user.ID, Email: user.Email, AccessInvitationID: &intent.ID, ExpiresAt: expiry, InvitedBy: req.Actor.UserID, CreatedAt: s.now()}
 		proof.TokenHash = s.identityInvitationHash(s.identityInvitationToken(proof.ID))

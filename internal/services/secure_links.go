@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/pixelcop/clientshare/internal/dbtime"
 	"github.com/pixelcop/clientshare/internal/models"
 	"github.com/pixelcop/clientshare/pkg/utils/ids"
 	"gorm.io/gorm"
@@ -27,14 +28,15 @@ func PopulateLinkOpens(ctx context.Context, db *gorm.DB, tenantID string, links 
 		byID[links[i].ID] = &links[i]
 		ids = append(ids, links[i].ID)
 	}
+	openedAt := dbtime.Instant(db, "created_at")
 	latest := db.WithContext(ctx).Model(&models.FileActivity{}).
-		Select("secure_link_id, MAX(created_at)").
+		Select("secure_link_id, MAX("+openedAt+")").
 		Where("tenant_id = ? AND secure_link_id IN ? AND action = ?", tenantID, ids, "view_link").
 		Group("secure_link_id")
 	// Select the original timestamp column so database drivers retain its time type.
 	var activity []models.FileActivity
 	if err := db.WithContext(ctx).Select("secure_link_id, created_at").
-		Where("tenant_id = ? AND action = ? AND (secure_link_id, created_at) IN (?)", tenantID, "view_link", latest).
+		Where("tenant_id = ? AND action = ? AND (secure_link_id, "+openedAt+") IN (?)", tenantID, "view_link", latest).
 		Find(&activity).Error; err != nil {
 		return err
 	}
