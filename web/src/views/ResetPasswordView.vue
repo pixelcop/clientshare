@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import axios from 'axios';
-import { Button, FloatLabel, Password } from 'openvue';
+import { Button, FloatLabel, InputText } from 'openvue';
 import { storeToRefs } from 'pinia';
 import { computed, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -19,6 +19,7 @@ const token = computed(() => {
 
 const password = ref('');
 const confirmPassword = ref('');
+const showPasswords = ref(false);
 const loading = ref(false);
 const message = ref<string | null>(null);
 const error = ref<string | null>(null);
@@ -61,13 +62,26 @@ async function onSubmit() {
       <form v-else @submit.prevent="onSubmit">
         <div class="mb-4">
           <FloatLabel variant="on">
-            <Password v-model="password" id="password" toggleMask fluid :feedback="false" focus />
+            <InputText
+              v-model="password"
+              id="password"
+              :type="showPasswords ? 'text' : 'password'"
+              autocomplete="new-password"
+              autofocus
+              fluid
+            />
             <label for="password">New password</label>
           </FloatLabel>
         </div>
         <div class="mb-6">
           <FloatLabel variant="on">
-            <Password v-model="confirmPassword" id="confirm" toggleMask fluid :feedback="false" />
+            <InputText
+              v-model="confirmPassword"
+              id="confirm"
+              :type="showPasswords ? 'text' : 'password'"
+              autocomplete="new-password"
+              fluid
+            />
             <label for="confirm">Confirm password</label>
           </FloatLabel>
         </div>
@@ -75,6 +89,17 @@ async function onSubmit() {
           <span v-if="loading">Updating...</span>
           <span v-else>Update password</span>
         </Button>
+        <div class="mt-2 text-center">
+          <Button
+            type="button"
+            text
+            size="small"
+            aria-controls="password confirm"
+            @click="showPasswords = !showPasswords"
+          >
+            {{ showPasswords ? 'Hide passwords' : 'Show passwords' }}
+          </Button>
+        </div>
         <div v-if="message" data-sentry-mask class="mt-4 text-green-700 text-center">{{ message }}</div>
         <div v-if="error" data-sentry-mask class="mt-4 text-red-600 text-center">{{ error }}</div>
       </form>
