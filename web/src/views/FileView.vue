@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { useEventListener, useMediaQuery } from '@vueuse/core';
 import axios from 'axios';
-import { Popover } from 'openvue';
+import { Menu, Popover } from 'openvue';
+import type { MenuItem } from 'openvue/menuitem';
 
+import DocumentRequestReviewActions from '@/components/DocumentRequestReviewActions.vue';
 import DocumentRequestReviewPanel from '@/components/DocumentRequestReviewPanel.vue';
 import FileComments from '@/components/FileComments.vue';
 import FilePreview from '@/components/FilePreview.vue';
@@ -38,6 +40,7 @@ const showShare = ref(false);
 const showComments = ref(false);
 const desktop = useMediaQuery('(min-width: 1024px)');
 const requestPopover = ref<InstanceType<typeof Popover>>();
+const fileActionsMenu = ref<InstanceType<typeof Menu>>();
 const requestDetails = ref<DocumentRequest>();
 const requestContext = computed(() => {
   const { request, requestClient } = router.currentRoute.value.query;
@@ -60,6 +63,9 @@ const activeRequest = computed(() => {
   return undefined;
 });
 const mobileRequest = computed(() => !!activeRequest.value && !desktop.value);
+const activeRequestItem = computed(() =>
+  activeRequest.value?.items.find((item) => item.files.some((entry) => entry.id === fileId)),
+);
 const displayFileName = computed(
   () =>
     activeRequest.value?.items.flatMap((item) => item.files).find((entry) => entry.id === fileId)
@@ -101,6 +107,9 @@ const error = ref('');
 const downloadError = ref('');
 const downloading = ref(false);
 const copied = ref(false);
+const canShare = computed(
+  () => !!file.value?.capabilities?.can_share && auth.user?.role !== 'link',
+);
 let copyTimer: ReturnType<typeof setTimeout> | undefined;
 let requestVersion = 0;
 let returning = false;
@@ -291,6 +300,27 @@ async function copyLink() {
   }
 }
 
+const requestFileActions = computed<MenuItem[]>(() => [
+  ...(canShare.value
+    ? [{ label: 'Share', icon: 'oi oi-share-alt', command: () => (showShare.value = true) }]
+    : []),
+  {
+    label: 'Copy file address',
+    icon: 'oi oi-link',
+    command: () => void copyLink(),
+  },
+  ...(file.value?.capabilities?.can_read
+    ? [
+        {
+          label: 'Download',
+          icon: 'oi oi-download',
+          disabled: downloading.value,
+          command: () => void download(),
+        },
+      ]
+    : []),
+]);
+
 async function toggleComments() {
   commentsVisited.value = true;
   showComments.value = !showComments.value;
@@ -319,7 +349,10 @@ watch(
   },
   { immediate: true },
 );
-watch([() => fileId, desktop], () => requestPopover.value?.hide());
+watch([() => fileId, desktop], () => {
+  requestPopover.value?.hide();
+  fileActionsMenu.value?.hide();
+});
 onBeforeUnmount(() => {
   requestVersion += 1;
   countVersion += 1;
@@ -389,6 +422,7 @@ onBeforeUnmount(() => {
             @click="toggleComments"
           />
           <Button
+            v-if="!activeRequest"
             :icon="copied ? 'oi oi-check' : 'oi oi-link'"
             aria-label="Copy file address — access is still required"
             :title="copied ? 'Copied' : 'Copy file address — access is still required'"
@@ -399,9 +433,9 @@ onBeforeUnmount(() => {
           />
           <span class="sr-only" role="status">{{ copied ? 'File address copied' : '' }}</span>
           <Button
-            v-if="file.capabilities?.can_read"
+            v-if="!activeRequest && file.capabilities?.can_read"
             icon="oi oi-download"
-            :label="mobileRequest ? undefined : 'Download'"
+            label="Download"
             class="file-download"
             aria-label="Download"
             title="Download"
@@ -411,8 +445,8 @@ onBeforeUnmount(() => {
             @click="download"
           />
           <Button
-            v-if="file.capabilities?.can_share && auth.user?.role !== 'link'"
-            :label="mobileRequest ? undefined : 'Share'"
+            v-if="!activeRequest && canShare"
+            label="Share"
             icon="oi oi-share-alt"
             class="file-share"
             aria-label="Share"
@@ -422,6 +456,27 @@ onBeforeUnmount(() => {
             :aria-controls="`sharing-item-${file.id}`"
             @click="showShare = true"
           />
+          <template v-if="activeRequest">
+            <Button
+              :icon="copied ? 'oi oi-check' : 'oi oi-share-alt'"
+              :label="mobileRequest ? undefined : 'File actions'"
+              :severity="mobileRequest ? 'secondary' : undefined"
+              class="file-request-actions"
+              aria-label="File actions"
+              title="Share, copy or download"
+              aria-haspopup="menu"
+              aria-controls="request-file-actions"
+              @click="fileActionsMenu?.toggle($event)"
+              @keydown.esc.stop
+            />
+            <Menu
+              id="request-file-actions"
+              ref="fileActionsMenu"
+              :model="requestFileActions"
+              aria-label="File actions"
+              popup
+            />
+          </template>
         </div>
       </template>
       <h1 v-else>File viewer</h1>
@@ -429,7 +484,7 @@ onBeforeUnmount(() => {
     <Popover
       v-if="mobileRequest && activeRequest && requestContext"
       ref="requestPopover"
-      aria-label="Document request review"
+      aria-label="Switch request documents"
       :style="{ width: 'min(340px, calc(100vw - 24px))' }"
       :pt="{
         content: { style: { padding: 0, maxHeight: 'min(60dvh, 480px)', overflowY: 'auto' } },
@@ -440,9 +495,17 @@ onBeforeUnmount(() => {
         :request="activeRequest"
         :client-id="requestContext.clientId"
         :file-id="fileId"
-        @reviewed="loadRequest"
       />
     </Popover>
+    <DocumentRequestReviewActions
+      v-if="file && activeRequest && activeRequestItem && requestContext"
+      :key="fileId"
+      :item="activeRequestItem"
+      :request-id="activeRequest.id"
+      :client-id="requestContext.clientId"
+      :file-id="fileId"
+      @reviewed="loadRequest"
+    />
     <p v-if="downloadError" role="alert" class="file-download-error">{{ downloadError }}</p>
     <div class="file-workspace" :class="{ 'comments-open': showComments }">
       <aside
@@ -455,7 +518,6 @@ onBeforeUnmount(() => {
           :request="activeRequest"
           :client-id="requestContext.clientId"
           :file-id="fileId"
-          @reviewed="loadRequest"
         />
       </aside>
       <div class="file-canvas">
@@ -631,7 +693,7 @@ h1 {
 .mobile-request .file-request-toggle {
   margin-inline-end: auto;
 }
-.mobile-request :is(.file-share, .file-comments-toggle, .file-download, .file-copy) {
+.mobile-request :is(.file-request-actions, .file-comments-toggle) {
   min-width: 44px;
 }
 .file-comments-pane {
@@ -698,6 +760,7 @@ h1 {
   }
   .file-header-actions {
     justify-content: flex-end;
+    flex-wrap: wrap;
     width: 100%;
     gap: 4px;
   }
@@ -706,18 +769,6 @@ h1 {
   }
   .file-share {
     min-width: 0;
-  }
-  .file-download {
-    width: 44px;
-  }
-  .file-download :deep(.p-button-label) {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
   }
   .file-metadata {
     font-size: 12px;
