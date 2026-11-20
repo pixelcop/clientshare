@@ -118,6 +118,8 @@ const actionLabel = computed(() => {
   switch (item.event_type) {
     case 'request_created':
       return 'New document request';
+    case 'request_updated':
+      return 'More documents requested';
     case 'request_submitted':
       return 'Submitted for review';
     case 'request_accepted':

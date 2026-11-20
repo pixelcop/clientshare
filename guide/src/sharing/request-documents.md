@@ -8,8 +8,10 @@ item. For a one-off upload without a checklist, use an [Upload only link](#send-
 1. As an administrator or manager with access to manage the client, open the
    workspace root and choose **Document requests**. On mobile, look in the
    **Upload** menu.
-2. Choose **New request**, give it a title, and add the documents you need. Add
-   instructions where they help the recipient pick the right file.
+2. Choose **New request**, give it a title, and optionally write a **Request
+   description** for the whole checklist. It appears above the documents and in
+   the initial email. Add individual instructions where they help the recipient
+   pick the right file.
 3. The **Destination folder** defaults to the request title. Choose **Edit**
    beside the name if you want a different folder.
 4. **Email all client users** is checked by default. Each client user with
@@ -50,6 +52,15 @@ Staff can see earlier review decisions under **Review history**.
 
 The checklist is complete when all items are accepted. Revoking the link does
 not delete files already received in the workspace.
+
+## Request more documents
+
+From the full request page, choose **Request more documents**. Add the new items
+and optionally include a message for this batch. The original description stays
+in place, and the recipient sees the follow-up message above the expanded
+checklist. New items start outstanding; existing files and review decisions are
+unchanged. The link and its expiration stay the same. If email is enabled, the
+follow-up is sent to the original recipients who still have workspace access.
 
 ## Collect files without a checklist
 

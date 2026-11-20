@@ -4,6 +4,7 @@ import Button from 'openvue/button';
 import { computed, nextTick, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 
+import DocumentRequestGuidance from '@/components/DocumentRequestGuidance.vue';
 import RecipientPicker from '@/components/RecipientPicker.vue';
 import {
   type DocumentRequest,
@@ -24,6 +25,8 @@ const saving = ref(false);
 const error = ref('');
 const notice = ref('');
 const creating = ref(false);
+const adding = ref(false);
+const description = ref('');
 const title = ref('');
 const emailAll = ref(true);
 const recipientEmail = ref('');
@@ -65,6 +68,14 @@ function addRecipient() {
 let nextRow = 0;
 const newRow = () => ({ key: nextRow++, name: '', instructions: '', showInstructions: false });
 const draft = ref([newRow()]);
+
+function beginAddition() {
+  draft.value = [newRow()];
+  description.value = '';
+  notice.value = '';
+  error.value = '';
+  adding.value = true;
+}
 
 async function revealInstructions(item: ReturnType<typeof newRow>) {
   item.showInstructions = true;
@@ -125,6 +136,9 @@ watch(
     notice.value = '';
     revoking.value = false;
     creating.value = false;
+    adding.value = false;
+    description.value = '';
+    draft.value = [newRow()];
     editingFolder.value = false;
     void load();
   },
@@ -132,39 +146,60 @@ watch(
 );
 
 async function create() {
-  if (editingFolder.value || (!emailAll.value && recipientEmail.value.trim())) {
+  const append = adding.value;
+  if (
+    saving.value ||
+    (!append && (editingFolder.value || (!emailAll.value && recipientEmail.value.trim())))
+  ) {
     return;
   }
   saving.value = true;
   error.value = '';
   try {
-    const { data } = await axios.post<DocumentRequest>(endpoint.value, {
-      title: title.value,
-      folder_name: folderName.value,
-      email_all: emailAll.value,
-      recipient_emails: emailAll.value ? [] : recipientEmails.value,
-      items: draft.value.map(({ name, instructions }) => ({ name, instructions })),
-    });
+    const { data } = await axios.post<DocumentRequest>(
+      append ? `${detail.value}/additions` : endpoint.value,
+      {
+        ...(append
+          ? {}
+          : {
+              title: title.value,
+              folder_name: folderName.value,
+              email_all: emailAll.value,
+              recipient_emails: emailAll.value ? [] : recipientEmails.value,
+            }),
+        description: description.value,
+        items: draft.value.map(({ name, instructions }) => ({ name, instructions })),
+      },
+    );
     title.value = '';
     recipientEmail.value = '';
     recipientEmails.value = [];
     emailAll.value = true;
     folderOverride.value = null;
     draft.value = [newRow()];
-    await router.push(requestRoute(data.id));
+    description.value = '';
+    if (append) {
+      request.value = data;
+      adding.value = false;
+    } else {
+      await router.push(requestRoute(data.id));
+    }
+    const saved = append ? 'Documents added.' : 'Request created.';
+    notice.value = saved;
     if (data.email_status === 'queued') {
       const count = data.email_count ?? 0;
-      notice.value = `Request created. Email queued for ${count === 1 ? '1 client user' : `${count} client users`}.`;
+      notice.value = `${saved} Email queued for ${count === 1 ? '1 client user' : `${count} client users`}.`;
     } else if (data.email_status === 'unavailable') {
-      notice.value = 'Request created. Email is unavailable; copy and share the request link.';
+      notice.value = `${saved} Email is unavailable; copy and share the request link.`;
     } else if (data.email_status === 'no_recipients') {
-      notice.value =
-        'Request created. No client users could be emailed; copy and share the request link.';
+      notice.value = `${saved} No client users could be emailed; copy and share the request link.`;
     }
   } catch (failure) {
     error.value =
       (axios.isAxiosError<{ error?: string }>(failure) && failure.response?.data?.error) ||
-      'Could not create the request. Check the title and item names, then try again.';
+      (append
+        ? 'Could not add documents. Try again.'
+        : 'Could not create the request. Check the title and item names, then try again.');
   } finally {
     saving.value = false;
   }
@@ -245,6 +280,15 @@ async function revoke() {
         label="New request"
         @click="creating = true"
       />
+      <Button
+        v-if="request?.link && !adding"
+        type="button"
+        label="Request more documents"
+        icon="oi oi-plus"
+        severity="secondary"
+        variant="outlined"
+        @click="beginAddition"
+      />
     </div>
 
     <p v-if="loading" role="status">Loading document requests…</p>
@@ -252,11 +296,11 @@ async function revoke() {
     <p v-if="notice" role="status">{{ notice }}</p>
 
     <form
-      v-if="!requestId && creating"
+      v-if="(!requestId && creating) || adding"
       class="rounded-xl border border-surface-200 bg-surface-0 dark:border-surface-700 dark:bg-surface-900"
       @submit.prevent="create"
     >
-      <div class="px-4 pt-4 sm:px-6 sm:pt-6">
+      <div v-if="!adding" class="px-4 pt-4 sm:px-6 sm:pt-6">
         <label class="block space-y-1">
           <span class="font-medium">Request title</span>
           <input
@@ -309,8 +353,28 @@ async function revoke() {
           </template>
         </div>
       </div>
+      <div class="px-4 pt-4 sm:px-6">
+        <label class="block font-medium" for="request-description">
+          {{ adding ? 'Message for these additional documents' : 'Request description' }}
+          <span class="font-normal text-muted-color">(optional)</span>
+        </label>
+        <textarea
+          id="request-description"
+          v-model="description"
+          :class="inputClass"
+          class="mt-1"
+          rows="3"
+          maxlength="4000"
+          aria-describedby="request-description-help"
+        />
+        <p id="request-description-help" class="m-0 text-sm text-muted-color">
+          Shown above the checklist and included in the email if one is sent.
+        </p>
+      </div>
       <section aria-labelledby="request-documents-heading" class="px-4 pt-4 pb-5 sm:px-6">
-        <h2 id="request-documents-heading" class="m-0 text-lg font-semibold">Documents</h2>
+        <h2 id="request-documents-heading" class="m-0 text-lg font-semibold">
+          {{ adding ? 'Request more documents' : 'Documents' }}
+        </h2>
         <ol class="mt-2 divide-y divide-surface-200 dark:divide-surface-700">
           <li v-for="(item, index) in draft" :key="item.key" class="py-3">
             <fieldset class="min-w-0">
@@ -374,7 +438,7 @@ async function revoke() {
       <div
         class="space-y-4 rounded-b-xl border-t border-surface-200 bg-surface-50 px-4 py-4 sm:px-6 dark:border-surface-700 dark:bg-surface-800"
       >
-        <fieldset class="min-w-0 space-y-1">
+        <fieldset v-if="!adding" class="min-w-0 space-y-1">
           <legend class="text-base font-semibold">Delivery</legend>
           <label class="inline-flex min-h-9 cursor-pointer items-center gap-2 font-medium">
             <input
@@ -439,11 +503,17 @@ async function revoke() {
             </p>
           </div>
         </fieldset>
+        <p v-else class="m-0 text-sm text-muted-color">
+          The same link will work. The original recipients will be notified if they still have
+          access.
+        </p>
         <div class="flex flex-wrap gap-2">
           <Button
             type="submit"
-            label="Create request"
-            :disabled="saving || editingFolder || (!emailAll && !!recipientEmail.trim())"
+            :label="adding ? 'Add to request' : 'Create request'"
+            :disabled="
+              saving || (!adding && (editingFolder || (!emailAll && !!recipientEmail.trim())))
+            "
           />
           <Button
             type="button"
@@ -451,7 +521,7 @@ async function revoke() {
             severity="secondary"
             variant="text"
             :disabled="saving"
-            @click="creating = false"
+            @click="adding ? (adding = false) : (creating = false)"
           />
         </div>
       </div>
@@ -489,6 +559,7 @@ async function revoke() {
     </template>
 
     <template v-if="request">
+      <DocumentRequestGuidance :request />
       <p v-if="request.folder_id" class="text-sm text-muted-color">
         Destination folder:
         <RouterLink

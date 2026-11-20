@@ -4,6 +4,7 @@ import Button from 'openvue/button';
 import { computed, nextTick, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 
+import DocumentRequestGuidance from '@/components/DocumentRequestGuidance.vue';
 import {
   type DocumentRequestItem,
   documentRequestLabels,
@@ -142,6 +143,7 @@ onMounted(load);
         {{ request.title }}
       </h1>
       <p class="mt-2 text-muted-color">Document request</p>
+      <DocumentRequestGuidance :request class="mt-4" />
       <section
         aria-labelledby="document-checklist-status"
         class="mt-6 rounded-xl border border-surface-200 bg-surface-0 dark:border-surface-700 dark:bg-surface-900"

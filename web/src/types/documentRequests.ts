@@ -32,6 +32,8 @@ export interface DocumentRequestItem {
 
 export interface DocumentRequest extends DocumentRequestSummary {
   items: DocumentRequestItem[];
+  description?: string;
+  updates?: { id: string; description: string; created_at: string }[];
   link?: string;
   folder_id?: string;
   folder_name?: string;
@@ -39,7 +41,10 @@ export interface DocumentRequest extends DocumentRequestSummary {
   email_count?: number;
 }
 
-export type RecipientDocumentRequest = Pick<DocumentRequest, 'title' | 'expires_at' | 'items'>;
+export type RecipientDocumentRequest = Pick<
+  DocumentRequest,
+  'title' | 'expires_at' | 'items' | 'description' | 'updates'
+>;
 
 export function requestFileRoute(clientId: string, requestId: string, fileId: string) {
   return {
