@@ -18,24 +18,24 @@ const isAnonymousRequest = computed(() => isRequestRecipient.value && !user.valu
 </script>
 
 <template>
-  <router-view v-if="isAnonymousRequest" :key="route.hash" />
-  <template v-else>
-    <AppTopbar v-if="!!user && !isFilePage" />
+  <AppTopbar v-if="(!!user || isRequestRecipient) && !isFilePage" />
 
-    <router-view v-if="isFilePage" />
-    <div v-else class="layout-main-container">
-      <div v-if="isPublicLayout" class="layout-main flex-1 w-full max-w-6xl mx-auto p-4 md:p-8">
-        <router-view :key="isRequestRecipient ? route.hash : undefined" />
-      </div>
-      <div v-else class="layout-main">
-        <CollectDocument v-if="user?.role === 'admin' && !isRequestRecipient" />
-        <router-view :key="isRequestRecipient ? route.hash : undefined" />
-      </div>
+  <router-view v-if="isFilePage" />
+  <div v-else class="layout-main-container">
+    <div
+      v-if="isPublicLayout || isAnonymousRequest"
+      class="layout-main flex-1 w-full max-w-6xl mx-auto p-4 md:p-8"
+    >
+      <router-view :key="isRequestRecipient ? route.hash : undefined" />
     </div>
+    <div v-else class="layout-main">
+      <CollectDocument v-if="user?.role === 'admin' && !isRequestRecipient" />
+      <router-view :key="isRequestRecipient ? route.hash : undefined" />
+    </div>
+  </div>
 
-    <PasskeyEnrollmentDialog />
-    <HelpLauncher :key="user?.id || 'login'" />
-    <ConfirmDialog dismissableMask />
-    <Toast />
-  </template>
+  <PasskeyEnrollmentDialog v-if="!isAnonymousRequest" />
+  <HelpLauncher :key="user?.id || 'login'" />
+  <ConfirmDialog dismissableMask />
+  <Toast />
 </template>

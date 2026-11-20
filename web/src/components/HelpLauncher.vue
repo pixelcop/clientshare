@@ -13,6 +13,7 @@ const branding = useBrandingStore();
 const collection = useCollectionStore();
 const route = useRoute();
 const auth = useAuthStore();
+const guestRequest = computed(() => !auth.user && route.name === 'DocumentRequestRecipient');
 const loginHelp = computed(
   () => !auth.user && ['Login', 'ForgotPassword', 'ResetPassword'].includes(String(route.name)),
 );
@@ -156,9 +157,9 @@ async function send() {
     :guideURL="guideURL"
     :supportLabel="capabilities.support_label"
     :supportURL="capabilities.support_url"
-    :contactAvailable="capabilities.provider === 'clientshare'"
+    :contactAvailable="!guestRequest && capabilities.provider === 'clientshare'"
     :loading="loading"
-    :showLauncher="Boolean(auth.user)"
+    :showLauncher="Boolean(auth.user) || guestRequest"
     :floating="floating"
     :gettingStarted="Boolean(auth.user) && collection.allowed"
     @start="collection.start()"
