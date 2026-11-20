@@ -34,7 +34,7 @@ onMounted(load);
 </script>
 
 <template>
-  <main class="mx-auto max-w-3xl space-y-5 leading-normal">
+  <main class="mx-auto grid max-w-3xl gap-4 leading-normal">
     <h1 class="m-0 text-2xl font-semibold tracking-tight">Document Requests</h1>
     <p v-if="loading" role="status">Loading document requests…</p>
     <div v-else-if="failed" role="alert" class="flex flex-wrap items-center gap-3">
