@@ -34,11 +34,17 @@ function viewport(wide: boolean) {
   );
 }
 
-async function render(previous?: string, hash = '') {
+async function render(previous?: string, hash = '', path = '/files/file') {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
       { path: '/files/:fileId', name: 'FileView', component: FileView, meta: { public: false } },
+      { path: '/document-request/files/:fileId', name: 'DocumentRequestFile', component: FileView },
+      {
+        path: '/document-request',
+        name: 'DocumentRequestRecipient',
+        component: { template: '<div />' },
+      },
       {
         path: '/folder/:folderId',
         name: 'FolderView',
@@ -69,7 +75,7 @@ async function render(previous?: string, hash = '') {
   if (previous) {
     await router.push(previous);
   }
-  await router.push(`/files/file${hash}`);
+  await router.push(`${path}${hash}`);
   // Memory history does not maintain the browser history's `back` state.
   if (previous) {
     router.options.history.state.back = previous;
@@ -96,6 +102,50 @@ describe('file page', () => {
   });
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it('uses the request credential for guest comments without offering sharing', async () => {
+    useAuthStore().user = null;
+    vi.mocked(axios.get).mockImplementation(async (url) => ({
+      data:
+        url === '/api/document-request/files/file'
+          ? { ...file, capabilities: { can_read: true } }
+          : { count: 2 },
+    }));
+    const { wrapper, router } = await render(
+      undefined,
+      '#token=guest',
+      '/document-request/files/file?comments=1',
+    );
+    expect(axios.get).toHaveBeenCalledWith('/api/document-request/files/file', {
+      headers: { 'X-Document-Request': 'guest' },
+    });
+    expect(wrapper.getComponent(FileComments).props('requestToken')).toBe('guest');
+    expect(wrapper.find('[aria-label="Share"]').exists()).toBe(false);
+    expect(wrapper.find('.file-copy').exists()).toBe(false);
+    await wrapper.get('[aria-label="Back to full request"]').trigger('click');
+    await flushPromises();
+    expect(router.currentRoute.value.fullPath).toBe('/document-request#token=guest');
+    wrapper.unmount();
+  });
+
+  it('keeps normal file permissions for a signed-in request recipient with access', async () => {
+    const responses: Record<string, unknown> = {
+      '/api/my-document-requests/request/link': { token: 'account-token' },
+      '/api/document-request/files/file': { ...file, capabilities: { can_read: true } },
+      '/api/files/file': file,
+      '/api/files/file/comments/count': { count: 1 },
+    };
+    vi.mocked(axios.get).mockImplementation(async (url) => ({ data: responses[url] }));
+    const { wrapper } = await render(
+      undefined,
+      '',
+      '/document-request/files/file?request=request&comments=1',
+    );
+    expect(wrapper.getComponent(FileComments).props('requestToken')).toBeUndefined();
+    expect(axios.get).toHaveBeenCalledWith('/api/files/file/comments/count');
+    expect(wrapper.find('[aria-label="Share"]').exists()).toBe(true);
+    wrapper.unmount();
   });
 
   it('shows metadata, sharing, and an explicit download fallback for unsupported types', async () => {

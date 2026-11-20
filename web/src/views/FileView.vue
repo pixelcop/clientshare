@@ -31,10 +31,24 @@ const { fileId } = defineProps<{
 
 const auth = useAuthStore();
 const router = useRouter();
+const route = useRoute();
 const commentTarget = computed(() => commentIdFromHash(router.currentRoute.value.hash));
 const fileManager = useFileManagerStore();
 const brandingStore = useBrandingStore();
 const file = ref<FileItem | null>(null);
+const recipientFile = computed(() => route.name === 'DocumentRequestFile');
+const guestToken = ref('');
+const recipientName = ref('');
+const guestPreview = ref('');
+const guestPreviewLoading = ref(false);
+let previewController: AbortController | undefined;
+const requestFileApi = computed(() => `/api/document-request/files/${encodeURIComponent(fileId)}`);
+const guestHeaders = (token = guestToken.value) => ({ 'X-Document-Request': token });
+const canComment = computed(
+  () =>
+    !!file.value?.capabilities?.can_read &&
+    (!!guestToken.value || (!!auth.user && auth.user.role !== 'link')),
+);
 const loading = ref(false);
 const showShare = ref(false);
 const showComments = ref(false);
@@ -70,8 +84,7 @@ const displayFileName = computed(
   () =>
     activeRequest.value?.items.flatMap((item) => item.files).find((entry) => entry.id === fileId)
       ?.name ??
-    file.value?.filename ??
-    '',
+    (recipientName.value || file.value?.filename || ''),
 );
 let checklistVersion = 0;
 
@@ -116,9 +129,11 @@ let returning = false;
 let returnWhenLoaded = false;
 
 const downloadUrl = computed(() => (file.value ? getFileURL(file.value, true) : ''));
-const previewUrl = computed(() => (file.value ? getFileViewURL(file.value) : ''));
+const previewUrl = computed(() =>
+  guestToken.value ? guestPreview.value : file.value ? getFileViewURL(file.value) : '',
+);
 const folderName = computed(() =>
-  file.value?.folder_id === fileManager.context?.folder.id
+  !recipientFile.value && file.value?.folder_id === fileManager.context?.folder.id
     ? fileManager.context?.folder.filename
     : '',
 );
@@ -132,6 +147,12 @@ const homeRoute = computed(() => {
 
 function goBack() {
   if (returning) {
+    return;
+  }
+  if (recipientFile.value) {
+    returning = true;
+    const { request } = route.query;
+    void router.replace({ name: 'DocumentRequestRecipient', query: { request }, hash: route.hash });
     return;
   }
   if (activeRequest.value && requestContext.value) {
@@ -168,14 +189,18 @@ function setCommentCount(count: number | null) {
     typeof count === 'number' && Number.isSafeInteger(count) && count >= 0 ? count : null;
 }
 async function refreshCommentCount() {
-  if (!file.value?.capabilities?.can_read || !auth.user || auth.user.role === 'link') {
+  if (!canComment.value || !file.value) {
     return;
   }
   const id = file.value.id;
   countVersion += 1;
   const version = countVersion;
   try {
-    const { data } = await axios.get<{ count: number }>(`/api/files/${id}/comments/count`);
+    const { data } = await (guestToken.value
+      ? axios.get<{ count: number }>(`${requestFileApi.value}/comments/count`, {
+          headers: guestHeaders(),
+        })
+      : axios.get<{ count: number }>(`/api/files/${id}/comments/count`));
     if (version === countVersion && file.value?.id === id) {
       commentCount.value = Number.isSafeInteger(data.count) && data.count >= 0 ? data.count : null;
     }
@@ -220,11 +245,45 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
   goBack();
 });
 
+function clearGuestPreview() {
+  previewController?.abort();
+  if (guestPreview.value) {
+    URL.revokeObjectURL(guestPreview.value);
+  }
+  guestPreview.value = '';
+  guestPreviewLoading.value = false;
+}
+
+async function loadGuestPreview(token: string) {
+  const controller = new AbortController();
+  previewController = controller;
+  guestPreviewLoading.value = true;
+  try {
+    const { data } = await axios.get<Blob>(`${requestFileApi.value}/view`, {
+      headers: guestHeaders(token),
+      responseType: 'blob',
+      signal: controller.signal,
+    });
+    if (!controller.signal.aborted) {
+      guestPreview.value = URL.createObjectURL(data);
+    }
+  } catch {
+    // Offer the explicit download when the inline preview is unavailable.
+  } finally {
+    if (!controller.signal.aborted) {
+      guestPreviewLoading.value = false;
+    }
+  }
+}
+
 async function loadFile() {
   const version = ++requestVersion;
   returning = false;
   returnWhenLoaded = false;
   file.value = null;
+  recipientName.value = '';
+  guestToken.value = '';
+  clearGuestPreview();
   showShare.value = false;
   showComments.value = false;
   commentsVisited.value = false;
@@ -235,16 +294,64 @@ async function loadFile() {
   clearTimeout(copyTimer);
   loading.value = true;
   try {
-    const current = await fileManager.fetchFile(fileId);
+    let current: FileItem;
+    if (recipientFile.value) {
+      let token = new URLSearchParams(route.hash.slice(1)).get('token');
+      if (!token && typeof route.query.request === 'string') {
+        const { data } = await axios.get<{ token: string }>(
+          `/api/my-document-requests/${encodeURIComponent(route.query.request)}/link`,
+        );
+        token = data.token;
+      }
+      if (!token) {
+        throw new Error('Missing document request');
+      }
+      const { data: scopedFile } = await axios.get<FileItem>(requestFileApi.value, {
+        headers: guestHeaders(token),
+      });
+      if (version !== requestVersion) {
+        return;
+      }
+      current = scopedFile;
+      let useGuest = true;
+      if (auth.user && auth.user.role !== 'link') {
+        try {
+          const { data } = await axios.get<FileItem>(`/api/files/${encodeURIComponent(fileId)}`);
+          if (data.capabilities?.can_read) {
+            current = data;
+            useGuest = false;
+          }
+        } catch (cause) {
+          if (
+            !axios.isAxiosError(cause) ||
+            ![401, 403, 404].includes(cause.response?.status ?? 0)
+          ) {
+            throw cause;
+          }
+        }
+      }
+      if (version !== requestVersion) {
+        return;
+      }
+      recipientName.value = scopedFile.filename;
+      if (useGuest) {
+        guestToken.value = token;
+        // Blob URLs do not carry the response's sandbox policy. Keep SVG
+        // download-only for guests rather than exposing a navigable SVG blob.
+        if (canPreviewFile(current) && getFileType(current) !== 'image/svg+xml') {
+          void loadGuestPreview(token);
+        }
+      }
+    } else {
+      current = await fileManager.fetchFile(fileId);
+    }
     if (version === requestVersion) {
       file.value = current;
       // Apply the responsive default once per file, not on resize: an explicit
       // choice to hide comments must not be undone while reading a document.
       showComments.value =
-        (desktop.value || !!commentTarget.value) &&
-        !!current.capabilities?.can_read &&
-        !!auth.user &&
-        auth.user.role !== 'link';
+        (desktop.value || !!commentTarget.value || route.query.comments === '1') &&
+        canComment.value;
       commentsVisited.value = showComments.value;
       void refreshCommentCount();
     }
@@ -272,8 +379,27 @@ async function download() {
   downloadError.value = '';
   fileManager.error = '';
   try {
+    if (guestToken.value) {
+      const { data } = await axios.get<Blob>(`${requestFileApi.value}/download`, {
+        headers: guestHeaders(),
+        responseType: 'blob',
+      });
+      if (file.value?.id === id) {
+        const url = URL.createObjectURL(new Blob([data], { type: 'application/octet-stream' }));
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = displayFileName.value;
+        anchor.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+      return;
+    }
     await fileManager.downloadFile(file.value);
     if (file.value?.id === id && fileManager.error) {
+      downloadError.value = 'The file couldn’t be downloaded. Please try again.';
+    }
+  } catch {
+    if (file.value?.id === id) {
       downloadError.value = 'The file couldn’t be downloaded. Please try again.';
     }
   } finally {
@@ -336,7 +462,7 @@ watch(
   { immediate: true },
 );
 watch(commentTarget, (target) => {
-  if (target && file.value?.capabilities?.can_read && auth.user && auth.user.role !== 'link') {
+  if (target && canComment.value) {
     commentsVisited.value = true;
     showComments.value = true;
   }
@@ -358,6 +484,7 @@ onBeforeUnmount(() => {
   countVersion += 1;
   checklistVersion += 1;
   clearTimeout(copyTimer);
+  clearGuestPreview();
 });
 </script>
 
@@ -366,8 +493,10 @@ onBeforeUnmount(() => {
     <header class="file-header">
       <Button
         icon="oi oi-arrow-left"
-        :aria-label="activeRequest ? 'Back to full request' : 'Back to files'"
-        :title="activeRequest ? 'Back to full request (Esc)' : 'Back to files (Esc)'"
+        :aria-label="activeRequest || recipientFile ? 'Back to full request' : 'Back to files'"
+        :title="
+          activeRequest || recipientFile ? 'Back to full request (Esc)' : 'Back to files (Esc)'
+        "
         aria-keyshortcuts="Escape"
         severity="secondary"
         variant="text"
@@ -404,7 +533,7 @@ onBeforeUnmount(() => {
             @click="requestPopover?.toggle($event)"
           />
           <Button
-            v-if="file.capabilities?.can_read && auth.user?.role !== 'link'"
+            v-if="canComment"
             id="file-comments-toggle"
             :label="mobileRequest ? undefined : 'Comments'"
             icon="oi oi-comment"
@@ -421,7 +550,7 @@ onBeforeUnmount(() => {
             @click="toggleComments"
           />
           <Button
-            v-if="!activeRequest"
+            v-if="!activeRequest && !guestToken"
             :icon="copied ? 'oi oi-check' : 'oi oi-link'"
             aria-label="Copy file address — access is still required"
             :title="copied ? 'Copied' : 'Copy file address — access is still required'"
@@ -527,13 +656,15 @@ onBeforeUnmount(() => {
           <Button label="Try again" severity="secondary" @click="loadFile" />
         </div>
         <template v-else-if="file">
+          <p v-if="guestPreviewLoading" role="status" class="file-state">Loading preview…</p>
           <FilePreview
-            v-if="file.capabilities?.can_read && canPreviewFile(file)"
+            v-else-if="file.capabilities?.can_read && canPreviewFile(file) && previewUrl"
             :key="file.id"
             :file-type="getFileType(file)"
             :file-url="previewUrl"
-            :download-url="downloadUrl"
-            :file-name="file.filename"
+            :download-url="guestToken ? undefined : downloadUrl"
+            :file-name="displayFileName"
+            @download="download"
             maximized
           />
           <div v-else class="file-state">
@@ -556,7 +687,7 @@ onBeforeUnmount(() => {
         </template>
       </div>
       <aside
-        v-if="file && commentsVisited && file.capabilities?.can_read && auth.user?.role !== 'link'"
+        v-if="file && commentsVisited && canComment"
         v-show="showComments"
         id="file-comments-pane"
         class="file-comments-pane"
@@ -565,9 +696,10 @@ onBeforeUnmount(() => {
         <FileComments
           :key="`${file.id}:${auth.user?.session_id}`"
           :fileId="file.id"
-          :fileName="file.filename"
+          :fileName="displayFileName"
           :visible="showComments"
           :focusId="commentTarget"
+          :request-token="guestToken || undefined"
           @count="setCommentCount"
           @changed="refreshCommentCount"
         />

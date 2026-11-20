@@ -28,6 +28,18 @@ const heading = ref<HTMLElement>();
 
 const canSubmit = (item: DocumentRequestItem) =>
   item.status === 'needed' || item.status === 'replacement';
+const stagedFiles = (item: DocumentRequestItem) => item.files.filter((file) => !file.id);
+const submittedFiles = (item: DocumentRequestItem) => item.files.filter((file) => file.id);
+const submissionDate = new Intl.DateTimeFormat(undefined, {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+});
+const fileRoute = (fileId: string, comments = false) => ({
+  name: 'DocumentRequestFile',
+  params: { fileId },
+  query: { ...(accountRequest && { request: accountRequest }), ...(comments && { comments: '1' }) },
+  hash: route.hash,
+});
 const remaining = computed(() => request.value?.items.filter(canSubmit).length ?? 0);
 const complete = computed(() => request.value?.items.every((item) => item.status === 'accepted'));
 const ordered = computed(() =>
@@ -211,11 +223,11 @@ onMounted(load);
               {{ itemError.text }}
             </p>
             <ul
-              v-if="item.files.length"
+              v-if="stagedFiles(item).length"
               class="mt-2 space-y-1 text-sm text-muted-color"
               :aria-label="`Uploaded files for ${item.name}`"
             >
-              <li v-for="(file, index) in item.files" :key="index" class="wrap-anywhere">
+              <li v-for="(file, index) in stagedFiles(item)" :key="index" class="wrap-anywhere">
                 {{ file.name }}
               </li>
             </ul>
@@ -239,7 +251,7 @@ onMounted(load);
                   class="inline-flex min-h-[44px] items-center rounded-md border border-sky-700 px-3 text-sm font-semibold text-sky-800 hover:bg-sky-50 peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-sky-700 dark:border-sky-400 dark:text-sky-200 dark:hover:bg-sky-950"
                 >
                   {{
-                    item.files.length
+                    stagedFiles(item).length
                       ? 'Add more files'
                       : item.status === 'replacement'
                         ? 'Add replacement'
@@ -248,7 +260,7 @@ onMounted(load);
                 </span>
               </label>
               <Button
-                v-if="item.files.length"
+                v-if="stagedFiles(item).length"
                 type="button"
                 label="Submit for review"
                 unstyled
@@ -264,6 +276,40 @@ onMounted(load);
               >
                 {{ active.label }}
               </p>
+            </div>
+            <div
+              v-if="submittedFiles(item).length"
+              class="mt-4 border-t border-surface-200 pt-3 dark:border-surface-700"
+            >
+              <p class="m-0 text-sm font-semibold">Submitted files</p>
+              <ul class="mt-2 space-y-2 text-sm" :aria-label="`Submitted files for ${item.name}`">
+                <li v-for="file in submittedFiles(item)" :key="file.id">
+                  <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                    <RouterLink
+                      :to="fileRoute(file.id!)"
+                      class="font-medium text-primary underline wrap-anywhere"
+                    >
+                      {{ file.name }}
+                    </RouterLink>
+                    <RouterLink
+                      v-if="file.comment_count"
+                      :to="fileRoute(file.id!, true)"
+                      :aria-label="`${file.comment_count} shared ${file.comment_count === 1 ? 'comment' : 'comments'} on ${file.name}`"
+                      class="text-primary underline"
+                    >
+                      {{ file.comment_count }}
+                      {{ file.comment_count === 1 ? 'comment' : 'comments' }}
+                    </RouterLink>
+                  </div>
+                  <time
+                    v-if="file.submitted_at"
+                    :datetime="file.submitted_at"
+                    class="text-muted-color"
+                  >
+                    Submitted {{ submissionDate.format(new Date(file.submitted_at)) }}
+                  </time>
+                </li>
+              </ul>
             </div>
           </li>
         </ul>

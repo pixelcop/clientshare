@@ -643,19 +643,29 @@ async function revoke() {
             {{ item.reason }}
           </p>
           <ul
-            v-if="item.files.some((file) => file.round === item.round)"
+            v-if="item.files.length"
             class="space-y-1 text-sm"
-            :aria-label="`Current files for ${item.name}`"
+            :aria-label="`Files for ${item.name}`"
           >
-            <li
-              v-for="file in item.files.filter((file) => file.round === item.round)"
-              :key="file.id"
-            >
+            <li v-for="file in item.files" :key="file.id">
               <RouterLink
                 :to="requestFileRoute(clientId, request.id, file.id!)"
                 class="text-primary underline wrap-anywhere"
                 >{{ file.name }}</RouterLink
               >
+              <span v-if="file.submitted_at || file.comment_count" class="ml-2 text-muted-color">
+                <time v-if="file.submitted_at" :datetime="file.submitted_at">
+                  Submitted {{ new Date(file.submitted_at).toLocaleString() }}
+                </time>
+                <RouterLink
+                  v-if="file.comment_count"
+                  :to="requestFileRoute(clientId, request.id, file.id!, true)"
+                  :aria-label="`${file.comment_count} ${file.comment_count === 1 ? 'comment' : 'comments'} on ${file.name}`"
+                  class="ml-2 text-primary underline"
+                >
+                  {{ file.comment_count }} {{ file.comment_count === 1 ? 'comment' : 'comments' }}
+                </RouterLink>
+              </span>
             </li>
           </ul>
           <p
@@ -723,18 +733,6 @@ async function revoke() {
                 <p v-if="review.reason" class="wrap-anywhere whitespace-pre-wrap">
                   {{ review.reason }}
                 </p>
-                <ul v-if="review.round !== item.round">
-                  <li
-                    v-for="file in item.files.filter((file) => file.round === review.round)"
-                    :key="file.id"
-                  >
-                    <RouterLink
-                      :to="requestFileRoute(clientId, request.id, file.id!)"
-                      class="text-primary underline wrap-anywhere"
-                      >{{ file.name }}</RouterLink
-                    >
-                  </li>
-                </ul>
               </li>
             </ul>
           </details>

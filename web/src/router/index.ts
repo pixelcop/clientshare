@@ -123,6 +123,13 @@ const router = createRouter({
       meta: { public: false, roles: ['client', 'customer'] },
     },
     {
+      path: '/document-request/files/:fileId',
+      name: 'DocumentRequestFile',
+      component: FileView,
+      props: true,
+      meta: { public: true },
+    },
+    {
       path: '/document-request',
       name: 'DocumentRequestRecipient',
       component: () => import('../views/DocumentRequestRecipient.vue'),

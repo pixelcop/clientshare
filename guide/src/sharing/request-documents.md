@@ -30,6 +30,14 @@ Signed-in client users can also open **Document Requests** in the top
 navigation to find active requests addressed to them. Copy-only requests are
 available through the shared link.
 
+Under **Submitted files**, recipients can reopen a file in the normal file
+viewer, even after a replacement is requested. The checklist shows when each
+file was submitted and links to its shared comments. Anyone with the active
+request link can view or download files submitted through that request and
+read or post shared comments. The link does not reveal the destination folder
+or team-only notes, and it does not let guests share the files onward. Ordinary
+file and folder sharing links keep their original permissions.
+
 Anyone with the link can see the named checklist, filenames attached to the
 current submissions, and instructions or replacement reasons. The link does not
 let them download files or browse the workspace. It expires after 30 days; staff

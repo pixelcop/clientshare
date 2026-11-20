@@ -21,7 +21,13 @@ export interface DocumentRequestItem {
   status: DocumentRequestStatus;
   reason: string;
   round: number;
-  files: { id?: string; name: string; round: number }[];
+  files: {
+    id?: string;
+    name: string;
+    round: number;
+    submitted_at?: string;
+    comment_count?: number;
+  }[];
   history?: {
     round: number;
     status: 'replacement' | 'accepted';
@@ -46,10 +52,15 @@ export type RecipientDocumentRequest = Pick<
   'title' | 'expires_at' | 'items' | 'description' | 'updates'
 >;
 
-export function requestFileRoute(clientId: string, requestId: string, fileId: string) {
+export function requestFileRoute(
+  clientId: string,
+  requestId: string,
+  fileId: string,
+  comments = false,
+) {
   return {
     name: 'FileView',
     params: { fileId },
-    query: { requestClient: clientId, request: requestId },
+    query: { requestClient: clientId, request: requestId, ...(comments && { comments: '1' }) },
   };
 }

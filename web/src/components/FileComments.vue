@@ -15,7 +15,13 @@ import type { SharingRecipient } from '@/types/sharing';
 const CommentEditor = defineAsyncComponent(() => import('@/components/CommentEditor.vue'));
 
 const props = withDefaults(
-  defineProps<{ fileId: string; fileName?: string; visible?: boolean; focusId?: string }>(),
+  defineProps<{
+    fileId: string;
+    fileName?: string;
+    visible?: boolean;
+    focusId?: string;
+    requestToken?: string;
+  }>(),
   { visible: true, fileName: 'File' },
 );
 const emit = defineEmits<{ count: [value: number | null]; changed: [] }>();
@@ -46,6 +52,7 @@ const {
   fileId: props.fileId,
   sessionKey: sessionKey.value,
   focusId: props.focusId,
+  requestToken: props.requestToken,
 }));
 const draft = ref('');
 const composerOpen = ref(false);
@@ -98,7 +105,12 @@ function shareMention(person: SharingRecipient): Promise<boolean> {
   });
 }
 function warmMentions() {
-  if (props.visible && ready.value && (visibility.value === 'shared' || canInternal.value)) {
+  if (
+    !props.requestToken &&
+    props.visible &&
+    ready.value &&
+    (visibility.value === 'shared' || canInternal.value)
+  ) {
     mentions.warm(visibility.value);
   }
 }
@@ -491,6 +503,10 @@ onBeforeUnmount(() => clearTimeout(highlightTimer));
             data-sentry-mask
             @submit.prevent="send"
           >
+            <p v-if="visibility === 'shared'" class="audience-help">
+              On a document request upload, anyone with the active request link can read shared
+              comments.
+            </p>
             <p v-if="teamDraftUnavailable" role="status" class="audience-help">
               Team-note access changed. Copy your draft, or clear it before writing a shared
               comment.
@@ -505,7 +521,19 @@ onBeforeUnmount(() => clearTimeout(highlightTimer));
                 "
               />
             </p>
+            <div v-if="requestToken" class="space-y-2">
+              <label :for="composerId">Add a shared comment</label>
+              <textarea
+                :id="composerId"
+                v-model="draft"
+                rows="3"
+                class="block w-full rounded-md border border-surface-300 bg-transparent p-2 dark:border-surface-600"
+                :disabled="saving"
+                data-sentry-mask
+              />
+            </div>
             <CommentEditor
+              v-else
               :id="composerId"
               v-model="draft"
               :fileId="fileId"

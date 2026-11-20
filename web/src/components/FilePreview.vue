@@ -13,11 +13,12 @@ const {
   maximized,
 } = defineProps<{
   fileUrl: string;
-  downloadUrl: string;
+  downloadUrl?: string;
   fileType: string;
   maximized?: boolean;
   fileName?: string;
 }>();
+const emit = defineEmits<{ download: [] }>();
 
 const { isAudio, isPdf, isText, isImage } = useFile(fileType);
 
@@ -54,17 +55,27 @@ watch(
     onCleanup(() => controller.abort());
     failed.value = false;
     textContent.value = '';
-    if (!isText) {return;}
+    if (!isText) {
+      return;
+    }
     loading.value = true;
     try {
       const response = await fetch(url, { signal: controller.signal });
-      if (!response.ok) {throw new Error('Preview request failed');}
+      if (!response.ok) {
+        throw new Error('Preview request failed');
+      }
       const text = await response.text();
-      if (!controller.signal.aborted) {textContent.value = text;}
+      if (!controller.signal.aborted) {
+        textContent.value = text;
+      }
     } catch {
-      if (!controller.signal.aborted) {failed.value = true;}
+      if (!controller.signal.aborted) {
+        failed.value = true;
+      }
     } finally {
-      if (!controller.signal.aborted) {loading.value = false;}
+      if (!controller.signal.aborted) {
+        loading.value = false;
+      }
     }
   },
   { immediate: true },
@@ -76,9 +87,22 @@ watch(
     <i class="oi oi-file" aria-hidden="true" />
     <h2>{{ failed ? 'Preview couldn’t be loaded' : 'No preview available' }}</h2>
     <p>Download the file to open it on your device.</p>
-    <Button as="a" :href="downloadUrl" :download="fileName" label="Download" icon="oi oi-download" />
+    <Button
+      v-if="downloadUrl"
+      as="a"
+      :href="downloadUrl"
+      :download="fileName"
+      label="Download"
+      icon="oi oi-download"
+    />
+    <Button v-else label="Download" icon="oi oi-download" @click="emit('download')" />
   </div>
-  <ImagePreview v-else-if="isImage" :file-url="fileUrl" :file-name="fileName" @error="failed = true" />
+  <ImagePreview
+    v-else-if="isImage"
+    :file-url="fileUrl"
+    :file-name="fileName"
+    @error="failed = true"
+  />
   <div v-else-if="isAudio" data-sentry-block class="audio-preview">
     <audio :src="fileUrl" controls class="w-full max-w-lg" @error="failed = true">
       Your browser does not support the audio element.

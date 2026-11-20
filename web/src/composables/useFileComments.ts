@@ -14,7 +14,7 @@ interface CommentPage {
 
 // Conversation state belongs to the current file/session, never a shared cache.
 export function useFileComments(
-  context: () => { fileId: string; sessionKey: string; focusId?: string },
+  context: () => { fileId: string; sessionKey: string; focusId?: string; requestToken?: string },
 ) {
   const comments = ref<FileComment[]>([]);
   const loading = ref(false);
@@ -28,7 +28,12 @@ export function useFileComments(
   const focusedWindow = ref(false);
   const focusHasNewer = ref(false);
   const unavailableMentionIds = ref<string[]>([]);
-  const base = computed(() => `/api/files/${context().fileId}/comments`);
+  const base = computed(
+    () =>
+      `/api/${context().requestToken ? 'document-request/' : ''}files/${encodeURIComponent(context().fileId)}/comments`,
+  );
+  const requestHeaders = () =>
+    context().requestToken ? { 'X-Document-Request': context().requestToken } : {};
   let generation = 0;
   let listGeneration = 0;
   let controller: AbortController | undefined;
@@ -85,6 +90,7 @@ export function useFileComments(
       const { data } = await axios.get<CommentPage>(base.value, {
         params: older ? { before: nextCursor.value } : { ...(focusId && { focus: focusId }) },
         signal: controller.signal,
+        ...(context().requestToken && { headers: requestHeaders() }),
       });
       if (current !== generation || request !== listGeneration) {
         return;
@@ -154,7 +160,7 @@ export function useFileComments(
         url,
         { body, visibility },
         {
-          headers: { 'Idempotency-Key': key },
+          headers: { ...requestHeaders(), 'Idempotency-Key': key },
         },
       ),
     );
@@ -169,7 +175,7 @@ export function useFileComments(
   }
 
   watch(
-    () => [context().fileId, context().sessionKey, context().focusId],
+    () => [context().fileId, context().sessionKey, context().focusId, context().requestToken],
     () => {
       reset();
       void load(false, context().focusId);

@@ -12,15 +12,18 @@ import AppTopbar from './AppTopbar.vue';
 const { user } = storeToRefs(useAuthStore());
 const { isPublicLayout } = useLayout();
 const route = useRoute();
-const isFilePage = computed(() => route.name === 'FileView');
+const isRequestFile = computed(() => route.name === 'DocumentRequestFile');
+const isFilePage = computed(() => route.name === 'FileView' || isRequestFile.value);
 const isRequestRecipient = computed(() => route.name === 'DocumentRequestRecipient');
-const isAnonymousRequest = computed(() => isRequestRecipient.value && !user.value);
+const isAnonymousRequest = computed(
+  () => (isRequestRecipient.value || isRequestFile.value) && !user.value,
+);
 </script>
 
 <template>
   <AppTopbar v-if="(!!user || isRequestRecipient) && !isFilePage" />
 
-  <router-view v-if="isFilePage" />
+  <router-view v-if="isFilePage" :key="isRequestFile ? route.fullPath : undefined" />
   <div v-else class="layout-main-container">
     <div
       v-if="isPublicLayout || isAnonymousRequest"
