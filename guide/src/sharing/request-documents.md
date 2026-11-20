@@ -32,8 +32,13 @@ can revoke it sooner from the request.
 ## Review the documents
 
 Open the request and use **Refresh** to check for submissions. Open a filename
-to preview it. For each submitted item, choose **Accept** or **Ask for
-replacement**. A replacement reason is visible to the recipient. Send them the
+to preview it. On desktop the request checklist stays to the left of the file
+and file comments open on the right. On a smaller screen, use **Request** in the
+file toolbar to switch files, review the current item, or return to the full
+checklist.
+
+For each submitted item, choose **Accept** or **Ask for replacement**.
+A replacement reason is visible to the recipient. Send them the
 same link so they can submit a correction; the other items keep their status.
 Staff can see earlier review decisions under **Review history**.
 

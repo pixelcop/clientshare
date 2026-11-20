@@ -10,6 +10,7 @@ import {
   type DocumentRequestItem,
   documentRequestLabels,
   type DocumentRequestSummary,
+  requestFileRoute,
 } from '@/types/documentRequests';
 
 const { clientId, requestId } = defineProps<{ clientId: string; requestId?: string }>();
@@ -580,7 +581,7 @@ async function revoke() {
               :key="file.id"
             >
               <RouterLink
-                :to="{ name: 'FileView', params: { fileId: file.id } }"
+                :to="requestFileRoute(clientId, request.id, file.id!)"
                 class="text-primary underline wrap-anywhere"
                 >{{ file.name }}</RouterLink
               >
@@ -657,7 +658,7 @@ async function revoke() {
                     :key="file.id"
                   >
                     <RouterLink
-                      :to="{ name: 'FileView', params: { fileId: file.id } }"
+                      :to="requestFileRoute(clientId, request.id, file.id!)"
                       class="text-primary underline wrap-anywhere"
                       >{{ file.name }}</RouterLink
                     >

@@ -1,13 +1,16 @@
 <script setup lang="ts">
 import { useEventListener, useMediaQuery } from '@vueuse/core';
 import axios from 'axios';
+import { Popover } from 'openvue';
 
+import DocumentRequestReviewPanel from '@/components/DocumentRequestReviewPanel.vue';
 import FileComments from '@/components/FileComments.vue';
 import FilePreview from '@/components/FilePreview.vue';
 import SharingDialog from '@/components/SharingDialog.vue';
 import { useAuthStore } from '@/stores/auth';
 import { useBrandingStore } from '@/stores/branding';
 import { useFileManagerStore } from '@/stores/fileManager';
+import type { DocumentRequest } from '@/types/documentRequests';
 import type { FileItem } from '@/types/models';
 import {
   canPreviewFile,
@@ -34,6 +37,57 @@ const loading = ref(false);
 const showShare = ref(false);
 const showComments = ref(false);
 const desktop = useMediaQuery('(min-width: 1024px)');
+const requestPopover = ref<InstanceType<typeof Popover>>();
+const requestDetails = ref<DocumentRequest>();
+const requestContext = computed(() => {
+  const { request, requestClient } = router.currentRoute.value.query;
+  if (
+    typeof request !== 'string' ||
+    !request ||
+    typeof requestClient !== 'string' ||
+    !requestClient ||
+    !['admin', 'manager'].includes(auth.user?.role ?? '')
+  ) {
+    return undefined;
+  }
+  return { requestId: request, clientId: requestClient };
+});
+const activeRequest = computed(() => {
+  const request = requestDetails.value;
+  if (request?.items.some((item) => item.files.some((entry) => entry.id === fileId))) {
+    return request;
+  }
+  return undefined;
+});
+const mobileRequest = computed(() => !!activeRequest.value && !desktop.value);
+const displayFileName = computed(
+  () =>
+    activeRequest.value?.items.flatMap((item) => item.files).find((entry) => entry.id === fileId)
+      ?.name ??
+    file.value?.filename ??
+    '',
+);
+let checklistVersion = 0;
+
+async function loadRequest() {
+  const version = ++checklistVersion;
+  const context = requestContext.value;
+  if (!context) {
+    return;
+  }
+  try {
+    const { data } = await axios.get<DocumentRequest>(
+      `/api/clients/${encodeURIComponent(context.clientId)}/document-requests/${encodeURIComponent(context.requestId)}`,
+    );
+    if (version === checklistVersion) {
+      requestDetails.value = data;
+    }
+  } catch {
+    if (version === checklistVersion) {
+      requestDetails.value = undefined;
+    }
+  }
+}
 const commentsVisited = ref(false);
 const commentCount = ref<number | null>(null);
 let countVersion = 0;
@@ -69,6 +123,11 @@ const homeRoute = computed(() => {
 
 function goBack() {
   if (returning) {
+    return;
+  }
+  if (activeRequest.value && requestContext.value) {
+    returning = true;
+    void router.replace({ name: 'DocumentRequests', params: requestContext.value });
     return;
   }
   const previous = router.options.history.state.back;
@@ -252,20 +311,30 @@ watch(commentTarget, (target) => {
     showComments.value = true;
   }
 });
+watch(
+  [requestContext, () => auth.user?.session_id],
+  () => {
+    requestDetails.value = undefined;
+    void loadRequest();
+  },
+  { immediate: true },
+);
+watch([() => fileId, desktop], () => requestPopover.value?.hide());
 onBeforeUnmount(() => {
   requestVersion += 1;
   countVersion += 1;
+  checklistVersion += 1;
   clearTimeout(copyTimer);
 });
 </script>
 
 <template>
-  <main class="file-detail" aria-label="File viewer">
+  <main class="file-detail" :class="{ 'mobile-request': mobileRequest }" aria-label="File viewer">
     <header class="file-header">
       <Button
         icon="oi oi-arrow-left"
-        aria-label="Back to files"
-        title="Back to files (Esc)"
+        :aria-label="activeRequest ? 'Back to full request' : 'Back to files'"
+        :title="activeRequest ? 'Back to full request (Esc)' : 'Back to files (Esc)'"
         aria-keyshortcuts="Escape"
         severity="secondary"
         variant="text"
@@ -275,7 +344,7 @@ onBeforeUnmount(() => {
       <template v-if="file">
         <i :class="getFileIcon(file)" class="file-header-icon" aria-hidden="true" />
         <div data-sentry-mask class="file-heading">
-          <h1 :title="file.filename">{{ file.filename }}</h1>
+          <h1 :title="displayFileName">{{ displayFileName }}</h1>
           <div class="file-metadata">
             <router-link v-if="file.folder_id && folderName" :to="homeRoute" class="file-folder">
               <i class="oi oi-folder" aria-hidden="true" />
@@ -292,9 +361,20 @@ onBeforeUnmount(() => {
         </div>
         <div class="file-header-actions">
           <Button
+            v-if="mobileRequest"
+            label="Request"
+            icon="oi oi-chevron-down"
+            severity="secondary"
+            variant="outlined"
+            class="file-request-toggle"
+            aria-haspopup="dialog"
+            @click="requestPopover?.toggle($event)"
+            @keydown.esc.stop
+          />
+          <Button
             v-if="file.capabilities?.can_read && auth.user?.role !== 'link'"
             id="file-comments-toggle"
-            label="Comments"
+            :label="mobileRequest ? undefined : 'Comments'"
             icon="oi oi-comment"
             class="file-comments-toggle"
             :severity="hasComments ? undefined : 'secondary'"
@@ -302,6 +382,7 @@ onBeforeUnmount(() => {
             :badge="commentCount === null ? undefined : String(commentCount)"
             :badgeSeverity="hasComments ? undefined : 'secondary'"
             :aria-label="commentLabel"
+            :title="commentLabel"
             :aria-pressed="showComments"
             :aria-expanded="showComments"
             aria-controls="file-comments-pane"
@@ -320,7 +401,7 @@ onBeforeUnmount(() => {
           <Button
             v-if="file.capabilities?.can_read"
             icon="oi oi-download"
-            label="Download"
+            :label="mobileRequest ? undefined : 'Download'"
             class="file-download"
             aria-label="Download"
             title="Download"
@@ -331,9 +412,11 @@ onBeforeUnmount(() => {
           />
           <Button
             v-if="file.capabilities?.can_share && auth.user?.role !== 'link'"
-            label="Share"
+            :label="mobileRequest ? undefined : 'Share'"
             icon="oi oi-share-alt"
             class="file-share"
+            aria-label="Share"
+            title="Share"
             aria-haspopup="dialog"
             :aria-expanded="showShare"
             :aria-controls="`sharing-item-${file.id}`"
@@ -343,8 +426,38 @@ onBeforeUnmount(() => {
       </template>
       <h1 v-else>File viewer</h1>
     </header>
+    <Popover
+      v-if="mobileRequest && activeRequest && requestContext"
+      ref="requestPopover"
+      aria-label="Document request review"
+      :style="{ width: 'min(340px, calc(100vw - 24px))' }"
+      :pt="{
+        content: { style: { padding: 0, maxHeight: 'min(60dvh, 480px)', overflowY: 'auto' } },
+      }"
+    >
+      <DocumentRequestReviewPanel
+        :key="fileId"
+        :request="activeRequest"
+        :client-id="requestContext.clientId"
+        :file-id="fileId"
+        @reviewed="loadRequest"
+      />
+    </Popover>
     <p v-if="downloadError" role="alert" class="file-download-error">{{ downloadError }}</p>
     <div class="file-workspace" :class="{ 'comments-open': showComments }">
+      <aside
+        v-if="desktop && activeRequest && requestContext"
+        class="file-request-pane"
+        aria-label="Document request review"
+      >
+        <DocumentRequestReviewPanel
+          :key="fileId"
+          :request="activeRequest"
+          :client-id="requestContext.clientId"
+          :file-id="fileId"
+          @reviewed="loadRequest"
+        />
+      </aside>
       <div class="file-canvas">
         <p v-if="loading" role="status" class="file-state">Loading file…</p>
         <div v-else-if="error" class="file-state" role="alert">
@@ -497,6 +610,29 @@ h1 {
   flex: 1;
   min-height: 0;
   min-width: 0;
+}
+.file-request-pane {
+  flex: 0 0 clamp(224px, 22vw, 280px);
+  min-width: 0;
+  overflow: auto;
+  border-inline-end: 1px solid var(--p-content-border-color);
+}
+.mobile-request .file-header-actions {
+  width: 100%;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.mobile-request .file-header {
+  flex-wrap: wrap;
+}
+.mobile-request .file-heading {
+  flex-basis: calc(100% - 112px);
+}
+.mobile-request .file-request-toggle {
+  margin-inline-end: auto;
+}
+.mobile-request :is(.file-share, .file-comments-toggle, .file-download, .file-copy) {
+  min-width: 44px;
 }
 .file-comments-pane {
   flex: 0 0 360px;

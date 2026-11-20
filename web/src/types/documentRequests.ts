@@ -40,3 +40,11 @@ export interface DocumentRequest extends DocumentRequestSummary {
 }
 
 export type RecipientDocumentRequest = Pick<DocumentRequest, 'title' | 'expires_at' | 'items'>;
+
+export function requestFileRoute(clientId: string, requestId: string, fileId: string) {
+  return {
+    name: 'FileView',
+    params: { fileId },
+    query: { requestClient: clientId, request: requestId },
+  };
+}
