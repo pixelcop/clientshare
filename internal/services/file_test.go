@@ -163,6 +163,41 @@ func TestListFilesPendingDiskDeleteOnlyReturnsEligibleRows(t *testing.T) {
 	}
 }
 
+func TestPendingDiskDeleteAcrossDSTFallBack(t *testing.T) {
+	db := setupFileServiceTestDB(t)
+	ctx := context.Background()
+	service := NewFileService(db)
+	// The first 1:45 AM precedes the second 1:15 AM despite its later wall time.
+	cutoff := time.Date(2026, 11, 1, 6, 15, 0, 123456789, time.UTC)
+	for _, row := range []struct {
+		id, deleted string
+	}{
+		{"first", "2026-11-01T01:45:00-04:00"},
+		{"third", "2026-11-01 01:15:00.123456789-05:00"},
+		{"second", "2026-11-01 06:15:00.123456788Z"},
+		{"too-recent", "2026-11-01 01:15:00.123456790-05:00"},
+	} {
+		file := models.File{ID: row.id, TenantID: tenantctx.DefaultTenantID, ClientID: "client-1", Filename: row.id, Path: row.id, Type: "file", UploadedAt: cutoff}
+		if err := db.Create(&file).Error; err != nil {
+			t.Fatal(err)
+		}
+		if err := db.Exec("UPDATE files SET deleted_at = ? WHERE id = ?", row.deleted, file.ID).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	for limit, want := range map[int][]string{2: {"first", "second"}, 10: {"first", "second", "third"}} {
+		files, err := service.ListFilesPendingDiskDelete(ctx, cutoff, limit)
+		if err != nil || len(files) != len(want) {
+			t.Fatalf("limit %d: got %d files, error %v; want %v", limit, len(files), err, want)
+		}
+		for i := range want {
+			if files[i].Filename != want[i] {
+				t.Fatalf("limit %d: file %d was %q, want %q", limit, i, files[i].Filename, want[i])
+			}
+		}
+	}
+}
+
 func TestMarkFileDiskDeletedSetsTimestamp(t *testing.T) {
 	db := setupFileServiceTestDB(t)
 	service := NewFileService(db)
