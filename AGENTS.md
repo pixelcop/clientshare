@@ -8,6 +8,12 @@ A file for [guiding coding agents](https://agents.md/).
 - Keep deployment-specific cutover plans, host/service details, backup locations, rehearsal results and other local operational notes untracked or in the private production workspace. Do not commit them to this repository, even while there are no other users.
 - General configuration, upgrade, migration, recovery and troubleshooting documentation belongs in the public repository when it applies to self-hosted installations.
 
+## Changelog
+
+- With every commit or merge to `main`, check whether [`CHANGELOG.md`](CHANGELOG.md) needs an entry. Add entries under `Unreleased` as changes land; review feature branches as a whole on merge and avoid duplicate entries.
+- Keep entries sparse and readable as source material for release notes: one entry per feature or meaningful change, plus notable bug fixes. Use `Security` for security or privacy changes. Skip small UI polish, routine maintenance, and test-only work. Commit references are optional; if useful, link just the feature's merge commit.
+- Leave changes under `Unreleased` until a release. Version bumps and tags follow the production workspace's release process.
+
 ## Commands
 
 - **Run backend:** `make run`
