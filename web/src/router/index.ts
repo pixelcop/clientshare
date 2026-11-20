@@ -117,6 +117,12 @@ const router = createRouter({
       props: true,
     },
     {
+      path: '/document-requests',
+      name: 'MyDocumentRequests',
+      component: () => import('../views/MyDocumentRequests.vue'),
+      meta: { public: false, roles: ['client', 'customer'] },
+    },
+    {
       path: '/document-request',
       name: 'DocumentRequestRecipient',
       component: () => import('../views/DocumentRequestRecipient.vue'),

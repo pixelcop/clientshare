@@ -118,7 +118,7 @@ let controller: RuntimeReplay | undefined;
 let refreshing: Promise<void> | undefined;
 
 export const isDocumentRequestPage = (pathname: string) =>
-  /^\/(?:document-request|clients\/[^/]+\/document-requests)(?:\/|$)/.test(pathname);
+  /^\/(?:document-requests?|clients\/[^/]+\/document-requests)(?:\/|$)/.test(pathname);
 
 // DOM snapshots include the current URL. Do not start on credential-bearing
 // bootstrap pages; recording can resume after the application consumes the URL.

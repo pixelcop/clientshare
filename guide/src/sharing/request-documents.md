@@ -26,6 +26,10 @@ under the client workspace as soon as they finish. **Submit for
 review** tells the team that an item is ready. Adding files alone does not
 submit the item.
 
+Signed-in client users can also open **Document Requests** in the top
+navigation to find active requests addressed to them. Copy-only requests are
+available through the shared link.
+
 Anyone with the link can see the named checklist, filenames attached to the
 current submissions, and instructions or replacement reasons. The link does not
 let them download files or browse the workspace. It expires after 30 days; staff
@@ -33,9 +37,9 @@ can revoke it sooner from the request.
 
 ## Review the documents
 
-Activity notifies staff when an item is submitted for review. The selected
-client users get Activity entries for new requests, accepted documents, and
-replacement requests, even if email delivery is disabled.
+Activity shows new requests, additional documents, submitted items, and review
+decisions to staff with workspace access and to the client users the request
+was addressed to, even if email delivery is disabled.
 
 Open the request and use **Refresh** to check for submissions. Open a filename
 to preview it. On desktop the request checklist stays to the left of the file
