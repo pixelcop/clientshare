@@ -402,7 +402,6 @@ onBeforeUnmount(() => {
             class="file-request-toggle"
             aria-haspopup="dialog"
             @click="requestPopover?.toggle($event)"
-            @keydown.esc.stop
           />
           <Button
             v-if="file.capabilities?.can_read && auth.user?.role !== 'link'"
@@ -467,7 +466,6 @@ onBeforeUnmount(() => {
               aria-haspopup="menu"
               aria-controls="request-file-actions"
               @click="fileActionsMenu?.toggle($event)"
-              @keydown.esc.stop
             />
             <Menu
               id="request-file-actions"
