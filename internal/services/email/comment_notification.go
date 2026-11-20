@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/pixelcop/clientshare/internal/access"
+	"github.com/pixelcop/clientshare/internal/dbtime"
 	"github.com/pixelcop/clientshare/internal/models"
 	"gorm.io/gorm"
 )
@@ -55,7 +56,9 @@ func CommentNotificationAddress(value string) string {
 func CommentPriorParticipants(db *gorm.DB, comment models.FileComment) *gorm.DB {
 	return db.Model(&models.FileComment{}).
 		Where("tenant_id = ? AND file_id = ? AND visibility = ? AND deleted_at IS NULL", comment.TenantID, comment.FileID, comment.Visibility).
-		Where("(created_at < ? OR (created_at = ? AND id < ?))", comment.CreatedAt, comment.CreatedAt, comment.ID)
+		Where("(? OR (? AND id < ?))",
+			dbtime.Compare(db, "created_at", "<", comment.CreatedAt),
+			dbtime.Compare(db, "created_at", "=", comment.CreatedAt), comment.ID)
 }
 
 func (q *DBEmailQueue) revalidateCommentNotification(item *models.QueuedEmail) (bool, error) {

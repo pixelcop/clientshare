@@ -7,11 +7,13 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"time"
+
 	"github.com/gofiber/fiber/v3"
 	"github.com/pixelcop/clientshare/internal/access"
+	"github.com/pixelcop/clientshare/internal/dbtime"
 	"github.com/pixelcop/clientshare/internal/models"
 	"gorm.io/gorm"
-	"time"
 )
 
 const SessionCookie = "clientshare_session"
@@ -85,7 +87,9 @@ func (s *SessionStore) Validate(ctx context.Context, raw, audience, tenantID str
 	}
 	now := time.Now().UTC()
 	var record models.BrowserSession
-	query := s.DB.WithContext(ctx).Where("token_hash = ? AND audience = ? AND revoked_at IS NULL AND expires_at > ? AND idle_expires_at > ?", SessionHash(raw), audience, now, now)
+	query := s.DB.WithContext(ctx).Where("token_hash = ? AND audience = ? AND revoked_at IS NULL", SessionHash(raw), audience).
+		Where(dbtime.Compare(s.DB, "expires_at", ">", now)).
+		Where(dbtime.Compare(s.DB, "idle_expires_at", ">", now))
 	if tenantID != "" {
 		query = query.Where("tenant_id = ?", tenantID)
 	}

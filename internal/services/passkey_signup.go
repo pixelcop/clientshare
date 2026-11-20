@@ -16,6 +16,7 @@ import (
 
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
+	"github.com/pixelcop/clientshare/internal/dbtime"
 	"github.com/pixelcop/clientshare/internal/models"
 	"github.com/pixelcop/clientshare/pkg/utils/ids"
 	"gorm.io/gorm"
@@ -87,8 +88,8 @@ func (s *PasskeySignupService) Begin(ctx context.Context, email, name, slug stri
 	token := base64.RawURLEncoding.EncodeToString(secret)
 	record := models.PasskeySignup{ID: ids.NewULID(), TokenHash: signupTokenHash(token), Email: email,
 		TenantSlug: strings.ToLower(strings.TrimSpace(slug)), UserID: user.id, SessionData: data,
-		RPID: session.RelyingPartyID, ExpiresAt: time.Now().Add(5 * time.Minute)}
-	if err := s.db.WithContext(ctx).Where("reserved = ? AND expires_at < ?", false, time.Now()).Delete(&models.PasskeySignup{}).Error; err != nil {
+		RPID: session.RelyingPartyID, ExpiresAt: time.Now().UTC().Add(5 * time.Minute)}
+	if err := s.db.WithContext(ctx).Where("reserved = ? AND ?", false, dbtime.Compare(s.db, "expires_at", "<", time.Now())).Delete(&models.PasskeySignup{}).Error; err != nil {
 		return nil, err
 	}
 	if err := s.db.WithContext(ctx).Create(&record).Error; err != nil {
@@ -99,7 +100,7 @@ func (s *PasskeySignupService) Begin(ctx context.Context, email, name, slug stri
 
 func (s *PasskeySignupService) Verify(ctx context.Context, token string, response json.RawMessage) error {
 	var record models.PasskeySignup
-	if err := s.db.WithContext(ctx).Where("token_hash = ? AND verified_at IS NULL AND expires_at > ?", signupTokenHash(token), time.Now()).First(&record).Error; err != nil {
+	if err := s.db.WithContext(ctx).Where("token_hash = ? AND verified_at IS NULL AND ?", signupTokenHash(token), dbtime.Compare(s.db, "expires_at", ">", time.Now())).First(&record).Error; err != nil {
 		return ErrPasskeySignupInvalid
 	}
 	var session webauthn.SessionData
@@ -122,8 +123,9 @@ func (s *PasskeySignupService) Verify(ctx context.Context, token string, respons
 	if err != nil {
 		return err
 	}
-	result := s.db.WithContext(ctx).Model(&models.PasskeySignup{}).Where("id = ? AND verified_at IS NULL AND expires_at > ?", record.ID, time.Now()).Updates(map[string]any{
-		"credential_data": data, "verified_at": time.Now(), "expires_at": time.Now().Add(24 * time.Hour),
+	now := time.Now().UTC()
+	result := s.db.WithContext(ctx).Model(&models.PasskeySignup{}).Where("id = ? AND verified_at IS NULL AND ?", record.ID, dbtime.Compare(s.db, "expires_at", ">", now)).Updates(map[string]any{
+		"credential_data": data, "verified_at": now, "expires_at": now.Add(24 * time.Hour),
 	})
 	if result.Error != nil {
 		return result.Error
@@ -137,8 +139,8 @@ func (s *PasskeySignupService) Verify(ctx context.Context, token string, respons
 // Reserve is internal-only. Bind the proof to the email and workspace before SaaS
 // persists it for asynchronous provisioning. It does not establish a login session.
 func (s *PasskeySignupService) Reserve(ctx context.Context, token, email, slug string) error {
-	result := s.db.WithContext(ctx).Model(&models.PasskeySignup{}).Where("token_hash = ? AND email = ? AND tenant_slug = ? AND verified_at IS NOT NULL AND (reserved = ? OR expires_at > ?)",
-		signupTokenHash(token), strings.ToLower(strings.TrimSpace(email)), strings.ToLower(strings.TrimSpace(slug)), true, time.Now()).Update("reserved", true)
+	result := s.db.WithContext(ctx).Model(&models.PasskeySignup{}).Where("token_hash = ? AND email = ? AND tenant_slug = ? AND verified_at IS NOT NULL AND (reserved = ? OR ?)",
+		signupTokenHash(token), strings.ToLower(strings.TrimSpace(email)), strings.ToLower(strings.TrimSpace(slug)), true, dbtime.Compare(s.db, "expires_at", ">", time.Now())).Update("reserved", true)
 	if result.Error != nil {
 		return result.Error
 	}
@@ -187,7 +189,7 @@ func createPasskeyAdmin(tx *gorm.DB, tenantID string, input CreateAdminUserInput
 		return nil, err
 	}
 	stored := models.PasskeyCredential{TenantID: tenantID, UserID: user.ID, CredentialID: base64.RawURLEncoding.EncodeToString(credential.ID),
-		CredentialIDHash: signupTokenHash(string(credential.ID)), CredentialData: record.CredentialData, RPID: record.RPID, Name: "Signup passkey", CreatedAt: time.Now()}
+		CredentialIDHash: signupTokenHash(string(credential.ID)), CredentialData: record.CredentialData, RPID: record.RPID, Name: "Signup passkey", CreatedAt: time.Now().UTC()}
 	if err := tx.Create(&stored).Error; err != nil {
 		return nil, err
 	}

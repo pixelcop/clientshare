@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/pixelcop/clientshare/internal/access"
+	"github.com/pixelcop/clientshare/internal/dbtime"
 	"github.com/pixelcop/clientshare/internal/models"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -52,7 +53,7 @@ func (q *DBEmailQueue) Queue(email Email, sendAt *time.Time) (*models.QueuedEmai
 		if strings.TrimSpace(email.TenantID) != "" {
 			query = query.Where("tenant_id = ?", strings.TrimSpace(email.TenantID))
 		}
-		err := query.Order("scheduled_for ASC").First(&existing).Error
+		err := query.Order(queueScheduleOrder(q.DB)).First(&existing).Error
 		if err == nil {
 			updates := map[string]interface{}{
 				"recipient":     mergeRecipients(existing.Recipient, email.To),
@@ -60,7 +61,7 @@ func (q *DBEmailQueue) Queue(email Email, sendAt *time.Time) (*models.QueuedEmai
 				"body":          mergeBodies(existing.Body, email.Body),
 				"html_body":     mergeHTMLBodies(existing.HTMLBody, email.HTMLBody),
 				"file_ids_csv":  mergeCSVFileIDs(existing.FileIDsCSV, email.FileIDsCSV),
-				"scheduled_for": *sendAt,
+				"scheduled_for": sendAt.UTC(),
 			}
 			err = q.DB.Model(&models.QueuedEmail{}).Where("id = ?", existing.ID).Updates(updates).Error
 			if err != nil {
@@ -70,7 +71,7 @@ func (q *DBEmailQueue) Queue(email Email, sendAt *time.Time) (*models.QueuedEmai
 			if strings.TrimSpace(email.TenantID) != "" {
 				query = query.Where("tenant_id = ?", strings.TrimSpace(email.TenantID))
 			}
-			err = query.Order("scheduled_for ASC").First(&existing).Error
+			err = query.First(&existing).Error
 			if err != nil {
 				return nil, err
 			}
@@ -96,7 +97,7 @@ func (q *DBEmailQueue) Queue(email Email, sendAt *time.Time) (*models.QueuedEmai
 		FileIDsCSV:              email.FileIDsCSV,
 		ClientID:                email.ClientID,
 		EventType:               "generic",
-		ScheduledFor:            *sendAt,
+		ScheduledFor:            sendAt.UTC(),
 		SecureLinkID:            email.SecureLinkID,
 		RecipientUserID:         email.RecipientUserID,
 		RecipientLinkID:         email.RecipientLinkID,
@@ -146,7 +147,7 @@ func (q *DBEmailQueue) Pending(tenantID, clientID string) []*models.QueuedEmail 
 	if clientID != "" {
 		w = w.Where("client_id = ?", clientID)
 	}
-	if err := w.Order("scheduled_for ASC").Find(&items).Error; err != nil {
+	if err := w.Order(queueScheduleOrder(q.DB)).Find(&items).Error; err != nil {
 		zap.L().Warn("failed to list pending email queue items", zap.Error(err))
 		return []*models.QueuedEmail{}
 	}
@@ -289,7 +290,7 @@ func (q *DBEmailQueue) ProcessTenant(tenantID string) error {
 	}
 	now := q.now()
 	var items []models.QueuedEmail
-	if err := q.DB.Where("tenant_id = ? AND sent_at IS NULL AND canceled_at IS NULL", strings.TrimSpace(tenantID)).Order("scheduled_for ASC").Find(&items).Error; err != nil {
+	if err := q.DB.Where("tenant_id = ? AND sent_at IS NULL AND canceled_at IS NULL", strings.TrimSpace(tenantID)).Order(queueScheduleOrder(q.DB)).Find(&items).Error; err != nil {
 		return err
 	}
 	return q.process(items, now)
@@ -304,14 +305,9 @@ func (q *DBEmailQueue) ProcessBatch() error {
 	}
 	now := q.now()
 	var items []models.QueuedEmail
-	query := q.DB.Where("sent_at IS NULL AND canceled_at IS NULL")
-	if q.DB.Dialector.Name() == "sqlite" {
-		// SQLite stores these timestamps as text. Legacy jobs can use a local
-		// offset while new jobs use UTC, so compare their actual instants.
-		query = query.Where("julianday(scheduled_for) <= julianday(?)", now).Order("julianday(scheduled_for) ASC")
-	} else {
-		query = query.Where("scheduled_for <= ?", now).Order("scheduled_for ASC")
-	}
+	query := q.DB.Where("sent_at IS NULL AND canceled_at IS NULL").
+		Where(dbtime.Compare(q.DB, "scheduled_for", "<=", now)).
+		Order(queueScheduleOrder(q.DB))
 	if err := query.Find(&items).Error; err != nil {
 		return err
 	}
@@ -327,7 +323,7 @@ func (q *DBEmailQueue) ProcessAll() error {
 	}
 	now := q.now()
 	var items []models.QueuedEmail
-	if err := q.DB.Where("sent_at IS NULL AND canceled_at IS NULL").Order("scheduled_for ASC").Find(&items).Error; err != nil {
+	if err := q.DB.Where("sent_at IS NULL AND canceled_at IS NULL").Order(queueScheduleOrder(q.DB)).Find(&items).Error; err != nil {
 		return err
 	}
 	return q.process(items, now)
@@ -349,7 +345,11 @@ func sameLink(a, b *string) bool {
 
 func (q *DBEmailQueue) now() time.Time {
 	if q.Now != nil {
-		return q.Now()
+		return q.Now().UTC()
 	}
-	return time.Now()
+	return time.Now().UTC()
+}
+
+func queueScheduleOrder(db *gorm.DB) string {
+	return dbtime.Instant(db, "scheduled_for") + " ASC, id ASC"
 }

@@ -95,6 +95,35 @@ func TestUserRevocationInvalidatesHandoffsAndChallenges(t *testing.T) {
 	}
 }
 
+func TestSessionExpiryUsesInstantsAcrossOffsets(t *testing.T) {
+	s := sessionTestStore(t)
+	now := time.Now().UTC()
+	expired := now.Add(-time.Hour).In(time.FixedZone("east", 3*3600))
+	active := now.Add(time.Hour).In(time.FixedZone("west", -3*3600))
+	for _, tt := range []struct {
+		name          string
+		expires, idle time.Time
+		valid         bool
+	}{
+		{"active", active, active, true},
+		{"absolute expiry", expired, active, false},
+		{"idle expiry", active, expired, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			raw, err := s.Create(t.Context(), "tenant", "user", "", PortalAudience, "", "")
+			require.NoError(t, err)
+			require.NoError(t, s.DB.Model(&models.BrowserSession{}).Where("token_hash = ?", SessionHash(raw)).
+				Updates(map[string]any{"expires_at": tt.expires, "idle_expires_at": tt.idle}).Error)
+			_, err = s.Validate(t.Context(), raw, PortalAudience, "tenant")
+			if tt.valid {
+				require.NoError(t, err)
+			} else {
+				require.ErrorIs(t, err, ErrSessionInvalid)
+			}
+		})
+	}
+}
+
 func TestScopedLinkSessionsRevalidateTargetAndAncestry(t *testing.T) {
 	s := sessionTestStore(t)
 	target := "item"

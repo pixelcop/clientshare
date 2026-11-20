@@ -15,6 +15,7 @@ import (
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/gofiber/fiber/v3"
 	"github.com/pixelcop/clientshare/internal/auth"
+	"github.com/pixelcop/clientshare/internal/dbtime"
 	"github.com/pixelcop/clientshare/internal/models"
 	"github.com/pixelcop/clientshare/internal/services"
 	"github.com/pixelcop/clientshare/pkg/utils"
@@ -171,7 +172,7 @@ func (h *AuthHandler) FinishPasskeyRegistrationHandler(c fiber.Ctx) error {
 		CredentialData:   encodedCredential,
 		RPID:             session.RelyingPartyID,
 		Name:             name,
-		CreatedAt:        time.Now(),
+		CreatedAt:        time.Now().UTC(),
 	}
 	if err := h.db.WithContext(c.Context()).Create(&stored).Error; err != nil {
 		if errors.Is(err, gorm.ErrDuplicatedKey) {
@@ -298,7 +299,7 @@ func (h *AuthHandler) FinishPasskeyLoginHandler(c fiber.Ctx) error {
 		utils.Logger(c).Error("failed serializing passkey", zap.Error(err))
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Passkey sign in failed"})
 	}
-	now := time.Now()
+	now := time.Now().UTC()
 	credentialIDHash := passkeyCredentialHash(credential.ID)
 	update := h.db.WithContext(c.Context()).Model(&models.PasskeyCredential{}).
 		Where("tenant_id = ? AND user_id = ? AND credential_id_hash = ? AND (rp_id = ? OR rp_id = '')", tenantID, user.ID, credentialIDHash, session.RelyingPartyID).
@@ -400,7 +401,7 @@ func (h *AuthHandler) FinishHostedPasskeyLogin(c fiber.Ctx, hostedLogin *service
 	if err != nil {
 		return nil, err
 	}
-	now := time.Now()
+	now := time.Now().UTC()
 	update := h.db.WithContext(c.Context()).Model(&models.PasskeyCredential{}).
 		Where("tenant_id = ? AND user_id = ? AND credential_id_hash = ? AND (rp_id = ? OR rp_id = '')", identity.TenantID, user.ID, passkeyCredentialHash(credential.ID), session.RelyingPartyID).
 		Updates(map[string]interface{}{"credential_data": encodedCredential, "last_used_at": now, "rp_id": session.RelyingPartyID})
@@ -693,7 +694,7 @@ func (h *AuthHandler) storePasskeyChallenge(c fiber.Ctx, tenantID, userID, purpo
 	if err != nil {
 		return "", err
 	}
-	now := time.Now()
+	now := time.Now().UTC()
 	expiresAt := session.Expires
 	if expiresAt.IsZero() {
 		expiresAt = now.Add(passkeyChallengeTTL)
@@ -708,7 +709,7 @@ func (h *AuthHandler) storePasskeyChallenge(c fiber.Ctx, tenantID, userID, purpo
 		ExpiresAt:        expiresAt,
 		CreatedAt:        now,
 	}
-	if err := h.db.WithContext(c.Context()).Where("expires_at < ? OR used_at IS NOT NULL", now).Delete(&models.WebAuthnChallenge{}).Error; err != nil {
+	if err := h.db.WithContext(c.Context()).Where("? OR used_at IS NOT NULL", dbtime.Compare(h.db, "expires_at", "<", now)).Delete(&models.WebAuthnChallenge{}).Error; err != nil {
 		utils.Logger(c).Warn("failed cleaning up passkey challenges", zap.Error(err))
 	}
 	if err := h.db.WithContext(c.Context()).Create(&challenge).Error; err != nil {
@@ -718,10 +719,11 @@ func (h *AuthHandler) storePasskeyChallenge(c fiber.Ctx, tenantID, userID, purpo
 }
 
 func (h *AuthHandler) consumePasskeyChallenge(c fiber.Ctx, tenantID, userID, purpose, challengeID string) (webauthn.SessionData, error) {
-	now := time.Now()
+	now := time.Now().UTC()
+	active := dbtime.Compare(h.db, "expires_at", ">", now)
 	var challenge models.WebAuthnChallenge
 	if err := h.db.WithContext(c.Context()).
-		Where("id = ? AND tenant_id = ? AND user_id = ? AND purpose = ? AND used_at IS NULL AND expires_at > ?", challengeID, tenantID, userID, purpose, now).
+		Where("id = ? AND tenant_id = ? AND user_id = ? AND purpose = ? AND used_at IS NULL AND ?", challengeID, tenantID, userID, purpose, active).
 		First(&challenge).Error; err != nil {
 		return webauthn.SessionData{}, errPasskeyChallengeInvalid
 	}
@@ -729,7 +731,7 @@ func (h *AuthHandler) consumePasskeyChallenge(c fiber.Ctx, tenantID, userID, pur
 		return webauthn.SessionData{}, errPasskeyChallengeInvalid
 	}
 	result := h.db.WithContext(c.Context()).Model(&models.WebAuthnChallenge{}).
-		Where("id = ? AND used_at IS NULL AND expires_at > ?", challenge.ID, now).
+		Where("id = ? AND used_at IS NULL AND ?", challenge.ID, active).
 		Update("used_at", now)
 	if result.Error != nil || result.RowsAffected != 1 {
 		return webauthn.SessionData{}, errPasskeyChallengeInvalid

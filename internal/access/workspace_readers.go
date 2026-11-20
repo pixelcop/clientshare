@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/pixelcop/clientshare/internal/dbtime"
 	"github.com/pixelcop/clientshare/internal/models"
 )
 
@@ -32,8 +33,8 @@ func (s *AccessService) WorkspaceReaderIDs(ctx context.Context, tenantID, client
 		) OR EXISTS (
 		SELECT 1 FROM role_assignments ra JOIN access_roles ar ON ar.tenant_id=ra.tenant_id AND ar.id=ra.role_id
 		WHERE ra.tenant_id=users.tenant_id AND ra.client_id=? AND ra.file_id IS NULL AND ra.revoked_at IS NULL AND ra.source_kind NOT IN ('membership','grant')
-		AND (ra.expires_at IS NULL OR ra.expires_at>?) AND ar.allow_workspace=TRUE AND ar.can_read=TRUE
+		AND (ra.expires_at IS NULL OR ?) AND ar.allow_workspace=TRUE AND ar.can_read=TRUE
 		AND (ar.audience='both' OR ar.audience=CASE WHEN users.role IN ('admin','manager') THEN 'internal' ELSE 'external' END)
-		AND (ra.user_id=users.id OR EXISTS (SELECT 1 FROM access_group_members gm WHERE gm.tenant_id=ra.tenant_id AND gm.group_id=ra.group_id AND gm.user_id=users.id)))`, clientID, clientID, time.Now().UTC()).Order("users.id ASC").Pluck("users.id", &ids).Error
+		AND (ra.user_id=users.id OR EXISTS (SELECT 1 FROM access_group_members gm WHERE gm.tenant_id=ra.tenant_id AND gm.group_id=ra.group_id AND gm.user_id=users.id)))`, clientID, clientID, dbtime.Compare(s.DB, "ra.expires_at", ">", time.Now())).Order("users.id ASC").Pluck("users.id", &ids).Error
 	return ids, err
 }

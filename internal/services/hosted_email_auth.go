@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/pixelcop/clientshare/internal/auth"
+	"github.com/pixelcop/clientshare/internal/dbtime"
 	"github.com/pixelcop/clientshare/internal/models"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -101,7 +102,8 @@ func (s *HostedLoginService) CompleteEmailToken(ctx context.Context, token, purp
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		now := time.Now().UTC()
 		var record models.HostedEmailToken
-		if err := tx.Where("token_hash = ? AND purpose = ? AND used_at IS NULL AND expires_at > ?", hashHostedLoginHandoff(s.handoffSecret, "email:"+purpose+":"+token), purpose, now).First(&record).Error; err != nil {
+		active := dbtime.Compare(tx, "expires_at", ">", now)
+		if err := tx.Where("token_hash = ? AND purpose = ? AND used_at IS NULL AND ?", hashHostedLoginHandoff(s.handoffSecret, "email:"+purpose+":"+token), purpose, active).First(&record).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return ErrHostedEmailTokenInvalid
 			}
@@ -119,7 +121,7 @@ func (s *HostedLoginService) CompleteEmailToken(ctx context.Context, token, purp
 		if err != nil || identity.UserID != record.UserID || identity.TenantID != record.TenantID {
 			return ErrHostedEmailTokenInvalid
 		}
-		claimed := tx.Model(&models.HostedEmailToken{}).Where("id = ? AND token_hash = ? AND used_at IS NULL AND expires_at > ?", record.ID, record.TokenHash, now).Update("used_at", now)
+		claimed := tx.Model(&models.HostedEmailToken{}).Where("id = ? AND token_hash = ? AND used_at IS NULL AND ?", record.ID, record.TokenHash, active).Update("used_at", now)
 		if claimed.Error != nil {
 			return claimed.Error
 		}

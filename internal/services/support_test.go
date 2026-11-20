@@ -3,17 +3,39 @@ package services
 import (
 	"context"
 	"errors"
-	"github.com/pixelcop/clientshare/internal/models"
-	emailpkg "github.com/pixelcop/clientshare/internal/services/email"
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
 	"testing"
 	"time"
+
+	"github.com/pixelcop/clientshare/internal/models"
+	emailpkg "github.com/pixelcop/clientshare/internal/services/email"
+	"github.com/stretchr/testify/require"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
 type supportTestSender struct {
 	fail bool
 	sent []emailpkg.Email
+}
+
+func TestSupportRetryCutoffUsesInstants(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(t.TempDir()+"/support.db"), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&models.SupportMessage{}))
+	s := SupportService{DB: db}
+	now := time.Now().UTC()
+	due := models.SupportMessage{TenantID: "tenant", RequesterID: "user", RetryKey: "due", Message: "Due"}
+	future := models.SupportMessage{TenantID: "tenant", RequesterID: "user", RetryKey: "future", Message: "Future"}
+	require.NoError(t, s.Receive(t.Context(), &due))
+	require.NoError(t, s.Receive(t.Context(), &future))
+	require.NoError(t, db.Model(&due).Update("next_attempt_at", now.Add(-time.Hour).In(time.FixedZone("east", 3*3600))).Error)
+	require.NoError(t, db.Model(&future).Update("next_attempt_at", now.Add(time.Hour).In(time.FixedZone("west", -3*3600))).Error)
+	sender := &supportTestSender{}
+	require.NoError(t, s.Notify(sender))
+	require.Len(t, sender.sent, 1)
+	require.Contains(t, sender.sent[0].Subject, due.ID)
+	require.NoError(t, db.First(&future, "id = ?", future.ID).Error)
+	require.Zero(t, future.Attempts)
 }
 
 func (s *supportTestSender) Send(e emailpkg.Email) error {

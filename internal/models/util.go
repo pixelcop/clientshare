@@ -28,6 +28,6 @@ type PaginatedResult[T any] struct {
 }
 
 func Now() *time.Time {
-	t := time.Now()
+	t := time.Now().UTC()
 	return &t
 }

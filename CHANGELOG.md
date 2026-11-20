@@ -14,10 +14,12 @@
 ### Fixed
 
 - Queued emails on SQLite now send at the intended time even when their schedules use different time zones.
+- SQLite file cleanup, support retries, and storage reservations now use the actual cutoff time even when existing timestamps have different offsets.
 
 ### Security
 
 - Excluded document request pages from session replay and browser error reporting to protect private checklists and request links.
+- SQLite now checks access, invitation, and session expiry by the actual instant, regardless of the stored time-zone offset.
 
 ## 1.0 — 2026-11-15
 

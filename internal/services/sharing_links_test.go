@@ -83,8 +83,8 @@ func TestScopedLinkListIncludesOnlyRecordedOpensForItsTenantAndLinks(t *testing.
 	require.NoError(t, err)
 	unused, err := service.CreateLink(t.Context(), req, LinkInput{AccessType: "read", ExpiryDays: 7}, "unused")
 	require.NoError(t, err)
-	earlier := accessTestNow.Add(-2 * time.Hour)
-	latest := accessTestNow.Add(-time.Hour)
+	earlier := accessTestNow.Add(-2 * time.Hour).In(time.FixedZone("east", 3*3600))
+	latest := accessTestNow.Add(-time.Hour).In(time.FixedZone("west", -3*3600))
 	for _, activity := range []models.FileActivity{
 		{TenantID: "tenant", ClientID: used.ClientID, SecureLinkID: &used.ID, Action: "view_link", CreatedAt: earlier},
 		{TenantID: "tenant", ClientID: used.ClientID, SecureLinkID: &used.ID, Action: "view_link", CreatedAt: latest},

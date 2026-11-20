@@ -84,7 +84,7 @@ func (s *ClientService) CreateClient(ctx context.Context, tenantID, name string)
 			Path:       client.FolderPath,
 			Type:       "folder",
 			Size:       0,
-			UploadedAt: time.Now(),
+			UploadedAt: time.Now().UTC(),
 		}
 		if err := tx.Create(rootFolder).Error; err != nil {
 			return err
@@ -340,7 +340,7 @@ func (s *ClientService) DeleteClient(ctx context.Context, tenantID, id string) e
 			return err
 		}
 
-		if err := tx.Model(&models.File{}).Where("tenant_id = ? AND client_id = ? AND deleted_at IS NULL", tenantID, id).Update("deleted_at", time.Now()).Error; err != nil {
+		if err := tx.Model(&models.File{}).Where("tenant_id = ? AND client_id = ? AND deleted_at IS NULL", tenantID, id).Update("deleted_at", time.Now().UTC()).Error; err != nil {
 			return err
 		}
 		if err := tx.Where("tenant_id = ? AND id = ?", tenantID, id).Delete(&models.Client{}).Error; err != nil {

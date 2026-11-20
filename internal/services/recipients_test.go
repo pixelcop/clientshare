@@ -106,3 +106,34 @@ func TestRecipientsSearchIsBoundedLiteralAndDeduplicated(t *testing.T) {
 	require.True(t, contacts[0].CurrentClient, "current-client contacts rank first")
 	require.Len(t, contacts, 20)
 }
+
+func TestRecipientLookupUsesGrantAndInvitationExpiryInstants(t *testing.T) {
+	f, _ := sharingFixture(t)
+	s := &RecipientService{DB: f.db}
+	now := time.Now().UTC()
+	expired := now.Add(-time.Hour).In(time.FixedZone("east", 3*3600))
+	active := now.Add(time.Hour).In(time.FixedZone("west", -3*3600))
+	for _, source := range []string{"grant", "invite"} {
+		for _, row := range []struct {
+			status string
+			expiry time.Time
+		}{{"active", active}, {"expired", expired}} {
+			id := source + "-" + row.status
+			user := models.User{ID: id, TenantID: "tenant", Email: id + "@example.test", Role: "client"}
+			require.NoError(t, f.db.Create(&user).Error)
+			if source == "grant" {
+				grant := f.grant(t, "file", id, models.AccessCapabilities{CanRead: true})
+				require.NoError(t, f.db.Model(grant).Update("expires_at", row.expiry).Error)
+			} else {
+				require.NoError(t, f.db.Create(&models.AccessInvitation{
+					TenantID: "tenant", ClientID: "client", RecipientUserID: &user.ID,
+					Email: user.Email, TokenHash: id, CreatedBy: "admin", ExpiresAt: row.expiry,
+				}).Error)
+			}
+		}
+		contacts, err := s.Search(t.Context(), f.req("admin", "", AccessContext), source+"-", false)
+		require.NoError(t, err)
+		require.Len(t, contacts, 1)
+		require.Equal(t, source+"-active", contacts[0].ID)
+	}
+}

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v3"
+	"github.com/pixelcop/clientshare/internal/dbtime"
 	"github.com/pixelcop/clientshare/internal/middleware"
 	"github.com/pixelcop/clientshare/internal/models"
 	"github.com/pixelcop/clientshare/internal/services"
@@ -190,13 +191,14 @@ func (h *UsersHandler) userListQuery(ctx context.Context, tenantID, actorID, sea
 		return nil, err
 	}
 	var clientScope *gorm.DB
+	active := dbtime.Compare(h.db, "expires_at", ">", time.Now())
 	pendingRecipients := func() *gorm.DB {
 		return h.db.WithContext(ctx).Table("access_invitations").Select("recipient_user_id").
-			Where("tenant_id = ? AND recipient_user_id IS NOT NULL AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > ?", tenantID, models.Now())
+			Where("tenant_id = ? AND recipient_user_id IS NOT NULL AND accepted_at IS NULL AND revoked_at IS NULL AND ?", tenantID, active)
 	}
 	namedRecipients := func(table string) *gorm.DB {
 		return h.db.WithContext(ctx).Table(table).Select("user_id").
-			Where("tenant_id = ? AND user_id IS NOT NULL AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > ?)", tenantID, models.Now())
+			Where("tenant_id = ? AND user_id IS NOT NULL AND revoked_at IS NULL AND (expires_at IS NULL OR ?)", tenantID, active)
 	}
 	if actor.Role != "admin" {
 		if actor.Role != "manager" {
@@ -458,7 +460,7 @@ func (h *UsersHandler) CreateUserHandler(c fiber.Ctx) error {
 		utils.Logger(c).Debug("client role requires client id")
 		return c.Status(400).JSON(fiber.Map{"error": "client_ids is required for client users"})
 	}
-	now := time.Now()
+	now := time.Now().UTC()
 	userName := strings.TrimSpace(req.Name)
 	user := models.User{
 		TenantID:          tenantID,
@@ -574,7 +576,7 @@ func (h *UsersHandler) GenerateAccessLinkHandler(c fiber.Ctx) error {
 	}
 
 	baseURL := tenantBaseURLFromCtx(c, h.baseURL)
-	now := time.Now()
+	now := time.Now().UTC()
 	if h.userInviteAccepted(user) {
 		resetRecord := models.PasswordResetToken{}
 		resetRawToken := ""
@@ -656,7 +658,7 @@ func (h *UsersHandler) ResendInviteHandler(c fiber.Ctx) error {
 	}
 	user.ClientIDs = clientIDs
 
-	now := time.Now()
+	now := time.Now().UTC()
 	createdBy := strings.TrimSpace(fiber.Locals[string](c, "user_id"))
 	inviteRecord := models.InviteToken{}
 	inviteRawToken := ""
@@ -709,7 +711,7 @@ func (h *UsersHandler) ResendAllInvitesHandler(c fiber.Ctx) error {
 		expiresAt time.Time
 	}
 	invites := make([]inviteSend, 0, len(users))
-	now := time.Now()
+	now := time.Now().UTC()
 	createdBy := strings.TrimSpace(fiber.Locals[string](c, "user_id"))
 	if err := h.db.WithContext(c.Context()).Transaction(func(tx *gorm.DB) error {
 		for _, user := range users {
@@ -877,7 +879,7 @@ func (h *UsersHandler) UpdateUserHandler(c fiber.Ctx) error {
 		normalizedClientIDs = normalizeClientIDs(*req.ClientIDs)
 	}
 	// Item-only and removed client members legitimately have zero memberships.
-	user.UpdatedAt = time.Now()
+	user.UpdatedAt = time.Now().UTC()
 	if err := h.db.WithContext(c.Context()).Transaction(func(tx *gorm.DB) error {
 		if err := services.RequireOrganizationAdministrator(tx, tenantID, fiber.Locals[string](c, "user_id")); err != nil {
 			return err
@@ -1029,7 +1031,7 @@ func (h *UsersHandler) AssignManagerToClientHandler(c fiber.Ctx) error {
 		if err := h.addClientAssignment(tx, tenantID, user.ID, req.ClientID); err != nil {
 			return err
 		}
-		user.UpdatedAt = time.Now()
+		user.UpdatedAt = time.Now().UTC()
 		if err := tx.Save(&user).Error; err != nil {
 			return err
 		}
@@ -1152,7 +1154,7 @@ func (h *UsersHandler) replaceClientAssignments(tx *gorm.DB, tenantID, userID, a
 }
 
 func (h *UsersHandler) addClientAssignment(tx *gorm.DB, tenantID, userID, clientID string) error {
-	rel := models.UserClient{TenantID: strings.TrimSpace(tenantID), UserID: strings.TrimSpace(userID), ClientID: strings.TrimSpace(clientID), CreatedAt: time.Now()}
+	rel := models.UserClient{TenantID: strings.TrimSpace(tenantID), UserID: strings.TrimSpace(userID), ClientID: strings.TrimSpace(clientID), CreatedAt: time.Now().UTC()}
 	if rel.UserID == "" || rel.ClientID == "" {
 		return fiber.NewError(fiber.StatusBadRequest, "user_id and client_id are required")
 	}

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/pixelcop/clientshare/internal/cache"
+	"github.com/pixelcop/clientshare/internal/dbtime"
 	"github.com/pixelcop/clientshare/internal/models"
 	"gorm.io/gorm"
 )
@@ -103,7 +104,7 @@ func (s *FileService) GetOrCreateFolderRecord(ctx context.Context, tenantID stri
 		Path:       folderPath,
 		Type:       "folder",
 		Size:       0,
-		UploadedAt: time.Now(),
+		UploadedAt: time.Now().UTC(),
 	}
 	if folder, err = s.CreateFolderRecord(ctx, folder); err != nil {
 		return nil, err
@@ -309,8 +310,9 @@ func (s *FileService) ListFilesPendingDiskDelete(ctx context.Context, olderThan 
 
 	var files []models.File
 	err := s.DB.WithContext(ctx).
-		Where("deleted_at IS NOT NULL AND deleted_at <= ? AND disk_deleted_at IS NULL", olderThan).
-		Order("deleted_at ASC, id ASC").
+		Where("deleted_at IS NOT NULL AND disk_deleted_at IS NULL").
+		Where(dbtime.Compare(s.DB, "deleted_at", "<=", olderThan)).
+		Order(dbtime.Instant(s.DB, "deleted_at") + " ASC, id ASC").
 		Limit(limit).
 		Find(&files).Error
 	if err != nil {
@@ -330,7 +332,7 @@ func (s *FileService) MarkFileDiskDeleted(ctx context.Context, tenantID, fileID 
 	result := s.DB.WithContext(ctx).
 		Model(&models.File{}).
 		Where("tenant_id = ? AND id = ? AND disk_deleted_at IS NULL", tenantID, fileID).
-		Update("disk_deleted_at", deletedAt)
+		Update("disk_deleted_at", deletedAt.UTC())
 	if result.Error != nil {
 		return result.Error
 	}

@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/pixelcop/clientshare/internal/dbtime"
 	"github.com/pixelcop/clientshare/internal/models"
 	"github.com/pixelcop/clientshare/internal/services/storage"
 	"github.com/pixelcop/clientshare/pkg/utils/ids"
@@ -92,7 +93,7 @@ func tenantUsage(tx *gorm.DB, tenantID string, entitlement *models.TenantEntitle
 	if err := tx.Model(&models.File{}).Where("tenant_id = ? AND type = 'file' AND deleted_at IS NULL", tenantID).Select("COALESCE(SUM(size), 0)").Scan(&u.StorageBytes).Error; err != nil {
 		return nil, err
 	}
-	if err := tx.Model(&models.StorageReservation{}).Where("tenant_id = ? AND expires_at > ?", tenantID, time.Now()).Select("COALESCE(SUM(bytes), 0)").Scan(&u.ReservedBytes).Error; err != nil {
+	if err := tx.Model(&models.StorageReservation{}).Where("tenant_id = ? AND ?", tenantID, dbtime.Compare(tx, "expires_at", ">", time.Now())).Select("COALESCE(SUM(bytes), 0)").Scan(&u.ReservedBytes).Error; err != nil {
 		return nil, err
 	}
 	return u, nil
@@ -123,13 +124,13 @@ func ReserveStorage(ctx context.Context, db *gorm.DB, tenantID string, size int6
 	if size < 0 {
 		return nil, errors.New("invalid file size")
 	}
-	r := &models.StorageReservation{ID: ids.NewULID(), TenantID: tenantID, Bytes: size, ExpiresAt: time.Now().Add(24 * time.Hour)}
+	r := &models.StorageReservation{ID: ids.NewULID(), TenantID: tenantID, Bytes: size, ExpiresAt: time.Now().UTC().Add(24 * time.Hour)}
 	err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		e, err := lockQuota(tx, tenantID)
 		if err != nil {
 			return err
 		}
-		if err := tx.Where("tenant_id = ? AND expires_at <= ?", tenantID, time.Now()).Delete(&models.StorageReservation{}).Error; err != nil {
+		if err := tx.Where("tenant_id = ? AND ?", tenantID, dbtime.Compare(tx, "expires_at", "<=", time.Now())).Delete(&models.StorageReservation{}).Error; err != nil {
 			return err
 		}
 		u, err := tenantUsage(tx, tenantID, e)
@@ -155,7 +156,7 @@ func finalizeStorage(ctx context.Context, db *gorm.DB, reservation *models.Stora
 			return err
 		}
 		var r models.StorageReservation
-		if err := tx.Where("id = ? AND tenant_id = ? AND expires_at > ?", reservation.ID, reservation.TenantID, time.Now()).First(&r).Error; err != nil {
+		if err := tx.Where("id = ? AND tenant_id = ? AND ?", reservation.ID, reservation.TenantID, dbtime.Compare(tx, "expires_at", ">", time.Now())).First(&r).Error; err != nil {
 			return err
 		}
 		if file.TenantID != r.TenantID || file.Size < 0 || file.Size > r.Bytes {

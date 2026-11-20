@@ -109,6 +109,28 @@ func TestStorageQuotaConcurrentReservationsAndExpiry(t *testing.T) {
 	require.Zero(t, u.ReservedBytes)
 }
 
+func TestStorageReservationsUseExpiryInstants(t *testing.T) {
+	db := quotaTestDB(t)
+	ctx := t.Context()
+	now := time.Now().UTC()
+	expired := models.StorageReservation{ID: "expired", TenantID: "a", Bytes: 9, ExpiresAt: now.Add(-time.Hour).In(time.FixedZone("east", 3*3600))}
+	active := models.StorageReservation{ID: "active", TenantID: "a", Bytes: 2, ExpiresAt: now.Add(time.Hour).In(time.FixedZone("west", -3*3600))}
+	require.NoError(t, db.Create(&[]models.StorageReservation{expired, active}).Error)
+	usage, err := GetTenantUsage(ctx, db, "a")
+	require.NoError(t, err)
+	require.EqualValues(t, 2, usage.ReservedBytes)
+	file := models.File{TenantID: "a", ClientID: "client", Type: "file", Filename: "test.pdf", Size: 2}
+	require.ErrorIs(t, FinalizeStorage(ctx, db, &expired, &file), gorm.ErrRecordNotFound)
+	_, err = ReserveStorage(ctx, db, "a", 9)
+	require.ErrorIs(t, err, ErrStorageLimit)
+	_, err = ReserveStorage(ctx, db, "a", 8)
+	require.NoError(t, err)
+	var count int64
+	require.NoError(t, db.Model(&models.StorageReservation{}).Where("id = ?", expired.ID).Count(&count).Error)
+	require.Zero(t, count)
+	require.NoError(t, FinalizeStorage(ctx, db, &active, &file))
+}
+
 type failedUploadStore struct{ storage.Storage }
 
 func (s failedUploadStore) PutNew(ctx context.Context, path string, src io.Reader) (storage.ObjectInfo, error) {

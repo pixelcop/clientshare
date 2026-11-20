@@ -183,7 +183,7 @@ func (h *AuthHandler) ForgotPasswordHandler(c fiber.Ctx) error {
 		return c.JSON(response)
 	}
 	resetHash := hashResetToken(h.resetTokenSecret, resetToken)
-	now := time.Now()
+	now := time.Now().UTC()
 	expiresAt := now.Add(h.resetTokenTTL)
 
 	if err := h.db.WithContext(c.Context()).Model(&models.PasswordResetToken{}).
@@ -250,7 +250,7 @@ func (h *AuthHandler) ResetPasswordHandler(c fiber.Ctx) error {
 	if !hmac.Equal([]byte(record.TokenHash), []byte(resetHash)) {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid or expired token"})
 	}
-	now := time.Now()
+	now := time.Now().UTC()
 	if record.UsedAt != nil || now.After(record.ExpiresAt) {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid or expired token"})
 	}
@@ -640,11 +640,11 @@ func (h *AuthHandler) RegisterHandler(c fiber.Ctx) error {
 		// A bearer credential cannot mint named sharing authority. Preserve
 		// this legacy client-wide registration path within its read/upload
 		// ceiling; scoped links never create client membership.
-		rel := models.UserClient{TenantID: tenantID, UserID: user.ID, ClientID: link.ClientID, CreatedAt: time.Now(), CapabilitiesSet: true, AccessCapabilities: models.AccessCapabilities{CanRead: true, CanUpload: true}, AccessSource: "link-registration"}
+		rel := models.UserClient{TenantID: tenantID, UserID: user.ID, ClientID: link.ClientID, CreatedAt: time.Now().UTC(), CapabilitiesSet: true, AccessCapabilities: models.AccessCapabilities{CanRead: true, CanUpload: true}, AccessSource: "link-registration"}
 		if err := tx.Create(&rel).Error; err != nil {
 			return err
 		}
-		result := tx.Model(&models.SecureLink{}).Where("tenant_id = ? AND id = ? AND revoked_at IS NULL", tenantID, link.ID).Update("revoked_at", time.Now())
+		result := tx.Model(&models.SecureLink{}).Where("tenant_id = ? AND id = ? AND revoked_at IS NULL", tenantID, link.ID).Update("revoked_at", time.Now().UTC())
 		if err := result.Error; err != nil {
 			return err
 		}

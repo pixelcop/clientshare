@@ -248,7 +248,7 @@ func (s *TenantProvisioningService) CreateAdminUser(tenantID string, input Creat
 		return nil, errors.New("user already exists")
 	}
 
-	now := time.Now()
+	now := time.Now().UTC()
 	user := models.User{
 		TenantID:     tenantID,
 		Email:        email,

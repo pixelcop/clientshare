@@ -289,6 +289,7 @@ func (s *FeedService) createEventWithDB(ctx context.Context, db *gorm.DB, event 
 	if event == nil {
 		return errors.New("feed event is required")
 	}
+	event.CreatedAt = event.CreatedAt.UTC()
 	if event.ActorUserID != nil {
 		actorUserID := strings.TrimSpace(*event.ActorUserID)
 		feedUserID := strings.TrimSpace(event.UserID)

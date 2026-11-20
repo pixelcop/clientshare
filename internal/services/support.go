@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
+
+	"github.com/pixelcop/clientshare/internal/dbtime"
 	"github.com/pixelcop/clientshare/internal/models"
 	emailpkg "github.com/pixelcop/clientshare/internal/services/email"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-	"time"
 )
 
 var ErrSupportConflict = errors.New("retry key already used for another message")
@@ -16,7 +18,7 @@ var ErrSupportConflict = errors.New("retry key already used for another message"
 type SupportService struct{ DB *gorm.DB }
 
 func (s SupportService) Receive(ctx context.Context, row *models.SupportMessage) error {
-	row.NextAttemptAt = time.Now()
+	row.NextAttemptAt = time.Now().UTC()
 	result := s.DB.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(row)
 	if result.Error != nil {
 		return result.Error
@@ -38,12 +40,13 @@ func (s SupportService) Receive(ctx context.Context, row *models.SupportMessage)
 // Persisted leases recover interrupted attempts. SMTP is at-least-once.
 func (s SupportService) Notify(sender emailpkg.EmailSender) error {
 	var rows []models.SupportMessage
-	now := time.Now()
-	if err := s.DB.Where("notified_at IS NULL AND next_attempt_at <= ?", now).Order("created_at").Limit(20).Find(&rows).Error; err != nil {
+	now := time.Now().UTC()
+	due := dbtime.Compare(s.DB, "next_attempt_at", "<=", now)
+	if err := s.DB.Where("notified_at IS NULL AND ?", due).Order(dbtime.Instant(s.DB, "created_at") + " ASC, id ASC").Limit(20).Find(&rows).Error; err != nil {
 		return err
 	}
 	for _, row := range rows {
-		lease := s.DB.Model(&models.SupportMessage{}).Where("id = ? AND notified_at IS NULL AND next_attempt_at <= ?", row.ID, now).Updates(map[string]any{"next_attempt_at": now.Add(10 * time.Minute), "attempts": gorm.Expr("attempts + 1")})
+		lease := s.DB.Model(&models.SupportMessage{}).Where("id = ? AND notified_at IS NULL AND ?", row.ID, due).Updates(map[string]any{"next_attempt_at": now.Add(10 * time.Minute), "attempts": gorm.Expr("attempts + 1")})
 		if lease.Error != nil {
 			return lease.Error
 		}
@@ -54,7 +57,7 @@ func (s SupportService) Notify(sender emailpkg.EmailSender) error {
 		if err != nil {
 			continue
 		}
-		if err := s.DB.Model(&models.SupportMessage{}).Where("id = ?", row.ID).Update("notified_at", time.Now()).Error; err != nil {
+		if err := s.DB.Model(&models.SupportMessage{}).Where("id = ?", row.ID).Update("notified_at", time.Now().UTC()).Error; err != nil {
 			return err
 		}
 	}
