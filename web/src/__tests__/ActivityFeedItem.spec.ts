@@ -29,6 +29,13 @@ const RouterLink = {
   template: "<a :href=\"typeof to === 'string' ? to : '#'\" @click.prevent><slot /></a>",
 };
 
+function renderItem(overrides: Partial<FeedEvent>) {
+  return mount(ActivityFeedItem, {
+    props: { item: buildUploadEvent(overrides) },
+    global: { stubs: { RouterLink, Button: true } },
+  });
+}
+
 describe('ActivityFeedItem', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
@@ -36,87 +43,42 @@ describe('ActivityFeedItem', () => {
     activitiesStore.currentState = FeedStateUnread;
   });
 
-  it('links uploaded notifications to the file route using file_id', () => {
-    const wrapper = mount(ActivityFeedItem, {
-      props: {
-        item: buildUploadEvent({
-          file_id: 'file_1',
-          actor_name: 'Admin User',
-          client_name: 'Acme',
-        }),
-      },
-      global: {
-        stubs: {
-          RouterLink,
-          Button: {
-            template: '<button><slot /></button>',
-          },
-        },
-      },
-    });
+  it('opens the uploaded file and marks its notification as read', async () => {
+    const markRead = vi.spyOn(useActivitiesStore(), 'markRead').mockResolvedValue(undefined);
+    const wrapper = renderItem({ file_id: 'file_1' });
 
-    expect(wrapper.find('a[href="/files/file_1"]').exists()).toBe(true);
-    expect(wrapper.find('a[href="/files/activity_1"]').exists()).toBe(false);
+    await wrapper.get('a[href="/files/file_1"]').trigger('click');
+    expect(markRead).toHaveBeenCalledExactlyOnceWith('evt_1');
   });
 
   it('leaves uploaded notifications as plain text when file_id is missing', () => {
-    const wrapper = mount(ActivityFeedItem, {
-      props: {
-        item: buildUploadEvent({
-          actor_name: 'Admin User',
-          client_name: 'Acme',
-        }),
-      },
-      global: {
-        stubs: {
-          RouterLink,
-          Button: {
-            template: '<button><slot /></button>',
-          },
-        },
-      },
-    });
+    const wrapper = renderItem({});
 
     expect(wrapper.find('a').exists()).toBe(false);
     expect(wrapper.text()).toContain('report.pdf');
   });
 
-  it('renders grouped upload notifications as one summary with multiple file links', () => {
-    const wrapper = mount(ActivityFeedItem, {
-      props: {
-        item: buildUploadEvent({
-          source_type: FeedEventSourceTypeFileUploadBatch,
-          source_id: 'batch_1',
-          file_id: 'file_1',
-          file_path: 'Acme/reports/report.pdf',
-          file_count: 2,
-          files: [
-            { id: 'file_1', path: 'Acme/reports/report.pdf' },
-            { id: 'file_2', path: 'Acme/reports/invoice.pdf' },
-          ],
-          actor_name: 'Admin User',
-          client_name: 'Acme',
-        }),
-      },
-      global: {
-        stubs: {
-          RouterLink,
-          Button: {
-            template: '<button><slot /></button>',
-          },
-        },
-      },
+  it('marks the grouped upload as read when one of its files is opened', async () => {
+    const markRead = vi.spyOn(useActivitiesStore(), 'markRead').mockResolvedValue(undefined);
+    const wrapper = renderItem({
+      source_type: FeedEventSourceTypeFileUploadBatch,
+      source_id: 'batch_1',
+      file_count: 2,
+      files: [
+        { id: 'file_1', path: 'Acme/reports/report.pdf' },
+        { id: 'file_2', path: 'Acme/reports/invoice.pdf' },
+      ],
     });
 
     expect(wrapper.text()).toContain('2 files');
     expect(wrapper.find('a[href="/files/file_1"]').exists()).toBe(true);
-    expect(wrapper.find('a[href="/files/file_2"]').exists()).toBe(true);
+    await wrapper.get('a[href="/files/file_2"]').trigger('click');
+    expect(markRead).toHaveBeenCalledExactlyOnceWith('evt_1');
     expect(wrapper.text()).toContain('report.pdf');
     expect(wrapper.text()).toContain('invoice.pdf');
   });
 
   it.each([
-    { file_id: 'file_1' },
     { event_type: 'file_comment', file_id: 'file_1' },
     {
       event_type: 'request_created',
@@ -124,19 +86,9 @@ describe('ActivityFeedItem', () => {
       request_id: 'request_1',
       request_title: 'October close',
     },
-    {
-      source_type: FeedEventSourceTypeFileUploadBatch,
-      files: [
-        { id: 'file_1', path: 'report.pdf' },
-        { id: 'file_2', path: 'invoice.pdf' },
-      ],
-    },
   ])('marks the activity as read when opening its link (%o)', async (overrides) => {
     const markRead = vi.spyOn(useActivitiesStore(), 'markRead').mockResolvedValue(undefined);
-    const wrapper = mount(ActivityFeedItem, {
-      props: { item: buildUploadEvent(overrides) },
-      global: { stubs: { RouterLink, Button: true } },
-    });
+    const wrapper = renderItem(overrides);
 
     await wrapper.get('a').trigger('click');
     expect(markRead).toHaveBeenCalledExactlyOnceWith('evt_1');
@@ -144,10 +96,7 @@ describe('ActivityFeedItem', () => {
 
   it('does not mark an already-read item again', async () => {
     const markRead = vi.spyOn(useActivitiesStore(), 'markRead').mockResolvedValue(undefined);
-    const wrapper = mount(ActivityFeedItem, {
-      props: { item: buildUploadEvent({ file_id: 'file_1', is_read: true }) },
-      global: { stubs: { RouterLink, Button: true } },
-    });
+    const wrapper = renderItem({ file_id: 'file_1', is_read: true });
     await wrapper.get('a').trigger('click');
     expect(markRead).not.toHaveBeenCalled();
   });

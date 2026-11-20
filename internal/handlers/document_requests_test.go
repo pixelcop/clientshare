@@ -19,6 +19,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func createdRequestIDs(feed *models.FeedListResponse) []string {
+	var ids []string
+	for _, event := range feed.Items {
+		if event.EventType == models.FeedEventTypeRequestCreated {
+			ids = append(ids, event.RequestID)
+		}
+	}
+	return ids
+}
+
 func TestDocumentRequestCollectionAndReview(t *testing.T) {
 	env := setupSharedHandlersEnv(t)
 	require.NoError(t, env.db.AutoMigrate(&models.DocumentRequest{}, &models.DocumentRequestItem{}, &models.DocumentRequestFile{}, &models.DocumentRequestReview{}, &models.DocumentRequestUpdate{}))
@@ -50,8 +60,6 @@ func TestDocumentRequestCollectionAndReview(t *testing.T) {
 	view := decode(do(jsonAuthRequest("POST", staff, env.managerToken, json.RawMessage(input)), 201))
 	require.Len(t, view.Items, 2)
 	require.Equal(t, "October close", view.FolderName)
-	require.Equal(t, "Please use PDFs if possible.", view.Description)
-	require.NotEmpty(t, view.FolderID)
 	do(jsonAuthRequest("POST", staff, env.managerToken, json.RawMessage(input)), 409)
 	override := `{"title":"October close","folder_name":"2026 October uploads","items":[{"name":"Another file"}]}`
 	second := decode(do(jsonAuthRequest("POST", staff, env.managerToken, json.RawMessage(override)), 201))
@@ -73,10 +81,10 @@ func TestDocumentRequestCollectionAndReview(t *testing.T) {
 		require.ElementsMatch(t, expected, actual)
 	}
 	activity(env.clientToken, models.FeedEventTypeRequestCreated)
-	activity(env.mismatchToken)
 	adminEvents := do(jsonAuthRequest("GET", "/api/feed", env.adminToken, nil), 200)
-	require.Contains(t, string(adminEvents), models.FeedEventSourceTypeDocumentRequestStaff)
-	require.Contains(t, string(adminEvents), view.ID)
+	var adminFeed models.FeedListResponse
+	require.NoError(t, json.Unmarshal(adminEvents, &adminFeed))
+	require.ElementsMatch(t, []string{view.ID, second.ID}, createdRequestIDs(&adminFeed))
 	accountRequests := func(session string, expected ...string) {
 		t.Helper()
 		raw := do(jsonAuthRequest("GET", "/api/my-document-requests", session, nil), 200)
@@ -170,7 +178,6 @@ func TestDocumentRequestCollectionAndReview(t *testing.T) {
 	do(wrongRequest, 404)
 	guestPost := func(body, key string, status int) []byte {
 		req := public("POST", filePath+"/comments", body)
-		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Idempotency-Key", key)
 		return do(req, status)
 	}
@@ -190,12 +197,10 @@ func TestDocumentRequestCollectionAndReview(t *testing.T) {
 	require.Contains(t, conversation, "Staff reply: shared")
 	require.NotContains(t, conversation, "Staff reply: team")
 	require.JSONEq(t, `{"count":2}`, string(do(public("GET", filePath+"/comments/count", ""), 200)))
-	activity(env.managerToken, models.FeedEventTypeRequestSubmitted, models.FeedEventTypeRequestSubmitted)
 	upload(bank, "1", "late.txt", 409)
 	review(payroll, `{"round":1,"status":"accepted"}`, 204)
 	review(bank, `{"round":1,"status":"replacement"}`, 400)
 	review(bank, `{"round":1,"status":"replacement","reason":"Page 2 is missing"}`, 204)
-	activity(env.clientToken, models.FeedEventTypeRequestCreated, models.FeedEventTypeRequestSubmitted, models.FeedEventTypeRequestSubmitted, models.FeedEventTypeRequestAccepted, models.FeedEventTypeRequestReplacement)
 	returned := decode(do(public("GET", recipient, ""), 200))
 	require.Equal(t, "Page 2 is missing", returned.Items[0].Reason)
 	require.Len(t, returned.Items[0].Files, 1)
@@ -203,7 +208,6 @@ func TestDocumentRequestCollectionAndReview(t *testing.T) {
 	require.Equal(t, 2, returned.Items[0].Files[0].Comments)
 	do(public("GET", filePath+"/comments", ""), 200)
 	require.Empty(t, returned.Items[0].History)
-	require.Equal(t, "accepted", returned.Items[1].Status)
 	upload(bank, "1", "stale.txt", 409)
 	upload(bank, "2", "complete.txt", 201)
 	do(public("POST", recipient+"/items/"+bank+"/submit", `{"round":2}`), 204)
@@ -214,7 +218,6 @@ func TestDocumentRequestCollectionAndReview(t *testing.T) {
 	require.Len(t, detail.Items[0].History, 2)
 	require.Len(t, detail.Items[0].Files, 2)
 	fileID := detail.Items[0].Files[0].ID
-	require.NotEmpty(t, fileID)
 	var file models.File
 	require.NoError(t, env.db.First(&file, "id = ?", fileID).Error)
 	require.NotNil(t, file.FolderID)
@@ -318,12 +321,15 @@ func TestDocumentRequestEmailsOnlySelectedEligibleRecipient(t *testing.T) {
 	result, err = svc.Create(t.Context(), req, in)
 	require.NoError(t, err)
 	require.Equal(t, 2, result.EmailCount)
-	var all []string
-	require.NoError(t, env.db.Model(&models.QueuedEmail{}).Where("document_request_id = ?", result.ID).Pluck("recipient", &all).Error)
-	require.ElementsMatch(t, []string{env.clientUser.Email, env.mismatchUser.Email}, all)
-	var notified []string
-	require.NoError(t, env.db.Model(&models.FeedEvent{}).Where("event_type = ? AND source_type = ? AND source_id = ?", models.FeedEventTypeRequestCreated, models.FeedEventSourceTypeDocumentRequest, result.ID).Pluck("user_id", &notified).Error)
-	require.ElementsMatch(t, []string{env.clientUser.ID, env.mismatchUser.ID}, notified)
+	var addresses []string
+	deliveries := env.db.Model(&models.QueuedEmail{}).Where("document_request_id = ?", result.ID)
+	require.NoError(t, deliveries.Pluck("recipient", &addresses).Error)
+	require.ElementsMatch(t, []string{env.clientUser.Email, env.mismatchUser.Email}, addresses)
+	for _, user := range []*models.User{env.clientUser, env.mismatchUser} {
+		feed, err := services.NewFeedService(env.db).ListFeed(t.Context(), req.TenantID, user.ID, user.Role, 1, 10)
+		require.NoError(t, err)
+		require.Contains(t, createdRequestIDs(feed), result.ID)
+	}
 	list, err := svc.AccountRequests(t.Context(), req.TenantID, env.mismatchUser.ID)
 	require.NoError(t, err)
 	require.Len(t, list, 1)

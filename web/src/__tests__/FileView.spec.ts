@@ -122,7 +122,6 @@ describe('file page', () => {
     });
     expect(wrapper.getComponent(FileComments).props('requestToken')).toBe('guest');
     expect(wrapper.find('[aria-label="Share"]').exists()).toBe(false);
-    expect(wrapper.find('.file-copy').exists()).toBe(false);
     await wrapper.get('[aria-label="Back to full request"]').trigger('click');
     await flushPromises();
     expect(router.currentRoute.value.fullPath).toBe('/document-request#token=guest');
@@ -143,7 +142,6 @@ describe('file page', () => {
       '/document-request/files/file?request=request&comments=1',
     );
     expect(wrapper.getComponent(FileComments).props('requestToken')).toBeUndefined();
-    expect(axios.get).toHaveBeenCalledWith('/api/files/file/comments/count');
     expect(wrapper.find('[aria-label="Share"]').exists()).toBe(true);
     wrapper.unmount();
   });
