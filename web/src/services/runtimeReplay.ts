@@ -117,6 +117,9 @@ export class RuntimeReplay {
 let controller: RuntimeReplay | undefined;
 let refreshing: Promise<void> | undefined;
 
+export const isDocumentRequestPage = (pathname: string) =>
+  /^\/(?:document-requests?|clients\/[^/]+\/document-requests)(?:\/|$)/.test(pathname);
+
 // DOM snapshots include the current URL. Do not start on credential-bearing
 // bootstrap pages; recording can resume after the application consumes the URL.
 export function isReplayURLSafe(value: string) {
@@ -127,6 +130,7 @@ export function isReplayURLSafe(value: string) {
     const parameters = [...url.searchParams, ...new URLSearchParams(url.hash.slice(1))];
     return (
       !url.pathname.startsWith('/links/') &&
+      !isDocumentRequestPage(url.pathname) &&
       !parameters.some(
         ([key, entry]) =>
           sensitive.test(key) ||
@@ -148,7 +152,9 @@ export function refreshRuntimeReplay() {
     const request = controller.refresh();
     refreshing = request;
     void request.finally(() => {
-      if (refreshing === request) {refreshing = undefined;}
+      if (refreshing === request) {
+        refreshing = undefined;
+      }
     });
   }
   return refreshing;
@@ -240,6 +246,8 @@ export function startRuntimeReplay() {
     void refreshRuntimeReplay();
   }, 30_000);
   window.addEventListener('pageshow', (event) => {
-    if (event.persisted) {void refreshRuntimeReplay();}
+    if (event.persisted) {
+      void refreshRuntimeReplay();
+    }
   });
 }

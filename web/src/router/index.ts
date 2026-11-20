@@ -117,6 +117,32 @@ const router = createRouter({
       props: true,
     },
     {
+      path: '/document-requests',
+      name: 'MyDocumentRequests',
+      component: () => import('../views/MyDocumentRequests.vue'),
+      meta: { public: false, roles: ['client', 'customer'] },
+    },
+    {
+      path: '/document-request/files/:fileId',
+      name: 'DocumentRequestFile',
+      component: FileView,
+      props: true,
+      meta: { public: true },
+    },
+    {
+      path: '/document-request',
+      name: 'DocumentRequestRecipient',
+      component: () => import('../views/DocumentRequestRecipient.vue'),
+      meta: { public: true },
+    },
+    {
+      path: '/clients/:clientId/document-requests/:requestId?',
+      name: 'DocumentRequests',
+      component: () => import('../views/DocumentRequests.vue'),
+      props: true,
+      meta: { public: false, roles: ['admin', 'manager'] },
+    },
+    {
       path: '/clients/:id/links',
       name: 'SecureLinks',
       component: SecureLinks,

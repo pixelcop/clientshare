@@ -35,7 +35,9 @@ func InitEmail(cfg *Config, logger *zap.Logger, db *gorm.DB) (emailpkg.EmailQueu
 	}
 	var queue emailpkg.EmailQueue
 	if db != nil {
-		queue = emailpkg.NewDBEmailQueue(db, emailSender, batchDelay)
+		dbQueue := emailpkg.NewDBEmailQueue(db, emailSender, batchDelay)
+		dbQueue.DocumentRequestSigningKey = cfg.SecureLinks.SigningKey
+		queue = dbQueue
 	} else {
 		queue = emailpkg.NewInMemoryEmailQueue(emailSender, batchDelay)
 	}

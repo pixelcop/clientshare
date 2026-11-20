@@ -26,6 +26,9 @@ describe('runtime replay', () => {
       '/login#handoff=private',
       '/reset-password?code=private',
       '/links/private',
+      '/document-request#token=private',
+      '/document-request',
+      '/clients/client-1/document-requests/request-1',
       '/login?redirect=/accept-invite?token=private',
     ].forEach((url) => expect(isReplayURLSafe(url)).toBe(false));
     expect(isReplayURLSafe('/login?redirect=/clients')).toBe(true);

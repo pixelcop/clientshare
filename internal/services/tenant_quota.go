@@ -145,6 +145,10 @@ func ReserveStorage(ctx context.Context, db *gorm.DB, tenantID string, size int6
 }
 
 func FinalizeStorage(ctx context.Context, db *gorm.DB, reservation *models.StorageReservation, file *models.File) error {
+	return finalizeStorage(ctx, db, reservation, file, nil)
+}
+
+func finalizeStorage(ctx context.Context, db *gorm.DB, reservation *models.StorageReservation, file *models.File, attach func(*gorm.DB) error) error {
 	return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		e, err := lockQuota(tx, reservation.TenantID)
 		if err != nil {
@@ -183,6 +187,11 @@ func FinalizeStorage(ctx context.Context, db *gorm.DB, reservation *models.Stora
 		if err := tx.Create(file).Error; err != nil {
 			return err
 		}
+		if attach != nil {
+			if err := attach(tx); err != nil {
+				return err
+			}
+		}
 		if err := models.DirtyView(tx, file.TenantID, file.ClientID); err != nil {
 			return err
 		}
@@ -198,6 +207,10 @@ func ReleaseStorage(db *gorm.DB, r *models.StorageReservation) error {
 // Multipart sizes are measured by the server; the bounded reader also prevents
 // a mismatched stream from exceeding its reservation.
 func UploadFile(ctx context.Context, db *gorm.DB, store storage.Storage, file *models.File, src io.Reader, size int64) error {
+	return uploadFile(ctx, db, store, file, src, size, nil)
+}
+
+func uploadFile(ctx context.Context, db *gorm.DB, store storage.Storage, file *models.File, src io.Reader, size int64, attach func(*gorm.DB) error) error {
 	if err := LogicalName(file.Filename); err != nil {
 		return err
 	}
@@ -225,7 +238,7 @@ func UploadFile(ctx context.Context, db *gorm.DB, store storage.Storage, file *m
 		_ = store.DeleteObject(context.WithoutCancel(ctx), key)
 		return errors.New("upload exceeds declared size or could not be read")
 	}
-	if err := FinalizeStorage(ctx, db, r, file); err != nil {
+	if err := finalizeStorage(ctx, db, r, file, attach); err != nil {
 		cleanupErr := store.DeleteObject(context.WithoutCancel(ctx), key)
 		return errors.Join(err, cleanupErr)
 	}

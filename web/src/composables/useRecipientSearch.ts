@@ -6,7 +6,12 @@ import type { RecipientContact } from '@/types/recipients';
 // No shared cache: changing actor, client, or scope must not reuse a directory
 // response from a wider authorization context.
 export function useRecipientSearch(
-  context: () => { clientId: string; enabled: boolean; actorKey: string },
+  context: () => {
+    clientId: string;
+    enabled: boolean;
+    actorKey: string;
+    workspaceClientsOnly?: boolean;
+  },
 ) {
   const contacts = ref<RecipientContact[]>([]);
   const across = ref(false);
@@ -45,6 +50,7 @@ export function useRecipientSearch(
           client_id: current.clientId,
           scope: across.value ? 'all' : 'client',
           search: query.trim().slice(0, 200),
+          ...(current.workspaceClientsOnly ? { kind: 'workspace_client' } : {}),
         },
         signal: controller.signal,
       });
@@ -69,7 +75,12 @@ export function useRecipientSearch(
   }
 
   watch(
-    () => [context().clientId, context().enabled, context().actorKey],
+    () => [
+      context().clientId,
+      context().enabled,
+      context().actorKey,
+      context().workspaceClientsOnly,
+    ],
     () => {
       reset();
       across.value = false;

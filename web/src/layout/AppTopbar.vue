@@ -63,6 +63,14 @@ const menuItems = computed<MenuItem[]>(() => {
     });
     items.push({
       type: 'custom',
+      label: 'Document Requests',
+      to: '/document-requests',
+      props: {
+        active: route.name === 'MyDocumentRequests' || route.name === 'DocumentRequestRecipient',
+      },
+    });
+    items.push({
+      type: 'custom',
       label: 'Activity',
       to: '/activity',
       props: { active: route.path.startsWith('/activity') },

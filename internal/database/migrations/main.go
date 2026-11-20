@@ -37,6 +37,9 @@ func main() {
 		migration.NewGoMigration(59, upAddReplayRequests, downAddReplayRequests),
 		migration.NewGoMigration(60, upAddFileComments, downAddFileComments),
 		migration.NewGoMigration(61, upCommentNotifications, downCommentNotifications),
+		migration.NewGoMigration(62, upDocumentRequests, downDocumentRequests),
+		migration.NewGoMigration(63, upDocumentRequestEmail, downDocumentRequestEmail),
+		migration.NewGoMigration(64, upDocumentRequestGuidance, downDocumentRequestGuidance),
 	}
 
 	migration.Run(goMigrations, func(path string) (db.DatabaseConfig, error) {

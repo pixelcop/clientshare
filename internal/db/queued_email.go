@@ -31,6 +31,8 @@ var QueuedEmail = struct {
 	AccessInvitationID      field.String
 	IdentityInviteID        field.String
 	FileCommentID           field.String
+	DocumentRequestID       field.String
+	DocumentRequestUpdateID field.String
 }{
 	ID:                      field.String{}.WithColumn("id"),
 	TenantID:                field.String{}.WithColumn("tenant_id"),
@@ -56,4 +58,6 @@ var QueuedEmail = struct {
 	AccessInvitationID:      field.String{}.WithColumn("access_invitation_id"),
 	IdentityInviteID:        field.String{}.WithColumn("identity_invite_id"),
 	FileCommentID:           field.String{}.WithColumn("file_comment_id"),
+	DocumentRequestID:       field.String{}.WithColumn("document_request_id"),
+	DocumentRequestUpdateID: field.String{}.WithColumn("document_request_update_id"),
 }

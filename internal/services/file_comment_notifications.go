@@ -2,6 +2,8 @@ package services
 
 import (
 	"context"
+	"errors"
+	"time"
 
 	"github.com/pixelcop/clientshare/internal/models"
 	"github.com/pixelcop/clientshare/internal/services/email"
@@ -10,9 +12,6 @@ import (
 
 func recordCommentParticipation(ctx context.Context, tx *gorm.DB, comment models.FileComment, baseURL string) error {
 	_, ids := prepareCommentMarkdown(comment.Body)
-	if len(ids) == 0 && baseURL == "" {
-		return nil
-	}
 	var file models.File
 	if err := tx.Where("tenant_id = ? AND id = ?", comment.TenantID, comment.FileID).First(&file).Error; err != nil {
 		return err
@@ -39,10 +38,6 @@ func recordCommentParticipation(ctx context.Context, tx *gorm.DB, comment models
 			}
 		}
 	}
-	if baseURL == "" {
-		return nil
-	}
-
 	// Select only people involved in this audience. Access alone is never a
 	// subscription, regardless of whether it is inherited or granted directly.
 	priorAuthors := email.CommentPriorParticipants(tx, comment).Select("author_id")
@@ -59,7 +54,12 @@ func recordCommentParticipation(ctx context.Context, tx *gorm.DB, comment models
 		return err
 	}
 	deliveries := make([]models.QueuedEmail, 0, len(eligible)+len(readers))
+	feedUsers := make([]string, 0, len(eligible)+len(readers))
 	queue := func(user models.User, event string) {
+		feedUsers = append(feedUsers, user.ID)
+		if baseURL == "" {
+			return
+		}
 		address := email.CommentNotificationAddress(user.Email)
 		if address == "" {
 			return
@@ -89,10 +89,56 @@ func recordCommentParticipation(ctx context.Context, tx *gorm.DB, comment models
 	for _, user := range eligible {
 		queue(user, email.CommentMentionNotification)
 	}
+	var actorID *string
+	if !isRequestGuestAuthor(comment.AuthorID) {
+		actorID = &comment.AuthorID
+	}
+	err := (&FeedService{DB: tx}).createEvents(ctx, feedUsers, func(userID string) models.FeedEvent {
+		return models.FeedEvent{
+			TenantID: comment.TenantID, ClientID: &file.ClientID, UserID: userID, ActorUserID: actorID,
+			SourceType: models.FeedEventSourceTypeFileComment, SourceID: comment.ID, EventType: models.FeedEventTypeFileComment,
+			FileID: &file.ID, CreatedAt: comment.CreatedAt,
+		}
+	})
+	if err != nil {
+		return err
+	}
 	if len(deliveries) == 0 {
 		return nil
 	}
 	return tx.CreateInBatches(&deliveries, 25).Error
+}
+
+func hydrateCommentActivity(ctx context.Context, db *gorm.DB, user models.User, event *models.FeedEvent) (bool, error) {
+	if event.ClientID == nil || event.FileID == nil || event.SourceType != models.FeedEventSourceTypeFileComment {
+		return false, nil
+	}
+	var comment models.FileComment
+	err := db.First(&comment, "tenant_id = ? AND file_id = ? AND id = ? AND deleted_at IS NULL",
+		event.TenantID, *event.FileID, event.SourceID).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	var file models.File
+	err = db.First(&file, "tenant_id = ? AND client_id = ? AND id = ? AND type = 'file' AND deleted_at IS NULL",
+		event.TenantID, *event.ClientID, *event.FileID).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	allowed, err := email.CommentReader(ctx, db, file, comment.Visibility, user, time.Now())
+	if allowed {
+		event.FilePath = file.Filename
+		if comment.Visibility == "team" {
+			event.EventType = models.FeedEventTypeTeamNote
+		}
+	}
+	return allowed, err
 }
 
 func pruneCommentParticipation(tx *gorm.DB, comment models.FileComment) error {

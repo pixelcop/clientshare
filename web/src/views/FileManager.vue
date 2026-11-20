@@ -39,6 +39,12 @@ const displayCanShare = computed(() => {
 const { clientId } = storeToRefs(useClientsStore());
 
 const { user } = storeToRefs(useAuthStore());
+const canManageRequests = computed(
+  () =>
+    displayIsClientRoot.value &&
+    !!presentation.value.context?.can_manage_client &&
+    ['admin', 'manager'].includes(user.value?.role ?? ''),
+);
 
 const showAccess = ref(false);
 const showFolderShare = ref(false);
@@ -55,21 +61,36 @@ const canShareCurrent = computed(() =>
   isClientRoot.value ? canManageAccess.value : !!fileManager.context?.capabilities.can_share,
 );
 const canNotify = computed(() => user.value?.role !== 'customer');
-const compactActions = computed<MenuItem[]>(() =>
-  displayCanShare.value
+const compactActions = computed<MenuItem[]>(() => [
+  ...(canManageRequests.value && presentation.value.context?.client_id
+    ? [
+        {
+          label: 'Document requests',
+          command: () =>
+            router.push({
+              name: 'DocumentRequests',
+              params: { clientId: presentation.value.context?.client_id },
+            }),
+        },
+      ]
+    : []),
+  ...(displayCanShare.value
     ? [
         {
           label: displayIsClientRoot.value ? 'Share workspace' : 'Share folder',
           icon: 'oi oi-users',
           disabled: fileManager.loading || !canShareCurrent.value,
           command: () => {
-            if (isClientRoot.value) showAccess.value = true;
-            else showFolderShare.value = true;
+            if (isClientRoot.value) {
+              showAccess.value = true;
+            } else {
+              showFolderShare.value = true;
+            }
           },
         },
       ]
-    : [],
-);
+    : []),
+]);
 
 let destinationVersion = 0;
 async function openDestination(id = folderId) {
@@ -127,6 +148,13 @@ onBeforeUnmount(() => {
         <ClientWorkspaceSwitcher :clientId="presentation.context?.client_id" />
       </template>
       <template #actions>
+        <RouterLink
+          v-if="canManageRequests"
+          :to="{ name: 'DocumentRequests', params: { clientId: presentation.context?.client_id } }"
+          class="inline-flex min-h-9 items-center rounded-md px-3 text-sm font-semibold text-primary hover:underline"
+        >
+          Document requests
+        </RouterLink>
         <Button
           v-if="displayCanShare"
           :id="`collect-links-${clientId}`"

@@ -107,6 +107,30 @@ func (s *FeedService) visibleFeedEvents(ctx context.Context, tenantID, userID, e
 		wholeClient[id] = true
 	}
 	for _, event := range events {
+		switch event.EventType {
+		case models.FeedEventTypeRequestCreated, models.FeedEventTypeRequestUpdated, models.FeedEventTypeRequestSubmitted, models.FeedEventTypeRequestAccepted, models.FeedEventTypeRequestReplacement:
+			ok, err := hydrateRequestActivity(ctx, s.DB.WithContext(ctx), user, &event)
+			if err != nil {
+				return nil, err
+			}
+			if ok {
+				visible = append(visible, event)
+			}
+			continue
+		case models.FeedEventTypeFileComment:
+			ok, err := hydrateCommentActivity(ctx, s.DB.WithContext(ctx), user, &event)
+			if err != nil {
+				return nil, err
+			}
+			if ok {
+				if !wholeClient[*event.ClientID] {
+					event.ClientName, event.ActorName, event.ActorEmail = "", "", ""
+					event.ActorUserID = nil
+				}
+				visible = append(visible, event)
+			}
+			continue
+		}
 		if event.EventType == models.FeedEventTypeInviteAccepted {
 			if user.Role == "admin" {
 				visible = append(visible, event)

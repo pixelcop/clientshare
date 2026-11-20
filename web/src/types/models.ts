@@ -195,13 +195,74 @@ export interface Client {
 }
 
 //////////
+// source: document_request.go
+
+export interface DocumentRequest {
+  ID: string;
+  TenantID: string;
+  ClientID: string;
+  FolderID: string;
+  Title: string;
+  Description: string;
+  CreatedBy: string;
+  CreatedAt: string;
+  ExpiresAt: string;
+  RevokedAt?: string;
+}
+export interface DocumentRequestUpdate {
+  ID: string;
+  RequestID: string;
+  Description: string;
+  CreatedAt: string;
+}
+export interface DocumentRequestItem {
+  ID: string;
+  RequestID: string;
+  Position: number /* int */;
+  Name: string;
+  Instructions: string;
+  Status: string;
+  Round: number /* int */;
+  Reason: string;
+  SubmittedAt?: string;
+}
+export interface DocumentRequestFile {
+  FileID: string;
+  ItemID: string;
+  Round: number /* int */;
+  Name: string;
+  CreatedAt: string;
+}
+export interface DocumentRequestReview {
+  ItemID: string;
+  Round: number /* int */;
+  Status: string;
+  Reason: string;
+  ReviewerID: string;
+  SubmittedAt: string;
+  CreatedAt: string;
+}
+
+//////////
 // source: feed_event.go
 
 export const FeedEventTypeFileUploaded = "file_uploaded";
 export const FeedEventTypeInviteAccepted = "invite_accepted";
+export const FeedEventTypeRequestCreated = "request_created";
+export const FeedEventTypeRequestUpdated = "request_updated";
+export const FeedEventTypeRequestSubmitted = "request_submitted";
+export const FeedEventTypeRequestAccepted = "request_accepted";
+export const FeedEventTypeRequestReplacement = "request_replacement";
+export const FeedEventTypeFileComment = "file_comment";
+export const FeedEventTypeTeamNote = "team_note"; // response label for a file comment with team visibility
 export const FeedEventSourceTypeFileActivity = "file_activity";
 export const FeedEventSourceTypeFileUploadBatch = "file_upload_batch";
 export const FeedEventSourceTypeInviteToken = "invite_token";
+export const FeedEventSourceTypeDocumentRequest = "document_request";
+export const FeedEventSourceTypeDocumentRequestItem = "document_request_item";
+export const FeedEventSourceTypeDocumentRequestUpdate = "document_request_update";
+export const FeedEventSourceTypeDocumentRequestStaff = "document_request_staff";
+export const FeedEventSourceTypeFileComment = "file_comment";
 export const FeedStateUnread = "unread";
 export const FeedStateRead = "read";
 export const FeedStateAll = "all";
@@ -238,6 +299,10 @@ export interface FeedEvent {
   subject_email?: string;
   files?: FeedEventFile[];
   file_count?: number /* int */;
+  request_id?: string;
+  request_title?: string;
+  request_item?: string;
+  request_open?: boolean;
   is_read: boolean;
   read_at?: string;
 }

@@ -14,10 +14,11 @@ import (
 )
 
 type DBEmailQueue struct {
-	defaultBatchDelay time.Duration
-	DB                *gorm.DB
-	Sender            EmailSender
-	Now               func() time.Time
+	defaultBatchDelay         time.Duration
+	DB                        *gorm.DB
+	Sender                    EmailSender
+	Now                       func() time.Time
+	DocumentRequestSigningKey string
 }
 
 func NewDBEmailQueue(db *gorm.DB, sender EmailSender, defaultBatchDelay time.Duration) *DBEmailQueue {
@@ -161,7 +162,7 @@ func (q *DBEmailQueue) Update(tenantID, id, recipient, subject, body string) err
 		"subject":   subject,
 		"body":      body,
 	}
-	query := q.DB.Model(&models.QueuedEmail{}).Where("id = ? AND file_comment_id IS NULL AND sent_at IS NULL AND canceled_at IS NULL", id)
+	query := q.DB.Model(&models.QueuedEmail{}).Where("id = ? AND file_comment_id IS NULL AND document_request_id IS NULL AND sent_at IS NULL AND canceled_at IS NULL", id)
 	if strings.TrimSpace(tenantID) != "" {
 		query = query.Where("tenant_id = ?", strings.TrimSpace(tenantID))
 	}
@@ -185,6 +186,15 @@ func (q *DBEmailQueue) send(item models.QueuedEmail) error {
 		return err
 	}
 	item = current
+	if item.DocumentRequestID != nil {
+		valid, err := q.revalidateDocumentRequest(&item)
+		if err != nil {
+			return err
+		}
+		if !valid {
+			return q.DB.Model(&models.QueuedEmail{}).Where("tenant_id = ? AND id = ? AND sent_at IS NULL", item.TenantID, item.ID).Update("canceled_at", q.now()).Error
+		}
+	}
 	if item.FileCommentID != nil {
 		valid, err := q.revalidateCommentNotification(&item)
 		if err != nil {

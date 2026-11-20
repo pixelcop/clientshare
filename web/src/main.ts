@@ -13,6 +13,7 @@ import App from './App.vue';
 import router from './router';
 import { replayPrivacyOptions } from './services/replayPrivacy';
 import {
+  isDocumentRequestPage,
   isReplayURLSafe,
   startRuntimeReplay,
   suspendRuntimeReplay,
@@ -28,9 +29,23 @@ if (sentryDSN) {
     dsn: sentryDSN,
     replaysSessionSampleRate: 0,
     replaysOnErrorSampleRate: 0,
-    integrations: [
-      Sentry.replayIntegration(replayPrivacyOptions),
-    ],
+    // Request pages carry a bearer credential or private checklist data.
+    beforeSend: (event) => (isDocumentRequestPage(window.location.pathname) ? null : event),
+    beforeBreadcrumb: (breadcrumb) => {
+      if (isDocumentRequestPage(window.location.pathname)) {
+        return null;
+      }
+      if (
+        breadcrumb.category === 'navigation' &&
+        [breadcrumb.data?.from, breadcrumb.data?.to].some(
+          (url) => typeof url === 'string' && !isReplayURLSafe(url),
+        )
+      ) {
+        return null;
+      }
+      return breadcrumb;
+    },
+    integrations: [Sentry.replayIntegration(replayPrivacyOptions)],
   });
   pinia.use(Sentry.createSentryPiniaPlugin());
   Sentry.addEventProcessor((event) => {
@@ -39,7 +54,9 @@ if (sentryDSN) {
         ...event,
         urls: event.urls.map((value: unknown) => {
           try {
-            if (typeof value !== 'string') {return '[Filtered]';}
+            if (typeof value !== 'string') {
+              return '[Filtered]';
+            }
             const url = new URL(value);
             return url.origin + url.pathname;
           } catch {

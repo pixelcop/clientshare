@@ -16,6 +16,7 @@ const props = withDefaults(
     disabled?: boolean;
     autofocus?: boolean;
     required?: boolean;
+    currentClientOnly?: boolean;
   }>(),
   { clientId: '', label: 'Recipient', placeholder: 'Name or email address' },
 );
@@ -29,6 +30,7 @@ const { contacts, across, loading, error, available, search, invalidate } = useR
     clientId: props.clientId,
     enabled: enabled.value,
     actorKey: `${auth.user?.tenant_id || ''}:${auth.user?.id || ''}`,
+    workspaceClientsOnly: props.currentClientOnly,
   }),
 );
 const selected = ref<RecipientContact | null>(null);
@@ -59,6 +61,7 @@ function toggleScope() {
     <div v-if="enabled && available" class="recipient-scope">
       <span>{{ across ? 'Across authorized clients' : 'Current client contacts' }}</span>
       <Button
+        v-if="!currentClientOnly"
         type="button"
         :label="across ? 'Use current client' : 'Search across clients'"
         variant="link"
@@ -89,9 +92,11 @@ function toggleScope() {
         :emptySearchMessage="
           !enabled
             ? 'Enter an email address.'
-            : across
-              ? 'No matching contacts. Enter a new email address.'
-              : 'No matching client contacts. Enter an email or search across clients.'
+            : currentClientOnly
+              ? 'No matching client users with workspace access.'
+              : across
+                ? 'No matching contacts. Enter a new email address.'
+                : 'No matching client contacts. Enter an email or search across clients.'
         "
         :pt="{
           pcInputText: { root: { type: 'email', required, autofocus, autocomplete: 'off' } },
