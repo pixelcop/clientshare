@@ -648,24 +648,27 @@ async function revoke() {
             :aria-label="`Files for ${item.name}`"
           >
             <li v-for="file in item.files" :key="file.id">
-              <RouterLink
-                :to="requestFileRoute(clientId, request.id, file.id!)"
-                class="text-primary underline wrap-anywhere"
-                >{{ file.name }}</RouterLink
-              >
-              <span v-if="file.submitted_at || file.comment_count" class="ml-2 text-muted-color">
-                <time v-if="file.submitted_at" :datetime="file.submitted_at">
-                  Submitted {{ new Date(file.submitted_at).toLocaleString() }}
-                </time>
+              <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                 <RouterLink
-                  v-if="file.comment_count"
-                  :to="requestFileRoute(clientId, request.id, file.id!, true)"
-                  :aria-label="`${file.comment_count} ${file.comment_count === 1 ? 'comment' : 'comments'} on ${file.name}`"
-                  class="ml-2 text-primary underline"
+                  :to="requestFileRoute(clientId, request.id, file.id!)"
+                  class="text-primary underline wrap-anywhere"
                 >
-                  {{ file.comment_count }} {{ file.comment_count === 1 ? 'comment' : 'comments' }}
+                  {{ file.name }}
                 </RouterLink>
-              </span>
+                <span v-if="file.comment_count" class="inline-flex items-baseline gap-2">
+                  <span aria-hidden="true" class="text-muted-color">·</span>
+                  <RouterLink
+                    :to="requestFileRoute(clientId, request.id, file.id!, true)"
+                    :aria-label="`${file.comment_count} ${file.comment_count === 1 ? 'comment' : 'comments'} on ${file.name}`"
+                    class="text-primary underline"
+                  >
+                    {{ file.comment_count }} {{ file.comment_count === 1 ? 'comment' : 'comments' }}
+                  </RouterLink>
+                </span>
+              </div>
+              <time v-if="file.submitted_at" :datetime="file.submitted_at" class="text-muted-color">
+                Submitted {{ new Date(file.submitted_at).toLocaleString() }}
+              </time>
             </li>
           </ul>
           <p

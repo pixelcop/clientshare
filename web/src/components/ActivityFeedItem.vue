@@ -154,12 +154,22 @@ const actionLabel = computed(() => {
           class="flex flex-wrap gap-x-2 text-sm text-muted-color"
         >
           <span v-if="item.client_name">{{ item.client_name }}</span>
-          <span v-if="item.request_item">{{ item.request_title }}</span>
+          <span
+            v-if="item.request_item && item.request_title"
+            class="inline-flex min-w-0 items-baseline gap-2"
+          >
+            <span v-if="item.client_name" aria-hidden="true">·</span>
+            <span class="wrap-anywhere">{{ item.request_title }}</span>
+          </span>
         </div>
         <div v-else-if="isFileUploaded" class="flex flex-wrap gap-2">
           <span v-if="item.client_name">{{ item.client_name }}</span>
-          <span v-if="folderPath" class="text-sm text-muted-color">
-            {{ folderPath }}
+          <span
+            v-if="folderPath"
+            class="inline-flex min-w-0 items-baseline gap-2 text-sm text-muted-color"
+          >
+            <span v-if="item.client_name" aria-hidden="true">·</span>
+            <span class="wrap-anywhere">{{ folderPath }}</span>
           </span>
         </div>
         <div v-else-if="isInviteAccepted" class="flex flex-wrap gap-2">

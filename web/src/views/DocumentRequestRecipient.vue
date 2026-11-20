@@ -284,22 +284,24 @@ onMounted(load);
               <p class="m-0 text-sm font-semibold">Submitted files</p>
               <ul class="mt-2 space-y-2 text-sm" :aria-label="`Submitted files for ${item.name}`">
                 <li v-for="file in submittedFiles(item)" :key="file.id">
-                  <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                  <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                     <RouterLink
                       :to="fileRoute(file.id!)"
                       class="font-medium text-primary underline wrap-anywhere"
                     >
                       {{ file.name }}
                     </RouterLink>
-                    <RouterLink
-                      v-if="file.comment_count"
-                      :to="fileRoute(file.id!, true)"
-                      :aria-label="`${file.comment_count} shared ${file.comment_count === 1 ? 'comment' : 'comments'} on ${file.name}`"
-                      class="text-primary underline"
-                    >
-                      {{ file.comment_count }}
-                      {{ file.comment_count === 1 ? 'comment' : 'comments' }}
-                    </RouterLink>
+                    <span v-if="file.comment_count" class="inline-flex items-baseline gap-2">
+                      <span aria-hidden="true" class="text-muted-color">·</span>
+                      <RouterLink
+                        :to="fileRoute(file.id!, true)"
+                        :aria-label="`${file.comment_count} shared ${file.comment_count === 1 ? 'comment' : 'comments'} on ${file.name}`"
+                        class="text-primary underline"
+                      >
+                        {{ file.comment_count }}
+                        {{ file.comment_count === 1 ? 'comment' : 'comments' }}
+                      </RouterLink>
+                    </span>
                   </div>
                   <time
                     v-if="file.submitted_at"

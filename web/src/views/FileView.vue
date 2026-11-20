@@ -512,12 +512,18 @@ onBeforeUnmount(() => {
               <i class="oi oi-folder" aria-hidden="true" />
               <span>{{ folderName }}</span>
             </router-link>
-            <span>{{ formatSize(file.size) }}</span>
-            <span :title="formatDate(file.uploaded_at)">
-              Added
-              {{
-                new Date(file.uploaded_at).toLocaleDateString(undefined, { dateStyle: 'medium' })
-              }}
+            <span class="inline-flex items-baseline gap-2">
+              <span v-if="file.folder_id && folderName" aria-hidden="true">·</span>
+              <span>{{ formatSize(file.size) }}</span>
+            </span>
+            <span class="inline-flex items-baseline gap-2">
+              <span aria-hidden="true">·</span>
+              <span :title="formatDate(file.uploaded_at)">
+                Added
+                {{
+                  new Date(file.uploaded_at).toLocaleDateString(undefined, { dateStyle: 'medium' })
+                }}
+              </span>
             </span>
           </div>
         </div>
@@ -758,7 +764,7 @@ h1 {
 .file-metadata {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 16px;
+  gap: 4px 8px;
   margin-top: 4px;
   font-size: 13px;
   color: var(--p-text-muted-color);
@@ -902,7 +908,6 @@ h1 {
   }
   .file-metadata {
     font-size: 12px;
-    gap: 4px 12px;
   }
 }
 @media (max-width: 1023px) {
