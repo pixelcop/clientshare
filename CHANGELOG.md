@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 1.1.0 — 2026-11-20
+
 ### Added
 
 - **Document requests:** Send clients a checklist by email or secure link. Clients can upload without an account; staff can accept each item, ask for a replacement, or add more items to the same request.
@@ -10,6 +12,7 @@
 ### Changed
 
 - Find recipients by name or email when sharing, inviting people, or sending a secure link.
+- Portal `robots.txt` now asks crawlers not to index portal routes.
 
 ### Fixed
 
