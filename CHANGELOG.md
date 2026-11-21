@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 1.1.1 — 2026-11-21
+
+### Fixed
+
+- Fixed the Docker build so CI can generate email templates and run the Go tests. No application behavior changed.
+
 ## 1.1.0 — 2026-11-20
 
 ### Added
